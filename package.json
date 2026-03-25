@@ -1,0 +1,18 @@
+{
+  "name": "mapdesigner",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@10.23.0",
+  "type": "module",
+  "scripts": {
+    "build": "pnpm -r build",
+    "dev:web": "pnpm --filter @mapdesigner/web dev",
+    "dev:server": "pnpm --filter @mapdesigner/server dev",
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck"
+  },
+  "devDependencies": {
+    "@types/node": "^24.5.2",
+    "typescript": "^5.9.2"
+  }
+}

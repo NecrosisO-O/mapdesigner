@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "meta": {
+    "id": "root-smoke-772eea",
+    "name": "Root Smoke",
+    "description": "",
+    "tags": [],
+    "created_at": "2026-03-25T20:22:32.216Z",
+    "updated_at": "2026-03-25T20:22:46.848Z",
+    "revision": 2
+  },
+  "grid": {
+    "layout": "flat-top-even-q",
+    "origin": {
+      "row": 0,
+      "col": 0
+    }
+  },
+  "cells": [
+    {
+      "row": 0,
+      "col": 0,
+      "terrain": "plain",
+      "biome": "grassland",
+      "tags": [],
+      "note": ""
+    }
+  ]
+}
