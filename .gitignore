@@ -1,0 +1,9 @@
+node_modules
+dist
+coverage
+.vite
+*.log
+storage/maps/*.tmp
+storage/exports/*.tmp
+storage/exports/*.png
+*.tsbuildinfo
