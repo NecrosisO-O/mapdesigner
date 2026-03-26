@@ -42,8 +42,16 @@ async function ensureDirectories(): Promise<void> {
   await fs.mkdir(EXPORT_STORAGE_DIR, { recursive: true });
 }
 
+function assertMapId(id: string): string {
+  const normalized = id.trim();
+  if (!normalized) {
+    throw new Error("map id is required");
+  }
+  return normalized;
+}
+
 function mapFilePath(id: string): string {
-  return path.join(MAP_STORAGE_DIR, `${id}.json`);
+  return path.join(MAP_STORAGE_DIR, `${assertMapId(id)}.json`);
 }
 
 function exportFilePath(fileName: string): string {
@@ -117,13 +125,13 @@ export async function createMap(input: {
 }
 
 export async function getMap(id: string): Promise<MapRuntimeState> {
-  const document = await loadMapDocument(id);
+  const document = await loadMapDocument(assertMapId(id));
   return runtimeFromDocument(document);
 }
 
 export async function saveMap(input: SaveMapInput): Promise<MapRuntimeState> {
   await ensureDirectories();
-  const current = await loadMapDocument(input.document.meta.id);
+  const current = await loadMapDocument(assertMapId(input.document.meta.id));
   if (current.meta.revision !== input.expectedRevision) {
     throw new Error(
       `revision conflict: expected ${input.expectedRevision}, current is ${current.meta.revision}`
@@ -159,11 +167,11 @@ export async function saveMapAs(input: SaveMapAsInput): Promise<MapRuntimeState>
 }
 
 export async function deleteMap(id: string): Promise<void> {
-  await fs.unlink(mapFilePath(id));
+  await fs.unlink(mapFilePath(assertMapId(id)));
 }
 
 export async function duplicateMap(id: string): Promise<MapRuntimeState> {
-  const existing = await loadMapDocument(id);
+  const existing = await loadMapDocument(assertMapId(id));
   const now = new Date().toISOString();
   const duplicateId = createMapId(existing.meta.name);
   const document: MapDocument = {
@@ -216,7 +224,7 @@ export async function importMap(input: {
 }
 
 export async function exportJson(id: string): Promise<{ fileName: string; path: string }> {
-  const document = await loadMapDocument(id);
+  const document = await loadMapDocument(assertMapId(id));
   const fileName = `${slugify(document.meta.name) || document.meta.id}.json`;
   const filePath = exportFilePath(fileName);
   await fs.writeFile(filePath, stringifyDocument(document), "utf8");
@@ -227,7 +235,7 @@ export async function exportPng(
   id: string,
   options: Partial<ExportRenderOptions> = {}
 ): Promise<{ fileName: string; path: string }> {
-  const runtime = await getMap(id);
+  const runtime = await getMap(assertMapId(id));
   const baseOptions: ExportRenderOptions = {
     preset: "clean",
     includeCoordinates: false,
@@ -258,7 +266,8 @@ export async function applyCommands(id: string, commands: MapCommand[]): Promise
   map: MapRuntimeState;
   warnings: ValidationIssue[];
 }> {
-  const document = await loadMapDocument(id);
+  const normalizedId = assertMapId(id);
+  const document = await loadMapDocument(normalizedId);
   let state = createRuntimeState(document);
   const warnings: ValidationIssue[] = [];
 
@@ -271,12 +280,12 @@ export async function applyCommands(id: string, commands: MapCommand[]): Promise
     state = result.map;
   }
 
-  await fs.writeFile(mapFilePath(id), stringifyDocument(state.document), "utf8");
+  await fs.writeFile(mapFilePath(normalizedId), stringifyDocument(state.document), "utf8");
   return { map: state, warnings };
 }
 
 export async function renderInlineSvg(id: string): Promise<string> {
-  const runtime = await getMap(id);
+  const runtime = await getMap(assertMapId(id));
   const scene = buildMapScene(runtime);
   return renderSvgString(scene);
 }

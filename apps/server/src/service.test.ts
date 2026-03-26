@@ -99,4 +99,9 @@ describe("server service", () => {
     const listed = await service.listMaps();
     expect(listed.map((item) => item.name)).toEqual(["Save As Copy", "Save As Source"]);
   });
+
+  it("rejects empty map ids with a clear error", async () => {
+    const service = await loadService(tempRoot);
+    await expect(service.getMap("")).rejects.toThrow(/map id is required/);
+  });
 });

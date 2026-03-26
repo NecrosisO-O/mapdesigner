@@ -69,6 +69,19 @@ function formatCellValue<T extends string>(
   return `${entry.label} (${entry.short})`;
 }
 
+function formatStatusMessage(message: string | undefined, fallback: string): string {
+  if (!message) {
+    return fallback;
+  }
+  if (message === "map id is required") {
+    return "请先选择一张地图";
+  }
+  if (message.includes("ENOENT:") || message.includes("/storage/maps/")) {
+    return "地图文件不存在或暂时无法读取";
+  }
+  return message;
+}
+
 export default function App() {
   const [maps, setMaps] = useState<MapListItem[]>([]);
   const [currentMap, setCurrentMap] = useState<MapRuntimeState | null>(null);
@@ -83,6 +96,7 @@ export default function App() {
   const [showShorthand, setShowShorthand] = useState(false);
   const [showGrid, setShowGrid] = useState(true);
   const [showUndesigned, setShowUndesigned] = useState(true);
+  const [exportPanelOpen, setExportPanelOpen] = useState(false);
   const [hoveredCell, setHoveredCell] = useState<ActiveCell | null>(null);
   const [pngOptions, setPngOptions] = useState<ExportRenderOptions>(DEFAULT_PNG_OPTIONS);
   const [loading, setLoading] = useState(false);
@@ -115,7 +129,7 @@ export default function App() {
   async function refreshMaps(selectId?: string): Promise<void> {
     const response = await api.listMaps();
     if (!response.ok || !response.result) {
-      setMessage(response.errors[0]?.message ?? "加载地图列表失败");
+      setMessage(formatStatusMessage(response.errors[0]?.message, "加载地图列表失败"));
       return;
     }
     startTransition(() => {
@@ -131,7 +145,7 @@ export default function App() {
     const response = await api.getMap(id);
     setLoading(false);
     if (!response.ok || !response.result) {
-      setMessage(response.errors[0]?.message ?? "打开地图失败");
+      setMessage(formatStatusMessage(response.errors[0]?.message, "打开地图失败"));
       return;
     }
     setCurrentMap(response.result);
@@ -185,7 +199,7 @@ export default function App() {
     }
     const response = await api.createMap({ name });
     if (!response.ok || !response.result) {
-      setMessage(response.errors[0]?.message ?? "新建地图失败");
+      setMessage(formatStatusMessage(response.errors[0]?.message, "新建地图失败"));
       return;
     }
     await refreshMaps(response.result.document.meta.id);
@@ -206,7 +220,7 @@ export default function App() {
       expectedRevision: persistedRevision
     });
     if (!response.ok || !response.result) {
-      setMessage(response.errors[0]?.message ?? "保存失败");
+      setMessage(formatStatusMessage(response.errors[0]?.message, "保存失败"));
       return;
     }
     setCurrentMap(response.result);
@@ -256,7 +270,7 @@ export default function App() {
       name: name.trim()
     });
     if (!response.ok || !response.result) {
-      setMessage(response.errors[0]?.message ?? "另存为失败");
+      setMessage(formatStatusMessage(response.errors[0]?.message, "另存为失败"));
       return;
     }
     await refreshMaps(response.result.document.meta.id);
@@ -276,7 +290,11 @@ export default function App() {
       return;
     }
     const response = await api.exportPng(currentMap.document.meta.id, pngOptions);
-    setMessage(response.result ? `PNG 已导出到 ${response.result.path}` : response.errors[0]?.message ?? "导出失败");
+    setMessage(
+      response.result
+        ? `PNG 已导出到 ${response.result.path}`
+        : formatStatusMessage(response.errors[0]?.message, "导出失败")
+    );
   }
 
   function applyDraft(): void {
@@ -339,12 +357,12 @@ export default function App() {
     if (!response.ok || !response.result) {
       const retry = window.confirm(`${response.errors[0]?.message ?? "导入失败"}。是否生成新 ID 后重试？`);
       if (!retry) {
-        setMessage(response.errors[0]?.message ?? "导入失败");
+        setMessage(formatStatusMessage(response.errors[0]?.message, "导入失败"));
         return;
       }
       const retryResponse = await api.importMap(content, true);
       if (!retryResponse.ok || !retryResponse.result) {
-        setMessage(retryResponse.errors[0]?.message ?? "导入失败");
+        setMessage(formatStatusMessage(retryResponse.errors[0]?.message, "导入失败"));
         return;
       }
       await refreshMaps(retryResponse.result.document.meta.id);
@@ -379,10 +397,14 @@ export default function App() {
           <select
             value={currentMapId}
             onChange={(event) => {
+              const nextId = event.target.value.trim();
+              if (!nextId) {
+                return;
+              }
               if (!ensureCanLeaveMap() || !ensureCanLeaveSelection()) {
                 return;
               }
-              void openMap(event.target.value);
+              void openMap(nextId);
             }}
           >
             <option value="">选择地图</option>
@@ -452,7 +474,11 @@ export default function App() {
                 return;
               }
               const response = await api.exportJson(currentMap.document.meta.id);
-              setMessage(response.result ? `JSON 已导出到 ${response.result.path}` : response.errors[0]?.message ?? "导出失败");
+              setMessage(
+                response.result
+                  ? `JSON 已导出到 ${response.result.path}`
+                  : formatStatusMessage(response.errors[0]?.message, "导出失败")
+              );
             }}
             disabled={!currentMap}
           >
@@ -472,7 +498,7 @@ export default function App() {
               }
               const response = await api.duplicateMap(currentMap.document.meta.id);
               if (!response.ok || !response.result) {
-                setMessage(response.errors[0]?.message ?? "复制失败");
+                setMessage(formatStatusMessage(response.errors[0]?.message, "复制失败"));
                 return;
               }
               await refreshMaps(response.result.document.meta.id);
@@ -495,7 +521,7 @@ export default function App() {
               }
               const response = await api.deleteMap(currentMap.document.meta.id);
               if (!response.ok) {
-                setMessage(response.errors[0]?.message ?? "删除失败");
+                setMessage(formatStatusMessage(response.errors[0]?.message, "删除失败"));
                 return;
               }
               setCurrentMap(null);
@@ -554,34 +580,22 @@ export default function App() {
 
       <main className="layout">
         <aside className="sidebar">
-          <section className="panel">
-            <h2>地图列表</h2>
-            {maps.length > 0 ? (
-              <div className="map-list">
-                {displayMaps.map((map) => {
-                  const current = map.id === currentMapId;
-                  return (
-                    <button
-                      key={map.id}
-                      className={`map-list-item${current ? " current" : ""}`}
-                      onClick={() => {
-                        if (!ensureCanLeaveMap() || !ensureCanLeaveSelection()) {
-                          return;
-                        }
-                        void openMap(map.id);
-                      }}
-                      type="button"
-                    >
-                      <strong>{map.name}</strong>
-                      <span>ID: {map.id}</span>
-                      <span>Designed: {map.designedCellCount} | Revision: {map.revision}</span>
-                      <span>更新于 {formatDateTime(map.updatedAt)}</span>
-                    </button>
-                  );
-                })}
+          <section className="panel status-panel" aria-label="当前状态">
+            <h2>当前状态</h2>
+            <p>{loading ? "加载中..." : message}</p>
+            {currentMap ? (
+              <div className="meta-list">
+                <p>
+                  当前地图：<strong>{currentMap.document.meta.name}</strong>
+                </p>
+                <p>ID：{currentMap.document.meta.id}</p>
+                <p>Designed：{currentMap.document.cells.length}</p>
+                <p>Revision：{currentMap.document.meta.revision}</p>
+                <p>更新时间：{formatDateTime(currentMap.document.meta.updated_at)}</p>
+                <p>保存状态：{mapDirty ? "未保存修改" : "已保存"}</p>
               </div>
             ) : (
-              <p>还没有地图。先从顶部新建或导入一张地图。</p>
+              <p>当前没有打开地图。</p>
             )}
           </section>
           <section className="panel">
@@ -591,160 +605,145 @@ export default function App() {
             <label className="checkbox-row"><input type="checkbox" checked={showGrid} onChange={(event) => setShowGrid(event.target.checked)} />显示网格线</label>
             <label className="checkbox-row"><input type="checkbox" checked={showUndesigned} onChange={(event) => setShowUndesigned(event.target.checked)} />显示 undesigned</label>
           </section>
-          <section className="panel">
-            <h2>图片导出</h2>
-            <label>
-              预设
-              <select
-                value={pngOptions.preset}
-                onChange={(event) =>
-                  setPngOptions((current) => ({
-                    ...current,
-                    preset: event.target.value as ExportRenderOptions["preset"],
-                    includeCoordinates: event.target.value === "reference" ? true : current.includeCoordinates,
-                    includeShorthand: event.target.value === "reference" ? true : current.includeShorthand
-                  }))
-                }
+          <section className="panel collapsible-panel">
+            <div className="panel-header">
+              <h2>图片导出</h2>
+              <button
+                type="button"
+                className="panel-toggle"
+                onClick={() => setExportPanelOpen((current) => !current)}
+                aria-expanded={exportPanelOpen}
+                aria-controls="export-panel-content"
               >
-                <option value="clean">clean</option>
-                <option value="reference">reference</option>
-              </select>
-            </label>
-            <label>
-              Scale
-              <select
-                value={pngOptions.scale}
-                onChange={(event) =>
-                  setPngOptions((current) => ({
-                    ...current,
-                    scale: Number(event.target.value)
-                  }))
-                }
-              >
-                <option value="1">1x</option>
-                <option value="2">2x</option>
-                <option value="3">3x</option>
-              </select>
-            </label>
-            <label>
-              Padding
-              <select
-                value={pngOptions.padding}
-                onChange={(event) =>
-                  setPngOptions((current) => ({
-                    ...current,
-                    padding: Number(event.target.value)
-                  }))
-                }
-              >
-                <option value="16">16</option>
-                <option value="32">32</option>
-                <option value="48">48</option>
-                <option value="64">64</option>
-              </select>
-            </label>
-            <label>
-              背景色
-              <input
-                type="color"
-                value={pngOptions.background}
-                onChange={(event) =>
-                  setPngOptions((current) => ({
-                    ...current,
-                    background: event.target.value
-                  }))
-                }
-              />
-            </label>
-            <label className="checkbox-row">
-              <input
-                type="checkbox"
-                checked={pngOptions.includeGrid}
-                onChange={(event) =>
-                  setPngOptions((current) => ({
-                    ...current,
-                    includeGrid: event.target.checked
-                  }))
-                }
-              />
-              导出网格线
-            </label>
-            <label className="checkbox-row">
-              <input
-                type="checkbox"
-                checked={pngOptions.includeUndesigned}
-                onChange={(event) =>
-                  setPngOptions((current) => ({
-                    ...current,
-                    includeUndesigned: event.target.checked
-                  }))
-                }
-              />
-              导出 undesigned
-            </label>
-            <label className="checkbox-row">
-              <input
-                type="checkbox"
-                checked={pngOptions.includeCoordinates}
-                onChange={(event) =>
-                  setPngOptions((current) => ({
-                    ...current,
-                    includeCoordinates: event.target.checked
-                  }))
-                }
-              />
-              导出坐标
-            </label>
-            <label className="checkbox-row">
-              <input
-                type="checkbox"
-                checked={pngOptions.includeShorthand}
-                onChange={(event) =>
-                  setPngOptions((current) => ({
-                    ...current,
-                    includeShorthand: event.target.checked
-                  }))
-                }
-              />
-              导出简写
-            </label>
+                {exportPanelOpen ? "收起" : "展开"}
+              </button>
+            </div>
+            {exportPanelOpen ? (
+              <div id="export-panel-content">
+                <label>
+                  预设
+                  <select
+                    value={pngOptions.preset}
+                    onChange={(event) =>
+                      setPngOptions((current) => ({
+                        ...current,
+                        preset: event.target.value as ExportRenderOptions["preset"],
+                        includeCoordinates: event.target.value === "reference" ? true : current.includeCoordinates,
+                        includeShorthand: event.target.value === "reference" ? true : current.includeShorthand
+                      }))
+                    }
+                  >
+                    <option value="clean">clean</option>
+                    <option value="reference">reference</option>
+                  </select>
+                </label>
+                <label>
+                  Scale
+                  <select
+                    value={pngOptions.scale}
+                    onChange={(event) =>
+                      setPngOptions((current) => ({
+                        ...current,
+                        scale: Number(event.target.value)
+                      }))
+                    }
+                  >
+                    <option value="1">1x</option>
+                    <option value="2">2x</option>
+                    <option value="3">3x</option>
+                  </select>
+                </label>
+                <label>
+                  Padding
+                  <select
+                    value={pngOptions.padding}
+                    onChange={(event) =>
+                      setPngOptions((current) => ({
+                        ...current,
+                        padding: Number(event.target.value)
+                      }))
+                    }
+                  >
+                    <option value="16">16</option>
+                    <option value="32">32</option>
+                    <option value="48">48</option>
+                    <option value="64">64</option>
+                  </select>
+                </label>
+                <label>
+                  背景色
+                  <input
+                    type="color"
+                    value={pngOptions.background}
+                    onChange={(event) =>
+                      setPngOptions((current) => ({
+                        ...current,
+                        background: event.target.value
+                      }))
+                    }
+                  />
+                </label>
+                <label className="checkbox-row">
+                  <input
+                    type="checkbox"
+                    checked={pngOptions.includeGrid}
+                    onChange={(event) =>
+                      setPngOptions((current) => ({
+                        ...current,
+                        includeGrid: event.target.checked
+                      }))
+                    }
+                  />
+                  导出网格线
+                </label>
+                <label className="checkbox-row">
+                  <input
+                    type="checkbox"
+                    checked={pngOptions.includeUndesigned}
+                    onChange={(event) =>
+                      setPngOptions((current) => ({
+                        ...current,
+                        includeUndesigned: event.target.checked
+                      }))
+                    }
+                  />
+                  导出 undesigned
+                </label>
+                <label className="checkbox-row">
+                  <input
+                    type="checkbox"
+                    checked={pngOptions.includeCoordinates}
+                    onChange={(event) =>
+                      setPngOptions((current) => ({
+                        ...current,
+                        includeCoordinates: event.target.checked
+                      }))
+                    }
+                  />
+                  导出坐标
+                </label>
+                <label className="checkbox-row">
+                  <input
+                    type="checkbox"
+                    checked={pngOptions.includeShorthand}
+                    onChange={(event) =>
+                      setPngOptions((current) => ({
+                        ...current,
+                        includeShorthand: event.target.checked
+                      }))
+                    }
+                  />
+                  导出简写
+                </label>
+              </div>
+            ) : (
+              <p className="panel-collapsed-hint">展开后可配置 PNG 导出的预设、比例和参考信息。</p>
+            )}
           </section>
           <section className="panel">
             <h2>说明</h2>
             <p>滚轮缩放，拖拽平移。默认展示扩展坐标，内部编号用于程序定位。</p>
             <p>编辑单元格后只会先更新当前地图内存，点击顶部“保存”才会写回 `storage/maps`。</p>
-          </section>
-          <section className="panel status-panel">
-            <h2>状态</h2>
-            <p>{loading ? "加载中..." : message}</p>
-            {currentMap ? (
-              <p>
-                当前地图：<strong>{currentMap.document.meta.name}</strong><br />
-                Designed: {currentMap.document.cells.length} | Revision: {currentMap.document.meta.revision}
-              </p>
-            ) : (
-              <p>当前没有打开地图。</p>
-            )}
-          </section>
-          <section className="panel">
-            <h2>悬停信息</h2>
-            {hoveredCell ? (
-              <div className="meta-list">
-                <p>坐标：{hoveredCell.display_coord}</p>
-                <p>ID：{hoveredCell.id}</p>
-                <p>状态：{hoveredCell.status}</p>
-                <p>地形：{formatCellValue(hoveredCell.terrain, TERRAIN_ENTRIES)}</p>
-                <p>生态：{formatCellValue(hoveredCell.biome, BIOME_ENTRIES)}</p>
-                <p>
-                  Tags：
-                  {hoveredCell.tags.length > 0
-                    ? hoveredCell.tags.map((tag) => TAG_ENTRIES[tag].label).join(" / ")
-                    : "无"}
-                </p>
-              </div>
-            ) : (
-              <p>将鼠标移动到单元格上查看摘要。</p>
-            )}
           </section>
         </aside>
 
@@ -779,10 +778,8 @@ export default function App() {
             <h2>当前选中</h2>
             {selectedCell ? (
               <div className="meta-list">
-                <p>坐标：{selectedCell.display_coord}</p>
-                <p>ID：{selectedCell.id}</p>
+                <p>坐标：{selectedCell.display_coord} | ID：{selectedCell.id}</p>
                 <p>状态：{selectedCell.status}</p>
-                {selectedCell.status === "undesigned" ? <p>编辑此格会扩展地图边界。</p> : null}
               </div>
             ) : (
               <p>请选择一个单元格</p>
@@ -790,7 +787,19 @@ export default function App() {
           </section>
 
           <section className="panel">
-            <h2>基础属性</h2>
+            <div className="panel-header">
+              <div className="action-row action-row-inline">
+                <button onClick={applyDraft} disabled={!selectedCell}>
+                  保存
+                </button>
+                <button onClick={() => setDraft(toDraft(selectedCell))} disabled={!selectedCell || !cellDirty}>
+                  撤销
+                </button>
+                <button onClick={clearSelected} disabled={!selectedCell}>
+                  清空
+                </button>
+              </div>
+            </div>
             <label>
               Terrain
               <select
@@ -821,10 +830,6 @@ export default function App() {
                 ))}
               </select>
             </label>
-          </section>
-
-          <section className="panel">
-            <h2>附加信息</h2>
             <div className="tag-grid">
               {Object.entries(TAG_ENTRIES).map(([key, entry]) => (
                 <label key={key}>
@@ -854,21 +859,6 @@ export default function App() {
                 onChange={(event) => setDraft((current) => ({ ...current, note: event.target.value }))}
               />
             </label>
-          </section>
-
-          <section className="panel">
-            <h2>操作</h2>
-            <div className="action-row">
-              <button onClick={applyDraft} disabled={!selectedCell}>
-                保存修改
-              </button>
-              <button onClick={clearSelected} disabled={!selectedCell}>
-                清空此格
-              </button>
-              <button onClick={() => setDraft(toDraft(selectedCell))} disabled={!selectedCell || !cellDirty}>
-                取消编辑
-              </button>
-            </div>
           </section>
 
           <section className="panel">
