@@ -1,6 +1,6 @@
 /* @vitest-environment jsdom */
 
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App.js";
 
@@ -160,16 +160,60 @@ describe("App", () => {
     await waitFor(() => expect(apiMock.getMap).toHaveBeenCalledWith("sample-map"));
     expect(await screen.findByText("已打开 Sample Map")).toBeTruthy();
     expect(screen.getByRole("option", { name: "Sample Map" })).toBeTruthy();
+    const statusBar = screen.getByLabelText("当前状态");
+    expect(screen.getByRole("heading", { name: "当前状态" })).toBeTruthy();
+    expect(statusBar.textContent).toContain("当前地图：");
+    expect(statusBar.textContent).toContain("ID：sample-map");
+    expect(statusBar.textContent).toContain("Designed：1");
+    expect(statusBar.textContent).toContain("Revision：1");
+    expect(screen.queryByRole("list", { name: "地图列表" })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "悬停信息" })).toBeNull();
+  });
+
+  it("ignores empty map selection in the top dropdown", async () => {
+    render(<App />);
+    await screen.findByText("已打开 Sample Map");
+    const mapSelector = screen.getAllByRole("combobox")[0] as HTMLSelectElement;
+
+    fireEvent.change(mapSelector, { target: { value: "" } });
+
+    expect(apiMock.getMap).toHaveBeenCalledTimes(1);
     expect(screen.getByText("当前地图：", { exact: false })).toBeTruthy();
+  });
+
+  it("normalizes low-level file errors in the status panel", async () => {
+    apiMock.getMap.mockResolvedValueOnce({
+      ok: false,
+      result: undefined,
+      warnings: [],
+      errors: [
+        {
+          code: "map_not_found",
+          message: "ENOENT: no such file or directory, open '/root/WorkSpace/MapDesigner/apps/server/storage/maps/.json'",
+          severity: "invalid"
+        }
+      ]
+    });
+
+    render(<App />);
+
+    await waitFor(() => expect(apiMock.getMap).toHaveBeenCalledWith("sample-map"));
+    expect(await screen.findByText("地图文件不存在或暂时无法读取")).toBeTruthy();
+    expect(screen.queryByText(/ENOENT:/)).toBeNull();
   });
 
   it("selects a cell and shows its metadata", async () => {
     render(<App />);
     await screen.findByText("已打开 Sample Map");
     fireEvent.click(screen.getByText("R0C0"));
-    expect(await screen.findByText("坐标：R0C0")).toBeTruthy();
-    expect(screen.getByText("ID：cell@0,0")).toBeTruthy();
-    expect((screen.getByLabelText("Terrain") as HTMLSelectElement).value).toBe("plain");
+    expect(await screen.findByText("坐标：R0C0 | ID：cell@0,0")).toBeTruthy();
+    const terrainField = screen.getByLabelText("Terrain") as HTMLSelectElement;
+    expect(terrainField.value).toBe("plain");
+    const cellPanel = terrainField.closest("section");
+    expect(cellPanel).toBeTruthy();
+    expect(within(cellPanel as HTMLElement).getByRole("button", { name: "保存" })).toBeTruthy();
+    expect(within(cellPanel as HTMLElement).getByRole("button", { name: "撤销" })).toBeTruthy();
+    expect(within(cellPanel as HTMLElement).getByRole("button", { name: "清空" })).toBeTruthy();
   });
 
   it("can create a map from the toolbar", async () => {
@@ -208,6 +252,9 @@ describe("App", () => {
   it("exports png with configured options", async () => {
     render(<App />);
     await screen.findByText("已打开 Sample Map");
+    expect(screen.queryByLabelText("预设")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "展开" }));
 
     fireEvent.change(screen.getByLabelText("预设"), {
       target: { value: "reference" }
@@ -230,15 +277,27 @@ describe("App", () => {
     );
   });
 
-  it("shows hover details for a map cell", async () => {
+  it("can collapse the export panel after opening it", async () => {
+    render(<App />);
+    await screen.findByText("已打开 Sample Map");
+
+    fireEvent.click(screen.getByRole("button", { name: "展开" }));
+    expect(screen.getByLabelText("预设")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "收起" }));
+    expect(screen.queryByLabelText("预设")).toBeNull();
+    expect(screen.getByText("展开后可配置 PNG 导出的预设、比例和参考信息。")).toBeTruthy();
+  });
+
+  it("does not render a hover details panel for map cells", async () => {
     render(<App />);
     await screen.findByText("已打开 Sample Map");
 
     const coordLabel = screen.getByText("R0C0");
     fireEvent.mouseEnter(coordLabel.closest("g")!);
 
-    expect(await screen.findByText("地形：平原 (PLN)")).toBeTruthy();
-    expect(screen.getByText("生态：草原 (GRS)")).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "悬停信息" })).toBeNull();
+    expect(screen.queryByText("地形：平原 (PLN)")).toBeNull();
   });
 
   it("shows recent history after editing a cell", async () => {
@@ -246,10 +305,12 @@ describe("App", () => {
     await screen.findByText("已打开 Sample Map");
 
     fireEvent.click(screen.getByText("R0C0"));
-    fireEvent.change(screen.getByLabelText("Note"), {
+    const noteField = screen.getByLabelText("Note");
+    fireEvent.change(noteField, {
       target: { value: "history-note" }
     });
-    fireEvent.click(screen.getByText("保存修改"));
+    const cellPanel = noteField.closest("section");
+    fireEvent.click(within(cellPanel as HTMLElement).getByRole("button", { name: "保存" }));
 
     expect(await screen.findByText("已记录 1 步 | 可重做 0 步")).toBeTruthy();
     expect(screen.getByText("设置单元格")).toBeTruthy();
