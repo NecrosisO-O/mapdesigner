@@ -3,7 +3,11 @@ dist
 coverage
 .vite
 *.log
+apps/server/storage/
 storage/maps/*.tmp
+storage/maps/test*.json
+storage/maps/*-smoke*.json
 storage/exports/*.tmp
+storage/exports/*.json
 storage/exports/*.png
 *.tsbuildinfo
