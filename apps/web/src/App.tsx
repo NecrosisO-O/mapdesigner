@@ -29,6 +29,11 @@ interface CellDraft {
   note: string;
 }
 
+interface FormatBrushScope {
+  terrain: boolean;
+  biome: boolean;
+}
+
 const DEFAULT_PNG_OPTIONS: ExportRenderOptions = {
   preset: "clean",
   includeCoordinates: false,
@@ -123,6 +128,11 @@ export default function App() {
   const [showGrid, setShowGrid] = useState(true);
   const [showUndesigned, setShowUndesigned] = useState(true);
   const [exportPanelOpen, setExportPanelOpen] = useState(false);
+  const [formatBrushEnabled, setFormatBrushEnabled] = useState(false);
+  const [formatBrushScope, setFormatBrushScope] = useState<FormatBrushScope>({
+    terrain: true,
+    biome: true
+  });
   const [hoveredCell, setHoveredCell] = useState<ActiveCell | null>(null);
   const [pngOptions, setPngOptions] = useState<ExportRenderOptions>(DEFAULT_PNG_OPTIONS);
   const [loading, setLoading] = useState(false);
@@ -145,6 +155,7 @@ export default function App() {
     : TERRAIN_CATEGORY_ORDER;
   const terrainOptions = terrainCategory ? getFilteredTerrainEntries(terrainCategory, draft.biome || undefined) : [];
   const biomeOptions = draft.terrain ? getAllowedBiomesForTerrain(draft.terrain) : BIOME_KEYS;
+  const canUseFormatBrush = selectedCell?.status === "designed";
   const displayMaps = maps.map((map) =>
     currentMap && map.id === currentMap.document.meta.id
       ? {
@@ -160,6 +171,28 @@ export default function App() {
   function syncDraftFromCell(cell: ActiveCell | null): void {
     setDraft(toDraft(cell));
     setTerrainCategory(resolveTerrainCategory(cell?.terrain));
+  }
+
+  function setFormatBrushScopeField(field: keyof FormatBrushScope, value: boolean): void {
+    setFormatBrushScope((current) => {
+      if (!value && !current[field === "terrain" ? "biome" : "terrain"]) {
+        return current;
+      }
+      return {
+        ...current,
+        [field]: value
+      };
+    });
+  }
+
+  function getFormatBrushLabel(): string {
+    if (formatBrushScope.terrain && formatBrushScope.biome) {
+      return "地形 + 生态";
+    }
+    if (formatBrushScope.terrain) {
+      return "地形";
+    }
+    return "生态";
   }
 
   function handleTerrainCategoryChange(nextCategory: string): void {
@@ -242,6 +275,7 @@ export default function App() {
     setPersistedRevision(response.result.document.meta.revision);
     setSelectedCellId(null);
     syncDraftFromCell(null);
+    setFormatBrushEnabled(false);
     setHoveredCell(null);
     setIsRenaming(false);
     setRenameDraft(response.result.document.meta.name);
@@ -266,6 +300,12 @@ export default function App() {
       setRenameDraft(currentMap?.document.meta.name ?? "");
     }
   }, [currentMap?.document.meta.name, isRenaming]);
+
+  useEffect(() => {
+    if (formatBrushEnabled && !canUseFormatBrush) {
+      setFormatBrushEnabled(false);
+    }
+  }, [canUseFormatBrush, formatBrushEnabled]);
 
   function ensureCanLeaveSelection(): boolean {
     if (!cellDirty) {
@@ -297,6 +337,7 @@ export default function App() {
     setPersistedRevision(response.result.document.meta.revision);
     setSelectedCellId(null);
     syncDraftFromCell(null);
+    setFormatBrushEnabled(false);
     setMessage(`已新建 ${response.result.document.meta.name}`);
   }
 
@@ -368,6 +409,7 @@ export default function App() {
     setPersistedRevision(response.result.document.meta.revision);
     setSelectedCellId(null);
     syncDraftFromCell(null);
+    setFormatBrushEnabled(false);
     setHoveredCell(null);
     setIsRenaming(false);
     setRenameDraft(response.result.document.meta.name);
@@ -439,7 +481,76 @@ export default function App() {
       result.map.activeCells.find((cell) => cell.row === selectedCell.row && cell.col === selectedCell.col) ?? null;
     setSelectedCellId(updatedCell?.id ?? null);
     syncDraftFromCell(updatedCell);
+    if (updatedCell?.status !== "designed") {
+      setFormatBrushEnabled(false);
+    }
     setMessage("单元格已清空，等待保存到文件");
+  }
+
+  function toggleFormatBrush(): void {
+    if (formatBrushEnabled) {
+      setFormatBrushEnabled(false);
+      setMessage("已退出格式刷模式");
+      return;
+    }
+    if (!canUseFormatBrush || !selectedCell) {
+      setMessage("请选择一个已设计单元格作为格式刷源格");
+      return;
+    }
+    setFormatBrushEnabled(true);
+    setMessage(`已进入格式刷模式：${selectedCell.display_coord}，当前刷入 ${getFormatBrushLabel()}`);
+  }
+
+  function applyFormatBrush(targetCell: ActiveCell): void {
+    if (!currentMap || !selectedCell || selectedCell.status !== "designed") {
+      setFormatBrushEnabled(false);
+      return;
+    }
+    if (targetCell.id === selectedCell.id) {
+      return;
+    }
+    if (!formatBrushScope.terrain && !formatBrushScope.biome) {
+      setMessage("请至少选择地形或生态");
+      return;
+    }
+    if (!formatBrushScope.terrain && !targetCell.terrain) {
+      setMessage("只刷生态时，目标格必须已有地形");
+      return;
+    }
+
+    const nextTerrain = formatBrushScope.terrain ? selectedCell.terrain : targetCell.terrain;
+    const nextBiome = formatBrushScope.biome ? selectedCell.biome : targetCell.biome;
+    if (!nextTerrain) {
+      setMessage("格式刷结果缺少 terrain，无法应用");
+      return;
+    }
+
+    const result = applyCommand(currentMap, {
+      action: "set_cell",
+      source: "webui",
+      target: { row: targetCell.row, col: targetCell.col },
+      changes: {
+        terrain: nextTerrain as keyof typeof TERRAIN_ENTRIES,
+        biome: nextBiome ? (nextBiome as keyof typeof BIOME_ENTRIES) : null,
+        tags: targetCell.tags as Array<keyof typeof TAG_ENTRIES>,
+        note: targetCell.note
+      }
+    });
+
+    if (!result.ok) {
+      setMessage(result.errors[0]?.message ?? "格式刷应用失败");
+      return;
+    }
+
+    setCurrentMap(result.map);
+    setSelectedCellId(createCellId(selectedCell.row, selectedCell.col));
+    syncDraftFromCell(
+      result.map.activeCells.find((cell) => cell.row === selectedCell.row && cell.col === selectedCell.col) ?? null
+    );
+    setMessage(
+      result.warnings[0]?.message ??
+        `已将 ${selectedCell.display_coord} 的${getFormatBrushLabel()}刷到 ${targetCell.display_coord}，等待保存到文件`
+    );
   }
 
   async function handleImportFile(file: File): Promise<void> {
@@ -461,6 +572,7 @@ export default function App() {
       setCurrentMapId(retryResponse.result.document.meta.id);
       setPersistedRevision(retryResponse.result.document.meta.revision);
       syncDraftFromCell(null);
+      setFormatBrushEnabled(false);
       setHoveredCell(null);
       setIsRenaming(false);
       setRenameDraft(retryResponse.result.document.meta.name);
@@ -472,6 +584,7 @@ export default function App() {
     setCurrentMapId(response.result.document.meta.id);
     setPersistedRevision(response.result.document.meta.revision);
     syncDraftFromCell(null);
+    setFormatBrushEnabled(false);
     setHoveredCell(null);
     setIsRenaming(false);
     setRenameDraft(response.result.document.meta.name);
@@ -582,6 +695,7 @@ export default function App() {
               setCurrentMap(response.result);
               setCurrentMapId(response.result.document.meta.id);
               setPersistedRevision(response.result.document.meta.revision);
+              setFormatBrushEnabled(false);
               setMessage("复制成功");
             }}
             disabled={!currentMap}
@@ -605,6 +719,7 @@ export default function App() {
               setCurrentMapId("");
               setPersistedRevision(null);
               setSelectedCellId(null);
+              setFormatBrushEnabled(false);
               setHoveredCell(null);
               syncDraftFromCell(null);
               await refreshMaps();
@@ -831,6 +946,10 @@ export default function App() {
               selectedCellId={selectedCellId}
               onHoverCellChange={setHoveredCell}
               onSelectCell={(cell) => {
+                if (formatBrushEnabled) {
+                  applyFormatBrush(cell);
+                  return;
+                }
                 if (!ensureCanLeaveSelection()) {
                   return;
                 }
@@ -875,7 +994,47 @@ export default function App() {
                 <button onClick={clearSelected} disabled={!selectedCell}>
                   清空
                 </button>
+                <button
+                  type="button"
+                  className={formatBrushEnabled ? "toggle-button-active" : undefined}
+                  aria-pressed={formatBrushEnabled}
+                  onClick={toggleFormatBrush}
+                  disabled={!canUseFormatBrush}
+                >
+                  格式刷
+                </button>
               </div>
+            </div>
+            <div className="format-brush-panel">
+              <div className="format-brush-options">
+                <label className="checkbox-row">
+                  <input
+                    type="checkbox"
+                    checked={formatBrushScope.terrain}
+                    onChange={(event) => setFormatBrushScopeField("terrain", event.target.checked)}
+                    disabled={!selectedCell}
+                  />
+                  刷地形
+                </label>
+                <label className="checkbox-row">
+                  <input
+                    type="checkbox"
+                    checked={formatBrushScope.biome}
+                    onChange={(event) => setFormatBrushScopeField("biome", event.target.checked)}
+                    disabled={!selectedCell}
+                  />
+                  刷生态
+                </label>
+              </div>
+              {formatBrushEnabled && selectedCell ? (
+                <p className="format-brush-summary">
+                  格式刷源格：{selectedCell.display_coord} | 当前刷入：{getFormatBrushLabel()}
+                </p>
+              ) : (
+                <p className="format-brush-summary">
+                  选中已设计单元格后可进入格式刷模式；再次点击按钮即可退出。
+                </p>
+              )}
             </div>
             <label>
               Terrain 分类
