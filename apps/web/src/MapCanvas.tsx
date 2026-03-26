@@ -15,6 +15,10 @@ import {
 } from "@mapdesigner/map-render";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+const MIN_ZOOM = 0.2;
+const MAX_ZOOM = 2.6;
+const ZOOM_FACTOR = 1.1;
+
 interface MapCanvasProps {
   map: MapRuntimeState;
   selectedCellId: string | null;
@@ -93,28 +97,9 @@ export function MapCanvas(props: MapCanvasProps) {
   const [hoveredCellId, setHoveredCellId] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const zoomRef = useRef(zoom);
+  const offsetRef = useRef(offset);
   const dragState = useRef<{ dragging: boolean; startX: number; startY: number } | null>(null);
-
-  useEffect(() => {
-    const node = containerRef.current;
-    if (!node) {
-      return;
-    }
-
-    const handleWheel = (event: WheelEvent) => {
-      event.preventDefault();
-      event.stopPropagation();
-      setZoom((current) => {
-        const next = current + (event.deltaY < 0 ? 0.1 : -0.1);
-        return Math.max(0.5, Math.min(2.6, Number(next.toFixed(2))));
-      });
-    };
-
-    node.addEventListener("wheel", handleWheel, { passive: false });
-    return () => {
-      node.removeEventListener("wheel", handleWheel);
-    };
-  }, []);
 
   const scene = useMemo(
     () =>
@@ -126,6 +111,109 @@ export function MapCanvas(props: MapCanvasProps) {
       }),
     [props.map, props.showCoordinates, props.showGrid, props.showShorthand, props.showUndesigned]
   );
+  const [viewportSize, setViewportSize] = useState({ width: scene.width, height: scene.height });
+
+  const baseScale = Math.min(
+    viewportSize.width / scene.width,
+    viewportSize.height / scene.height
+  );
+  const baseOffset = {
+    x: (viewportSize.width - scene.width * baseScale) / 2,
+    y: 0
+  };
+
+  const updateViewportSize = () => {
+    const node = containerRef.current;
+    if (!node) {
+      return;
+    }
+    const rect = node.getBoundingClientRect();
+    setViewportSize({
+      width: rect.width > 0 ? rect.width : scene.width,
+      height: rect.height > 0 ? rect.height : scene.height
+    });
+  };
+
+  useEffect(() => {
+    zoomRef.current = zoom;
+  }, [zoom]);
+
+  useEffect(() => {
+    offsetRef.current = offset;
+  }, [offset]);
+
+  useEffect(() => {
+    updateViewportSize();
+    window.addEventListener("resize", updateViewportSize);
+
+    return () => {
+      window.removeEventListener("resize", updateViewportSize);
+    };
+  }, [scene.height, scene.width]);
+
+  useEffect(() => {
+    const node = containerRef.current;
+    if (!node) {
+      return;
+    }
+
+    const handleWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+
+      const rect = node.getBoundingClientRect();
+      const viewport = {
+        width: rect.width > 0 ? rect.width : scene.width,
+        height: rect.height > 0 ? rect.height : scene.height
+      };
+      const nextBaseScale = Math.min(
+        viewport.width / scene.width,
+        viewport.height / scene.height
+      );
+      const nextBaseOffset = {
+        x: (viewport.width - scene.width * nextBaseScale) / 2,
+        y: 0
+      };
+      const pointerX = event.clientX - rect.left;
+      const pointerY = event.clientY - rect.top;
+      const currentZoom = zoomRef.current;
+      const currentOffset = offsetRef.current;
+      const nextZoom = Number(
+        Math.max(
+          MIN_ZOOM,
+          Math.min(
+            MAX_ZOOM,
+            currentZoom * (event.deltaY < 0 ? ZOOM_FACTOR : 1 / ZOOM_FACTOR)
+          )
+        ).toFixed(3)
+      );
+
+      if (nextZoom === currentZoom) {
+        return;
+      }
+
+      setViewportSize(viewport);
+
+      const currentScale = nextBaseScale * currentZoom;
+      const sceneX = (pointerX - nextBaseOffset.x - currentOffset.x) / currentScale;
+      const sceneY = (pointerY - nextBaseOffset.y - currentOffset.y) / currentScale;
+      const nextScale = nextBaseScale * nextZoom;
+      const nextOffset = {
+        x: Number((pointerX - nextBaseOffset.x - sceneX * nextScale).toFixed(2)),
+        y: Number((pointerY - nextBaseOffset.y - sceneY * nextScale).toFixed(2))
+      };
+
+      zoomRef.current = nextZoom;
+      offsetRef.current = nextOffset;
+      setZoom(nextZoom);
+      setOffset(nextOffset);
+    };
+
+    node.addEventListener("wheel", handleWheel, { passive: false });
+    return () => {
+      node.removeEventListener("wheel", handleWheel);
+    };
+  }, [scene.height, scene.width]);
 
   return (
     <div
@@ -155,13 +243,17 @@ export function MapCanvas(props: MapCanvasProps) {
       <svg
         width="100%"
         height="100%"
-        viewBox={`0 0 ${scene.width} ${scene.height}`}
-        preserveAspectRatio="xMidYMin meet"
+        viewBox={`0 0 ${viewportSize.width} ${viewportSize.height}`}
+        preserveAspectRatio="none"
         aria-label="Map canvas"
       >
         <defs dangerouslySetInnerHTML={{ __html: scene.defs.join("") }} />
-        <rect width="100%" height="100%" fill={scene.background} />
-        <g transform={`translate(${offset.x} ${offset.y}) scale(${zoom})`}>
+        <rect width={viewportSize.width} height={viewportSize.height} fill={scene.background} />
+        <g
+          transform={`translate(${Number((baseOffset.x + offset.x).toFixed(2))} ${Number(
+            (baseOffset.y + offset.y).toFixed(2)
+          )}) scale(${Number((baseScale * zoom).toFixed(3))})`}
+        >
           {scene.layout.map((entry) => (
             <g
               key={entry.cell.id}
