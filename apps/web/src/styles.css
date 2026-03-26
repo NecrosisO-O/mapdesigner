@@ -60,10 +60,12 @@ input {
   flex-wrap: wrap;
   gap: 10px;
   justify-content: flex-end;
+  align-items: center;
 }
 
 .toolbar button,
 .toolbar select,
+.rename-editor input,
 .action-row button {
   border: 1px solid rgba(88, 72, 52, 0.24);
   background: #fbf6ea;
@@ -83,6 +85,7 @@ input {
   gap: 14px;
   padding: 14px;
   min-height: calc(100vh - 72px);
+  align-items: start;
 }
 
 .sidebar,
@@ -138,18 +141,35 @@ input {
   min-height: 640px;
   border-radius: 24px;
   overflow: hidden;
+  overscroll-behavior: contain;
   border: 1px solid rgba(93, 76, 55, 0.16);
   background: #f4f0e6;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.32);
 }
 
+.rename-editor {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.rename-editor input {
+  min-width: 220px;
+}
+
 .hex-cell {
   cursor: pointer;
+  outline: none;
 }
 
 .hex-cell:focus-visible polygon {
   stroke: #d84f2a;
   stroke-width: 2;
+}
+
+.hex-cell:focus-visible {
+  outline: none;
 }
 
 .tag-grid {

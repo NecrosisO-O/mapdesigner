@@ -23,15 +23,32 @@ describe("coords", () => {
 });
 
 describe("neighbors", () => {
-  it("returns six neighbors for flat-top even-q", () => {
+  it("returns six axial neighbors that ring around the origin", () => {
     expect(getNeighborCoords({ row: 0, col: 0 })).toHaveLength(6);
     expect(getNeighborCoords({ row: 1, col: 1 })).toHaveLength(6);
+    expect(getNeighborCoords({ row: 0, col: 0 })).toEqual([
+      { row: 1, col: 0 },
+      { row: 0, col: 1 },
+      { row: -1, col: 1 },
+      { row: -1, col: 0 },
+      { row: 0, col: -1 },
+      { row: 1, col: -1 }
+    ]);
   });
 });
 
 describe("activity", () => {
   it("creates a 7-cell seed area for empty maps", () => {
     expect(getSeedCoordinates()).toHaveLength(7);
+    expect(getSeedCoordinates()).toEqual([
+      { row: -1, col: 0 },
+      { row: -1, col: 1 },
+      { row: 0, col: -1 },
+      { row: 0, col: 0 },
+      { row: 0, col: 1 },
+      { row: 1, col: -1 },
+      { row: 1, col: 0 }
+    ]);
     const runtime = createRuntimeState(
       createEmptyDocument({
         id: "seed-test",

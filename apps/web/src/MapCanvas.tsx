@@ -13,7 +13,7 @@ import {
   getPrimaryTagSymbol,
   getTerrainColor
 } from "@mapdesigner/map-render";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 interface MapCanvasProps {
   map: MapRuntimeState;
@@ -89,10 +89,32 @@ function CellGroup(props: {
 }
 
 export function MapCanvas(props: MapCanvasProps) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const [hoveredCellId, setHoveredCellId] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const dragState = useRef<{ dragging: boolean; startX: number; startY: number } | null>(null);
+
+  useEffect(() => {
+    const node = containerRef.current;
+    if (!node) {
+      return;
+    }
+
+    const handleWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+      setZoom((current) => {
+        const next = current + (event.deltaY < 0 ? 0.1 : -0.1);
+        return Math.max(0.5, Math.min(2.6, Number(next.toFixed(2))));
+      });
+    };
+
+    node.addEventListener("wheel", handleWheel, { passive: false });
+    return () => {
+      node.removeEventListener("wheel", handleWheel);
+    };
+  }, []);
 
   const scene = useMemo(
     () =>
@@ -100,21 +122,15 @@ export function MapCanvas(props: MapCanvasProps) {
         includeCoordinates: props.showCoordinates,
         includeShorthand: props.showShorthand,
         includeGrid: props.showGrid,
-        includeUndesigned: props.showUndesigned,
-        selectedCellId: props.selectedCellId,
-        hoveredCellId
+        includeUndesigned: props.showUndesigned
       }),
-    [hoveredCellId, props.map, props.selectedCellId, props.showCoordinates, props.showGrid, props.showShorthand, props.showUndesigned]
+    [props.map, props.showCoordinates, props.showGrid, props.showShorthand, props.showUndesigned]
   );
 
   return (
     <div
+      ref={containerRef}
       className="map-canvas"
-      onWheel={(event) => {
-        event.preventDefault();
-        const next = zoom + (event.deltaY < 0 ? 0.1 : -0.1);
-        setZoom(Math.max(0.5, Math.min(2.6, Number(next.toFixed(2)))));
-      }}
       onMouseDown={(event) => {
         dragState.current = { dragging: true, startX: event.clientX - offset.x, startY: event.clientY - offset.y };
       }}
@@ -136,7 +152,13 @@ export function MapCanvas(props: MapCanvasProps) {
         props.onHoverCellChange?.(null);
       }}
     >
-      <svg width="100%" height="100%" viewBox={`0 0 ${scene.width} ${scene.height}`} aria-label="Map canvas">
+      <svg
+        width="100%"
+        height="100%"
+        viewBox={`0 0 ${scene.width} ${scene.height}`}
+        preserveAspectRatio="xMidYMin meet"
+        aria-label="Map canvas"
+      >
         <defs dangerouslySetInnerHTML={{ __html: scene.defs.join("") }} />
         <rect width="100%" height="100%" fill={scene.background} />
         <g transform={`translate(${offset.x} ${offset.y}) scale(${zoom})`}>

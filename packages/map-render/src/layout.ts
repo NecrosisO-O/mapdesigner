@@ -3,13 +3,9 @@ import type { HexCellLayout, HexLayoutOptions } from "./types.js";
 
 const SQRT3 = Math.sqrt(3);
 
-function getParity(col: number): 0 | 1 {
-  return Math.abs(col % 2) as 0 | 1;
-}
-
 function centerForCell(cell: ActiveCell, size: number): { x: number; y: number } {
   const x = size * 1.5 * cell.col;
-  const y = size * SQRT3 * (cell.row + 0.5 * getParity(cell.col));
+  const y = -size * SQRT3 * (cell.row + cell.col / 2);
   return { x, y };
 }
 
