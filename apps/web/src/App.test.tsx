@@ -278,6 +278,84 @@ describe("App", () => {
     expect(within(cellPanel as HTMLElement).getByRole("button", { name: "清空" })).toBeTruthy();
   });
 
+  it("enables format brush from a designed cell and disables it on an undesigned cell", async () => {
+    render(<App />);
+    await screen.findByText("已打开 Sample Map");
+
+    fireEvent.click(screen.getByText("R0C0"));
+    const brushButton = screen.getByRole("button", { name: "格式刷" });
+    expect((brushButton as HTMLButtonElement).disabled).toBe(false);
+
+    fireEvent.click(brushButton);
+    expect(await screen.findByText("格式刷源格：R0C0 | 当前刷入：地形 + 生态")).toBeTruthy();
+    expect(brushButton.getAttribute("aria-pressed")).toBe("true");
+
+    fireEvent.click(brushButton);
+    expect(await screen.findByText("选中已设计单元格后可进入格式刷模式；再次点击按钮即可退出。")).toBeTruthy();
+    expect(brushButton.getAttribute("aria-pressed")).toBe("false");
+
+    fireEvent.click(screen.getByText("R0C1"));
+    expect((screen.getByRole("button", { name: "格式刷" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("brushes terrain only onto an undesigned cell", async () => {
+    render(<App />);
+    await screen.findByText("已打开 Sample Map");
+
+    fireEvent.click(screen.getByText("R0C0"));
+    fireEvent.click(screen.getByLabelText("刷生态"));
+    fireEvent.click(screen.getByRole("button", { name: "格式刷" }));
+    fireEvent.click(screen.getByText("R0C1"));
+
+    expect(await screen.findByText("Designed：2")).toBeTruthy();
+    expect(screen.getByText("已将 R0C0 的地形刷到 R0C1，等待保存到文件")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "格式刷" }));
+    fireEvent.click(screen.getByText("R0C1"));
+
+    expect(await screen.findByText("坐标：R0C1 | ID：cell@0,1")).toBeTruthy();
+    expect((screen.getByLabelText("Terrain") as HTMLSelectElement).value).toBe("plain");
+    expect((screen.getByLabelText("Biome") as HTMLSelectElement).value).toBe("");
+  });
+
+  it("brushes biome only onto an already designed cell", async () => {
+    render(<App />);
+    await screen.findByText("已打开 Sample Map");
+
+    fireEvent.click(screen.getByText("R0C1"));
+    fireEvent.change(screen.getByLabelText("Terrain 分类"), { target: { value: "plain" } });
+    fireEvent.change(screen.getByLabelText("Terrain"), { target: { value: "plain" } });
+    const terrainField = screen.getByLabelText("Terrain");
+    const cellPanel = terrainField.closest("section");
+    expect(cellPanel).toBeTruthy();
+    fireEvent.click(within(cellPanel as HTMLElement).getByRole("button", { name: "保存" }));
+
+    fireEvent.click(screen.getByText("R0C0"));
+    fireEvent.click(screen.getByLabelText("刷地形"));
+    fireEvent.click(screen.getByRole("button", { name: "格式刷" }));
+    fireEvent.click(screen.getByText("R0C1"));
+
+    expect(await screen.findByText("已将 R0C0 的生态刷到 R0C1，等待保存到文件")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "格式刷" }));
+    fireEvent.click(screen.getByText("R0C1"));
+
+    expect((screen.getByLabelText("Terrain") as HTMLSelectElement).value).toBe("plain");
+    expect((screen.getByLabelText("Biome") as HTMLSelectElement).value).toBe("grassland");
+  });
+
+  it("returns to normal selection after leaving format brush mode", async () => {
+    render(<App />);
+    await screen.findByText("已打开 Sample Map");
+
+    fireEvent.click(screen.getByText("R0C0"));
+    fireEvent.click(screen.getByRole("button", { name: "格式刷" }));
+    fireEvent.click(screen.getByRole("button", { name: "格式刷" }));
+    fireEvent.click(screen.getByText("R0C1"));
+
+    expect(await screen.findByText("坐标：R0C1 | ID：cell@0,1")).toBeTruthy();
+  });
+
   it("filters terrain options by the selected terrain category", async () => {
     render(<App />);
     await screen.findByText("已打开 Sample Map");

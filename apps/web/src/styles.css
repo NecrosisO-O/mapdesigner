@@ -86,6 +86,16 @@ input {
   background: #f2ead7;
 }
 
+.toggle-button-active {
+  background: #d9743a !important;
+  border-color: #c3622d !important;
+  color: #fff9f1 !important;
+}
+
+.toggle-button-active:hover {
+  background: #c9652f !important;
+}
+
 .panel-toggle {
   border: 1px solid rgba(88, 72, 52, 0.24);
   background: #fbf6ea;
@@ -242,6 +252,31 @@ select {
 
 .action-row-inline button {
   padding: 8px 12px;
+}
+
+.format-brush-panel {
+  margin-bottom: 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(255, 252, 245, 0.72);
+  border: 1px solid rgba(88, 72, 52, 0.12);
+}
+
+.format-brush-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.format-brush-options label {
+  margin-bottom: 0;
+}
+
+.format-brush-summary {
+  margin: 0;
+  color: #685d50;
+  font-size: 0.92rem;
 }
 
 .empty-state {
