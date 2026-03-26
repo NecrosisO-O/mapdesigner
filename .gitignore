@@ -3,6 +3,7 @@ dist
 coverage
 .vite
 *.log
+chrome-capture-*.png
 apps/server/storage/
 storage/maps/*.tmp
 storage/maps/test*.json
