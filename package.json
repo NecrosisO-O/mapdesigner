@@ -8,6 +8,7 @@
     "build": "pnpm -r build",
     "dev:web": "pnpm --filter @mapdesigner/web dev",
     "dev:server": "pnpm --filter @mapdesigner/server dev",
+    "start": "pnpm --filter @mapdesigner/server start",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck"
   },

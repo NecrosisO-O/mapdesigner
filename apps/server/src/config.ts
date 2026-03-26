@@ -4,12 +4,8 @@ import { fileURLToPath } from "node:url";
 
 export const SERVER_PORT = Number(process.env.PORT ?? 3010);
 
-function resolveProjectRoot(): string {
-  if (process.env.MAPDESIGNER_ROOT) {
-    return path.resolve(process.env.MAPDESIGNER_ROOT);
-  }
-
-  let current = path.dirname(fileURLToPath(import.meta.url));
+function findWorkspaceRoot(startDir: string): string {
+  let current = startDir;
   while (true) {
     if (fs.existsSync(path.join(current, "pnpm-workspace.yaml"))) {
       return current;
@@ -22,6 +18,15 @@ function resolveProjectRoot(): string {
   }
 }
 
+function resolveProjectRoot(): string {
+  if (process.env.MAPDESIGNER_ROOT) {
+    return path.resolve(process.env.MAPDESIGNER_ROOT);
+  }
+  return REPO_ROOT;
+}
+
+export const REPO_ROOT = findWorkspaceRoot(path.dirname(fileURLToPath(import.meta.url)));
 export const PROJECT_ROOT = resolveProjectRoot();
 export const MAP_STORAGE_DIR = path.join(PROJECT_ROOT, "storage/maps");
 export const EXPORT_STORAGE_DIR = path.join(PROJECT_ROOT, "storage/exports");
+export const WEB_DIST_DIR = path.join(REPO_ROOT, "apps/web/dist");
