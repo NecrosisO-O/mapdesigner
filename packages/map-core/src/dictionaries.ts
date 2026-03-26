@@ -6,6 +6,30 @@ import type {
   TerrainKey
 } from "./types.js";
 
+export const TERRAIN_CATEGORY_LABELS = {
+  water: "水域",
+  coast: "海岸",
+  plain: "平原与低地",
+  upland: "高地与山地",
+  cut: "切割地貌",
+  arid: "干旱地貌",
+  cold: "寒冷地貌",
+  volcanic: "火山地貌"
+} as const;
+
+export type TerrainCategoryKey = keyof typeof TERRAIN_CATEGORY_LABELS;
+
+export const TERRAIN_CATEGORY_ORDER: TerrainCategoryKey[] = [
+  "water",
+  "coast",
+  "plain",
+  "upland",
+  "cut",
+  "arid",
+  "cold",
+  "volcanic"
+];
+
 export const TERRAIN_ENTRIES: Record<TerrainKey, DictionaryEntry> = {
   ocean: { key: "ocean", label: "海洋", short: "OCN", category: "water" },
   sea: { key: "sea", label: "近海", short: "SEA", category: "water" },
@@ -104,3 +128,92 @@ export const PRIMARY_TAG_PRIORITY: TagKey[] = [
 export const TERRAIN_KEYS = Object.keys(TERRAIN_ENTRIES) as TerrainKey[];
 export const BIOME_KEYS = Object.keys(BIOME_ENTRIES) as BiomeKey[];
 export const TAG_KEYS = Object.keys(TAG_ENTRIES) as TagKey[];
+
+export const ALLOWED_BIOMES_BY_TERRAIN: Record<TerrainKey, BiomeKey[]> = {
+  ocean: ["marine", "coral", "seagrass", "pack_ice"],
+  sea: ["marine", "coral", "seagrass", "brackish", "pack_ice"],
+  coast: ["marine", "brackish", "seagrass", "mangrove", "bare", "shrubland", "pack_ice"],
+  beach: ["marine", "brackish", "bare", "shrubland", "seagrass"],
+  tidal_flat: ["brackish", "marine", "seagrass", "mangrove", "reedbed", "marsh", "bare"],
+  reef: ["marine", "coral", "seagrass"],
+  lagoon: ["marine", "brackish", "seagrass", "coral", "mangrove"],
+  estuary: ["freshwater", "brackish", "marine", "seagrass", "mangrove", "reedbed", "marsh"],
+  lake: ["freshwater", "reedbed", "marsh", "bog", "pack_ice"],
+  salt_lake: ["brackish", "arid", "bare", "pack_ice"],
+  river: ["freshwater", "reedbed", "marsh", "bog"],
+  delta: ["freshwater", "brackish", "marsh", "swamp", "reedbed", "mangrove", "grassland"],
+  plain: ["grassland", "steppe", "savanna", "shrubland", "deciduous_forest", "mixed_forest", "conifer_forest", "semi_arid"],
+  alluvial_plain: ["grassland", "deciduous_forest", "mixed_forest", "freshwater", "marsh", "reedbed", "shrubland"],
+  floodplain: ["grassland", "deciduous_forest", "mixed_forest", "freshwater", "marsh", "swamp", "reedbed", "bog"],
+  wetland: ["freshwater", "marsh", "swamp", "bog", "reedbed", "mangrove"],
+  hill: ["grassland", "steppe", "shrubland", "deciduous_forest", "mixed_forest", "conifer_forest", "semi_arid"],
+  foothill: ["grassland", "shrubland", "deciduous_forest", "mixed_forest", "conifer_forest", "cloud_forest"],
+  mountain: ["bare", "conifer_forest", "alpine", "tundra", "cloud_forest", "polar"],
+  plateau: ["grassland", "steppe", "shrubland", "semi_arid", "arid", "bare", "alpine"],
+  basin: ["grassland", "steppe", "shrubland", "semi_arid", "arid", "freshwater", "marsh", "bare"],
+  valley: ["grassland", "deciduous_forest", "mixed_forest", "conifer_forest", "freshwater", "marsh", "reedbed", "shrubland"],
+  canyon: ["bare", "shrubland", "steppe", "semi_arid", "arid", "grassland"],
+  rift_valley: ["grassland", "savanna", "shrubland", "steppe", "semi_arid", "freshwater", "marsh", "swamp"],
+  dune: ["arid", "semi_arid", "xeric_shrubland", "bare"],
+  gravel_desert: ["arid", "semi_arid", "xeric_shrubland", "bare"],
+  salt_flat: ["arid", "bare", "brackish"],
+  badlands: ["arid", "semi_arid", "steppe", "xeric_shrubland", "bare"],
+  karst: ["shrubland", "deciduous_forest", "mixed_forest", "conifer_forest", "grassland", "bare"],
+  loess: ["grassland", "steppe", "shrubland", "semi_arid", "deciduous_forest"],
+  rocky_barren: ["bare", "shrubland", "steppe", "alpine", "tundra", "semi_arid"],
+  glacier: ["polar", "pack_ice", "tundra", "bare"],
+  permafrost: ["tundra", "polar", "bare", "pack_ice", "conifer_forest"],
+  volcanic: ["bare", "shrubland", "grassland", "conifer_forest", "alpine"],
+  lava_field: ["bare", "shrubland", "arid", "alpine"],
+  geothermal: ["bare", "shrubland", "grassland", "marsh", "bog", "conifer_forest"]
+};
+
+export function isTerrainCategoryKey(value: string): value is TerrainCategoryKey {
+  return value in TERRAIN_CATEGORY_LABELS;
+}
+
+export function getTerrainCategoryKey(terrain: TerrainKey): TerrainCategoryKey {
+  return TERRAIN_ENTRIES[terrain].category as TerrainCategoryKey;
+}
+
+export function getTerrainEntriesByCategory(category: string): Array<typeof TERRAIN_ENTRIES[TerrainKey]> {
+  if (!isTerrainCategoryKey(category)) {
+    return [];
+  }
+  return TERRAIN_KEYS.filter((terrain) => getTerrainCategoryKey(terrain) === category).map(
+    (terrain) => TERRAIN_ENTRIES[terrain]
+  );
+}
+
+export function getAllowedBiomesForTerrain(terrain: string): BiomeKey[] {
+  if (!(terrain in ALLOWED_BIOMES_BY_TERRAIN)) {
+    return [];
+  }
+  return [...ALLOWED_BIOMES_BY_TERRAIN[terrain as TerrainKey]];
+}
+
+export function getAllowedTerrainsForBiome(biome: string): TerrainKey[] {
+  if (!(biome in BIOME_ENTRIES)) {
+    return [];
+  }
+  return TERRAIN_KEYS.filter((terrain) => ALLOWED_BIOMES_BY_TERRAIN[terrain].includes(biome as BiomeKey));
+}
+
+export function getAllowedTerrainCategoriesForBiome(biome: string): TerrainCategoryKey[] {
+  if (!(biome in BIOME_ENTRIES)) {
+    return [...TERRAIN_CATEGORY_ORDER];
+  }
+  return TERRAIN_CATEGORY_ORDER.filter((category) =>
+    TERRAIN_KEYS.some(
+      (terrain) => getTerrainCategoryKey(terrain) === category && ALLOWED_BIOMES_BY_TERRAIN[terrain].includes(biome as BiomeKey)
+    )
+  );
+}
+
+export function getFilteredTerrainEntries(category: string, biome?: string): Array<typeof TERRAIN_ENTRIES[TerrainKey]> {
+  const entries = getTerrainEntriesByCategory(category);
+  if (!biome || !(biome in BIOME_ENTRIES)) {
+    return entries;
+  }
+  return entries.filter((entry) => ALLOWED_BIOMES_BY_TERRAIN[entry.key as TerrainKey].includes(biome as BiomeKey));
+}

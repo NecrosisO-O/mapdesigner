@@ -66,6 +66,8 @@ pnpm build
 - 支持导出：
   - `JSON`
   - `PNG`
+- WebUI 导出 PNG 时会在服务端落盘，同时直接触发浏览器下载
+- CLI / server 仍然保留文件落盘能力，便于自动化流程与离线留档
 
 ### 运行时规则
 
@@ -86,7 +88,7 @@ pnpm build
 1. 新建地图
 2. 打开地图
 3. 在中央六角地图上选中单元格
-4. 编辑 `terrain / biome / tags / note`
+4. 通过 `terrain 分类 -> terrain` 两级选择编辑地形，并使用与 terrain 双向联动的 `biome` 选择
 5. 保存到地图文件
 6. 另存为新地图
 7. 重命名当前地图
@@ -124,12 +126,21 @@ pnpm exec tsx apps/server/src/cli.ts maps export-png --map-id demo-map --preset 
 
 ```bash
 echo '{
-  "action": "set_cell",
-  "source": "cli",
-  "target": { "row": 0, "col": 0 },
-  "changes": { "terrain": "plain", "biome": "grassland" }
+  "commands": [
+    {
+      "action": "set_cell",
+      "source": "cli",
+      "target": { "row": 0, "col": 0 },
+      "changes": { "terrain": "plain", "biome": "grassland" }
+    }
+  ]
 }' | pnpm exec tsx apps/server/src/cli.ts maps apply --map-id demo-map --stdin
 ```
+
+兼容性说明：
+
+- `maps apply` 正式输入格式为 `{ "commands": [...] }`
+- 当前也兼容单条 `MapCommand` 与 `MapCommand[]`，便于已有脚本平滑过渡
 
 CLI 当前支持：
 
@@ -150,6 +161,8 @@ CLI 输出固定为 JSON envelope，便于脚本和 AI agent 调用。
 - WebUI 六角地图渲染
 - 单元格坐标与内部编号
 - terrain 与 biome 叠加展示
+- terrain 一级分类 + 具体地形两级选择
+- terrain / biome 双向联动筛选，缩小可选菜单范围
 - 结构化命令驱动的地图修改
 - 本地 JSON 保存、导入、导出
 - PNG 导出

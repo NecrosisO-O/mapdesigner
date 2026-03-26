@@ -103,4 +103,40 @@ describe("server api", () => {
       await app.close();
     }
   });
+
+  it("exports a png and serves it through the download route", async () => {
+    const { createServer } = await loadApi(tempRoot);
+    const app = await createServer();
+    try {
+      const created = await app.inject({
+        method: "POST",
+        url: "/api/maps",
+        payload: { name: "Download Test" }
+      });
+      const createdBody = created.json();
+      const mapId = createdBody.result.document.meta.id as string;
+
+      const exported = await app.inject({
+        method: "POST",
+        url: `/api/maps/${mapId}/export-png`,
+        payload: { preset: "reference" }
+      });
+      expect(exported.statusCode).toBe(200);
+      const exportedBody = exported.json();
+      expect(exportedBody.ok).toBe(true);
+      expect(exportedBody.result.fileName).toMatch(/download-test-reference\.png$/);
+      expect(exportedBody.result.downloadUrl).toBe(`/api/exports/${encodeURIComponent(exportedBody.result.fileName)}`);
+
+      const downloaded = await app.inject({
+        method: "GET",
+        url: exportedBody.result.downloadUrl
+      });
+      expect(downloaded.statusCode).toBe(200);
+      expect(downloaded.headers["content-type"]).toContain("image/png");
+      expect(downloaded.headers["content-disposition"]).toContain(exportedBody.result.fileName);
+      expect(downloaded.body.length).toBeGreaterThan(0);
+    } finally {
+      await app.close();
+    }
+  });
 });

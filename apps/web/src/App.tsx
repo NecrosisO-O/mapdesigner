@@ -1,9 +1,17 @@
 import {
   BIOME_ENTRIES,
+  BIOME_KEYS,
   TAG_ENTRIES,
   TERRAIN_ENTRIES,
+  TERRAIN_CATEGORY_LABELS,
+  TERRAIN_CATEGORY_ORDER,
   applyCommand,
   createCellId,
+  getAllowedBiomesForTerrain,
+  getAllowedTerrainCategoriesForBiome,
+  getAllowedTerrainsForBiome,
+  getFilteredTerrainEntries,
+  getTerrainCategoryKey,
   type ActiveCell,
   type ExportRenderOptions,
   type MapRuntimeState,
@@ -50,6 +58,13 @@ function toDraft(cell: ActiveCell | null): CellDraft {
   };
 }
 
+function resolveTerrainCategory(terrain: string | null | undefined): string {
+  if (!terrain || !(terrain in TERRAIN_ENTRIES)) {
+    return "";
+  }
+  return getTerrainCategoryKey(terrain as keyof typeof TERRAIN_ENTRIES);
+}
+
 function formatDateTime(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
@@ -82,6 +97,16 @@ function formatStatusMessage(message: string | undefined, fallback: string): str
   return message;
 }
 
+function triggerDownload(url: string, fileName: string): void {
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  link.style.display = "none";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+
 export default function App() {
   const [maps, setMaps] = useState<MapListItem[]>([]);
   const [currentMap, setCurrentMap] = useState<MapRuntimeState | null>(null);
@@ -91,6 +116,7 @@ export default function App() {
   const [persistedRevision, setPersistedRevision] = useState<number | null>(null);
   const [selectedCellId, setSelectedCellId] = useState<string | null>(null);
   const [draft, setDraft] = useState<CellDraft>(toDraft(null));
+  const [terrainCategory, setTerrainCategory] = useState<string>("");
   const [message, setMessage] = useState<string>("准备就绪");
   const [showCoordinates, setShowCoordinates] = useState(true);
   const [showShorthand, setShowShorthand] = useState(false);
@@ -114,6 +140,11 @@ export default function App() {
     currentMap !== null &&
     persistedRevision !== null &&
     currentMap.document.meta.revision !== persistedRevision;
+  const filteredTerrainCategories = draft.biome
+    ? getAllowedTerrainCategoriesForBiome(draft.biome)
+    : TERRAIN_CATEGORY_ORDER;
+  const terrainOptions = terrainCategory ? getFilteredTerrainEntries(terrainCategory, draft.biome || undefined) : [];
+  const biomeOptions = draft.terrain ? getAllowedBiomesForTerrain(draft.terrain) : BIOME_KEYS;
   const displayMaps = maps.map((map) =>
     currentMap && map.id === currentMap.document.meta.id
       ? {
@@ -125,6 +156,64 @@ export default function App() {
         }
       : map
   );
+
+  function syncDraftFromCell(cell: ActiveCell | null): void {
+    setDraft(toDraft(cell));
+    setTerrainCategory(resolveTerrainCategory(cell?.terrain));
+  }
+
+  function handleTerrainCategoryChange(nextCategory: string): void {
+    setTerrainCategory(nextCategory);
+    setDraft((current) => {
+      if (!current.terrain) {
+        return current;
+      }
+      const allowedTerrains = new Set(getFilteredTerrainEntries(nextCategory, current.biome || undefined).map((entry) => entry.key));
+      return {
+        ...current,
+        terrain: allowedTerrains.has(current.terrain as keyof typeof TERRAIN_ENTRIES) ? current.terrain : ""
+      };
+    });
+  }
+
+  function handleTerrainChange(nextTerrain: string): void {
+    setTerrainCategory(nextTerrain ? resolveTerrainCategory(nextTerrain) : terrainCategory);
+    setDraft((current) => {
+      if (!nextTerrain) {
+        return {
+          ...current,
+          terrain: ""
+        };
+      }
+      const allowedBiomes = new Set(getAllowedBiomesForTerrain(nextTerrain));
+      return {
+        ...current,
+        terrain: nextTerrain,
+        biome: current.biome && !allowedBiomes.has(current.biome as keyof typeof BIOME_ENTRIES) ? "" : current.biome
+      };
+    });
+  }
+
+  function handleBiomeChange(nextBiome: string): void {
+    const filteredCategories = nextBiome ? getAllowedTerrainCategoriesForBiome(nextBiome) : TERRAIN_CATEGORY_ORDER;
+    setTerrainCategory((current) => {
+      if (!current || filteredCategories.includes(current as (typeof filteredCategories)[number])) {
+        return current;
+      }
+      return "";
+    });
+    setDraft((current) => {
+      const allowedTerrains = nextBiome ? new Set(getAllowedTerrainsForBiome(nextBiome)) : null;
+      return {
+        ...current,
+        biome: nextBiome,
+        terrain:
+          nextBiome && current.terrain && allowedTerrains && !allowedTerrains.has(current.terrain as keyof typeof TERRAIN_ENTRIES)
+            ? ""
+            : current.terrain
+      };
+    });
+  }
 
   async function refreshMaps(selectId?: string): Promise<void> {
     const response = await api.listMaps();
@@ -152,7 +241,7 @@ export default function App() {
     setCurrentMapId(response.result.document.meta.id);
     setPersistedRevision(response.result.document.meta.revision);
     setSelectedCellId(null);
-    setDraft(toDraft(null));
+    syncDraftFromCell(null);
     setHoveredCell(null);
     setIsRenaming(false);
     setRenameDraft(response.result.document.meta.name);
@@ -207,7 +296,7 @@ export default function App() {
     setCurrentMapId(response.result.document.meta.id);
     setPersistedRevision(response.result.document.meta.revision);
     setSelectedCellId(null);
-    setDraft(toDraft(null));
+    syncDraftFromCell(null);
     setMessage(`已新建 ${response.result.document.meta.name}`);
   }
 
@@ -278,7 +367,7 @@ export default function App() {
     setCurrentMapId(response.result.document.meta.id);
     setPersistedRevision(response.result.document.meta.revision);
     setSelectedCellId(null);
-    setDraft(toDraft(null));
+    syncDraftFromCell(null);
     setHoveredCell(null);
     setIsRenaming(false);
     setRenameDraft(response.result.document.meta.name);
@@ -290,11 +379,15 @@ export default function App() {
       return;
     }
     const response = await api.exportPng(currentMap.document.meta.id, pngOptions);
-    setMessage(
-      response.result
-        ? `PNG 已导出到 ${response.result.path}`
-        : formatStatusMessage(response.errors[0]?.message, "导出失败")
+    if (!response.ok || !response.result) {
+      setMessage(formatStatusMessage(response.errors[0]?.message, "导出失败"));
+      return;
+    }
+    triggerDownload(
+      response.result.downloadUrl ?? `/api/exports/${encodeURIComponent(response.result.fileName)}`,
+      response.result.fileName
     );
+    setMessage(`PNG 已导出并开始下载：${response.result.fileName}`);
   }
 
   function applyDraft(): void {
@@ -322,10 +415,8 @@ export default function App() {
     }
     setCurrentMap(result.map);
     setSelectedCellId(createCellId(selectedCell.row, selectedCell.col));
-    setDraft(
-      toDraft(
-        result.map.activeCells.find((cell) => cell.row === selectedCell.row && cell.col === selectedCell.col) ?? null
-      )
+    syncDraftFromCell(
+      result.map.activeCells.find((cell) => cell.row === selectedCell.row && cell.col === selectedCell.col) ?? null
     );
     setMessage(result.warnings[0]?.message ?? "单元格修改已应用，等待保存到文件");
   }
@@ -347,7 +438,7 @@ export default function App() {
     const updatedCell =
       result.map.activeCells.find((cell) => cell.row === selectedCell.row && cell.col === selectedCell.col) ?? null;
     setSelectedCellId(updatedCell?.id ?? null);
-    setDraft(toDraft(updatedCell));
+    syncDraftFromCell(updatedCell);
     setMessage("单元格已清空，等待保存到文件");
   }
 
@@ -369,6 +460,7 @@ export default function App() {
       setCurrentMap(retryResponse.result);
       setCurrentMapId(retryResponse.result.document.meta.id);
       setPersistedRevision(retryResponse.result.document.meta.revision);
+      syncDraftFromCell(null);
       setHoveredCell(null);
       setIsRenaming(false);
       setRenameDraft(retryResponse.result.document.meta.name);
@@ -379,6 +471,7 @@ export default function App() {
     setCurrentMap(response.result);
     setCurrentMapId(response.result.document.meta.id);
     setPersistedRevision(response.result.document.meta.revision);
+    syncDraftFromCell(null);
     setHoveredCell(null);
     setIsRenaming(false);
     setRenameDraft(response.result.document.meta.name);
@@ -513,7 +606,7 @@ export default function App() {
               setPersistedRevision(null);
               setSelectedCellId(null);
               setHoveredCell(null);
-              setDraft(toDraft(null));
+              syncDraftFromCell(null);
               await refreshMaps();
               setMessage("地图已删除");
             }}
@@ -742,7 +835,7 @@ export default function App() {
                   return;
                 }
                 setSelectedCellId(cell.id);
-                setDraft(toDraft(cell));
+                syncDraftFromCell(cell);
               }}
               showCoordinates={showCoordinates}
               showShorthand={showShorthand}
@@ -776,7 +869,7 @@ export default function App() {
                 <button onClick={applyDraft} disabled={!selectedCell}>
                   保存
                 </button>
-                <button onClick={() => setDraft(toDraft(selectedCell))} disabled={!selectedCell || !cellDirty}>
+                <button onClick={() => syncDraftFromCell(selectedCell)} disabled={!selectedCell || !cellDirty}>
                   撤销
                 </button>
                 <button onClick={clearSelected} disabled={!selectedCell}>
@@ -785,15 +878,30 @@ export default function App() {
               </div>
             </div>
             <label>
+              Terrain 分类
+              <select
+                value={terrainCategory}
+                onChange={(event) => handleTerrainCategoryChange(event.target.value)}
+                disabled={!selectedCell}
+              >
+                <option value="">请选择分类</option>
+                {filteredTerrainCategories.map((categoryKey) => (
+                  <option key={categoryKey} value={categoryKey}>
+                    {TERRAIN_CATEGORY_LABELS[categoryKey]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
               Terrain
               <select
                 value={draft.terrain}
-                onChange={(event) => setDraft((current) => ({ ...current, terrain: event.target.value }))}
-                disabled={!selectedCell}
+                onChange={(event) => handleTerrainChange(event.target.value)}
+                disabled={!selectedCell || !terrainCategory}
               >
-                <option value="">未设置</option>
-                {Object.entries(TERRAIN_ENTRIES).map(([key, entry]) => (
-                  <option key={key} value={key}>
+                <option value="">{terrainCategory ? "未设置" : "请先选择 Terrain 分类"}</option>
+                {terrainOptions.map((entry) => (
+                  <option key={entry.key} value={entry.key}>
                     {entry.label} ({entry.short})
                   </option>
                 ))}
@@ -803,13 +911,13 @@ export default function App() {
               Biome
               <select
                 value={draft.biome}
-                onChange={(event) => setDraft((current) => ({ ...current, biome: event.target.value }))}
+                onChange={(event) => handleBiomeChange(event.target.value)}
                 disabled={!selectedCell}
               >
                 <option value="">未设置</option>
-                {Object.entries(BIOME_ENTRIES).map(([key, entry]) => (
+                {biomeOptions.map((key) => (
                   <option key={key} value={key}>
-                    {entry.label} ({entry.short})
+                    {BIOME_ENTRIES[key].label} ({BIOME_ENTRIES[key].short})
                   </option>
                 ))}
               </select>

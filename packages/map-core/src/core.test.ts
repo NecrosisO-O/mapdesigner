@@ -1,9 +1,16 @@
 import { describe, expect, it } from "vitest";
 import {
+  BIOME_KEYS,
   applyCommand,
   buildActiveCells,
   createEmptyDocument,
   createRuntimeState,
+  getAllowedBiomesForTerrain,
+  getAllowedTerrainCategoriesForBiome,
+  getAllowedTerrainsForBiome,
+  getFilteredTerrainEntries,
+  getTerrainCategoryKey,
+  getTerrainEntriesByCategory,
   redo,
   getNeighborCoords,
   getSeedCoordinates,
@@ -107,6 +114,27 @@ describe("validation", () => {
   it("flags invalid terrain-biome combinations", () => {
     const issues = validateTerrainBiomePair("mountain", "coral");
     expect(issues.some((entry) => entry.severity === "invalid")).toBe(true);
+  });
+
+  it("groups terrain entries into stable ui categories", () => {
+    expect(getTerrainCategoryKey("plain")).toBe("plain");
+    expect(getTerrainCategoryKey("volcanic")).toBe("volcanic");
+    expect(getTerrainEntriesByCategory("water").map((entry) => entry.key)).toContain("ocean");
+    expect(getTerrainEntriesByCategory("water").map((entry) => entry.key)).toContain("river");
+    expect(getTerrainEntriesByCategory("upland").map((entry) => entry.key)).toContain("mountain");
+  });
+
+  it("provides relaxed terrain to biome filtering helpers", () => {
+    expect(getAllowedBiomesForTerrain("ocean")).toEqual(["marine", "coral", "seagrass", "pack_ice"]);
+    expect(getAllowedTerrainsForBiome("marine")).toContain("ocean");
+    expect(getAllowedTerrainsForBiome("marine")).not.toContain("plain");
+    expect(getAllowedTerrainCategoriesForBiome("marine")).toEqual(["water", "coast"]);
+    expect(getFilteredTerrainEntries("coast", "marine").map((entry) => entry.key)).toContain("reef");
+    expect(getFilteredTerrainEntries("coast", "marine").map((entry) => entry.key)).not.toContain("plain");
+    expect(getAllowedBiomesForTerrain("plain")).toContain("grassland");
+    expect(getAllowedBiomesForTerrain("plain")).not.toContain("marine");
+    expect(getAllowedTerrainCategoriesForBiome("")).toEqual(expect.arrayContaining(["water", "coast", "plain"]));
+    expect(BIOME_KEYS).toContain("grassland");
   });
 });
 

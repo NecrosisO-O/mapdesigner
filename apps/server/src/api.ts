@@ -1,7 +1,9 @@
+import fs from "node:fs/promises";
+import path from "node:path";
 import cors from "@fastify/cors";
 import Fastify, { type FastifyInstance } from "fastify";
 import type { ExportRenderOptions, MapCommand } from "@mapdesigner/map-core";
-import { SERVER_PORT } from "./config.js";
+import { EXPORT_STORAGE_DIR, SERVER_PORT } from "./config.js";
 import {
   applyCommands,
   createMap,
@@ -16,6 +18,14 @@ import {
   saveMap
 } from "./service.js";
 import { createEnvelope } from "./utils.js";
+
+function assertExportFileName(fileName: string): string {
+  const normalized = fileName.trim();
+  if (!normalized || normalized !== path.basename(normalized) || !normalized.endsWith(".png")) {
+    throw new Error("invalid export file name");
+  }
+  return normalized;
+}
 
 export async function createServer(): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
@@ -144,9 +154,30 @@ export async function createServer(): Promise<FastifyInstance> {
     }
   });
 
+  app.get<{ Params: { fileName: string } }>("/api/exports/:fileName", async (request, reply) => {
+    try {
+      const fileName = assertExportFileName(request.params.fileName);
+      const content = await fs.readFile(path.join(EXPORT_STORAGE_DIR, fileName));
+      reply.header("Content-Disposition", `attachment; filename="${fileName}"`);
+      reply.type("image/png");
+      return reply.send(content);
+    } catch (error) {
+      reply.status(404);
+      return createEnvelope({
+        errors: [{ code: "export_not_found", message: (error as Error).message, severity: "invalid" }]
+      });
+    }
+  });
+
   app.post<{ Params: { id: string }; Body: Partial<ExportRenderOptions> }>("/api/maps/:id/export-png", async (request, reply) => {
     try {
-      return createEnvelope({ result: await exportPng(request.params.id, request.body ?? {}) });
+      const result = await exportPng(request.params.id, request.body ?? {});
+      return createEnvelope({
+        result: {
+          ...result,
+          downloadUrl: `/api/exports/${encodeURIComponent(result.fileName)}`
+        }
+      });
     } catch (error) {
       reply.status(400);
       return createEnvelope({
