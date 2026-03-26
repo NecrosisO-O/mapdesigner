@@ -192,4 +192,66 @@ describe("App", () => {
     );
     expect(await screen.findByText("已另存为 Copied Map")).toBeTruthy();
   });
+
+  it("can rename the current map locally before saving", async () => {
+    render(<App />);
+    await screen.findByText("已打开 Sample Map");
+    fireEvent.click(screen.getByText("重命名"));
+    fireEvent.change(screen.getByLabelText("地图名称"), {
+      target: { value: "Renamed Map" }
+    });
+    fireEvent.click(screen.getByText("确认重命名"));
+    expect(await screen.findByText("地图名称已更新，等待保存")).toBeTruthy();
+    expect(screen.getAllByText("Renamed Map").length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("exports png with configured options", async () => {
+    render(<App />);
+    await screen.findByText("已打开 Sample Map");
+
+    fireEvent.change(screen.getByLabelText("预设"), {
+      target: { value: "reference" }
+    });
+    fireEvent.change(screen.getByLabelText("Scale"), {
+      target: { value: "3" }
+    });
+    fireEvent.click(screen.getByText("导出图片"));
+
+    await waitFor(() =>
+      expect(apiMock.exportPng).toHaveBeenCalledWith(
+        "sample-map",
+        expect.objectContaining({
+          preset: "reference",
+          scale: 3,
+          includeCoordinates: true,
+          includeShorthand: true
+        })
+      )
+    );
+  });
+
+  it("shows hover details for a map cell", async () => {
+    render(<App />);
+    await screen.findByText("已打开 Sample Map");
+
+    const coordLabel = screen.getByText("R0C0");
+    fireEvent.mouseEnter(coordLabel.closest("g")!);
+
+    expect(await screen.findByText("地形：平原 (PLN)")).toBeTruthy();
+    expect(screen.getByText("生态：草原 (GRS)")).toBeTruthy();
+  });
+
+  it("shows recent history after editing a cell", async () => {
+    render(<App />);
+    await screen.findByText("已打开 Sample Map");
+
+    fireEvent.click(screen.getByText("R0C0"));
+    fireEvent.change(screen.getByLabelText("Note"), {
+      target: { value: "history-note" }
+    });
+    fireEvent.click(screen.getByText("保存修改"));
+
+    expect(await screen.findByText("已记录 1 步 | 可重做 0 步")).toBeTruthy();
+    expect(screen.getByText("设置单元格")).toBeTruthy();
+  });
 });

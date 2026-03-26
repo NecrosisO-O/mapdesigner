@@ -60,4 +60,47 @@ describe("server api", () => {
       await app.close();
     }
   });
+
+  it("returns structured errors for missing maps and id mismatches", async () => {
+    const { createServer } = await loadApi(tempRoot);
+    const app = await createServer();
+    try {
+      const missing = await app.inject({
+        method: "GET",
+        url: "/api/maps/not-found"
+      });
+      expect(missing.statusCode).toBe(404);
+      const missingBody = missing.json();
+      expect(missingBody.ok).toBe(false);
+      expect(missingBody.errors[0].code).toBe("map_not_found");
+
+      const created = await app.inject({
+        method: "POST",
+        url: "/api/maps",
+        payload: { name: "Mismatch Test" }
+      });
+      const createdBody = created.json();
+
+      const mismatch = await app.inject({
+        method: "POST",
+        url: `/api/maps/${createdBody.result.document.meta.id}/save-as`,
+        payload: {
+          document: {
+            ...createdBody.result.document,
+            meta: {
+              ...createdBody.result.document.meta,
+              id: "other-id"
+            }
+          },
+          name: "Mismatch Copy"
+        }
+      });
+      expect(mismatch.statusCode).toBe(400);
+      const mismatchBody = mismatch.json();
+      expect(mismatchBody.ok).toBe(false);
+      expect(mismatchBody.errors[0].code).toBe("id_mismatch");
+    } finally {
+      await app.close();
+    }
+  });
 });

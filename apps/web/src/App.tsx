@@ -73,6 +73,8 @@ export default function App() {
   const [maps, setMaps] = useState<MapListItem[]>([]);
   const [currentMap, setCurrentMap] = useState<MapRuntimeState | null>(null);
   const [currentMapId, setCurrentMapId] = useState<string>("");
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [renameDraft, setRenameDraft] = useState("");
   const [persistedRevision, setPersistedRevision] = useState<number | null>(null);
   const [selectedCellId, setSelectedCellId] = useState<string | null>(null);
   const [draft, setDraft] = useState<CellDraft>(toDraft(null));
@@ -98,6 +100,17 @@ export default function App() {
     currentMap !== null &&
     persistedRevision !== null &&
     currentMap.document.meta.revision !== persistedRevision;
+  const displayMaps = maps.map((map) =>
+    currentMap && map.id === currentMap.document.meta.id
+      ? {
+          ...map,
+          name: currentMap.document.meta.name,
+          revision: currentMap.document.meta.revision,
+          designedCellCount: currentMap.document.cells.length,
+          updatedAt: currentMap.document.meta.updated_at
+        }
+      : map
+  );
 
   async function refreshMaps(selectId?: string): Promise<void> {
     const response = await api.listMaps();
@@ -127,6 +140,8 @@ export default function App() {
     setSelectedCellId(null);
     setDraft(toDraft(null));
     setHoveredCell(null);
+    setIsRenaming(false);
+    setRenameDraft(response.result.document.meta.name);
     setMessage(`已打开 ${response.result.document.meta.name}`);
   }
 
@@ -142,6 +157,12 @@ export default function App() {
     }
     void openMap(maps[0]!.id);
   }, [currentMapId, maps]);
+
+  useEffect(() => {
+    if (!isRenaming) {
+      setRenameDraft(currentMap?.document.meta.name ?? "");
+    }
+  }, [currentMap?.document.meta.name, isRenaming]);
 
   function ensureCanLeaveSelection(): boolean {
     if (!cellDirty) {
@@ -191,6 +212,8 @@ export default function App() {
     setCurrentMap(response.result);
     setPersistedRevision(response.result.document.meta.revision);
     setHoveredCell(null);
+    setIsRenaming(false);
+    setRenameDraft(response.result.document.meta.name);
     await refreshMaps(response.result.document.meta.id);
     setMessage("保存成功");
   }
@@ -209,6 +232,8 @@ export default function App() {
     nextDocument.meta.updated_at = new Date().toISOString();
     nextDocument.meta.revision += 1;
     setCurrentMap({ ...currentMap, document: nextDocument });
+    setIsRenaming(false);
+    setRenameDraft(nextName);
     setMessage("地图名称已更新，等待保存");
   }
 
@@ -241,6 +266,8 @@ export default function App() {
     setSelectedCellId(null);
     setDraft(toDraft(null));
     setHoveredCell(null);
+    setIsRenaming(false);
+    setRenameDraft(response.result.document.meta.name);
     setMessage(`已另存为 ${response.result.document.meta.name}`);
   }
 
@@ -325,6 +352,8 @@ export default function App() {
       setCurrentMapId(retryResponse.result.document.meta.id);
       setPersistedRevision(retryResponse.result.document.meta.revision);
       setHoveredCell(null);
+      setIsRenaming(false);
+      setRenameDraft(retryResponse.result.document.meta.name);
       setMessage("导入成功");
       return;
     }
@@ -333,6 +362,8 @@ export default function App() {
     setCurrentMapId(response.result.document.meta.id);
     setPersistedRevision(response.result.document.meta.revision);
     setHoveredCell(null);
+    setIsRenaming(false);
+    setRenameDraft(response.result.document.meta.name);
     setMessage("导入成功");
   }
 
@@ -355,7 +386,7 @@ export default function App() {
             }}
           >
             <option value="">选择地图</option>
-            {maps.map((map) => (
+            {displayMaps.map((map) => (
               <option key={map.id} value={map.id}>
                 {map.name}
               </option>
@@ -367,21 +398,54 @@ export default function App() {
           <button onClick={() => void handleSaveAs()} disabled={!currentMap}>
             另存为
           </button>
-          <button
-            onClick={() => {
-              if (!currentMap) {
-                return;
-              }
-              const nextName = window.prompt("输入新的地图名称", currentMap.document.meta.name);
-              if (!nextName) {
-                return;
-              }
-              renameCurrentMap(nextName);
-            }}
-            disabled={!currentMap}
-          >
-            重命名
-          </button>
+          {isRenaming ? (
+            <div className="rename-editor">
+              <input
+                aria-label="地图名称"
+                value={renameDraft}
+                onChange={(event) => setRenameDraft(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    renameCurrentMap(renameDraft);
+                  }
+                  if (event.key === "Escape") {
+                    setIsRenaming(false);
+                    setRenameDraft(currentMap?.document.meta.name ?? "");
+                  }
+                }}
+                placeholder="输入地图名称"
+              />
+              <button
+                onClick={() => renameCurrentMap(renameDraft)}
+                disabled={!currentMap || !renameDraft.trim()}
+                type="button"
+              >
+                确认重命名
+              </button>
+              <button
+                onClick={() => {
+                  setIsRenaming(false);
+                  setRenameDraft(currentMap?.document.meta.name ?? "");
+                }}
+                type="button"
+              >
+                取消重命名
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => {
+                if (!currentMap) {
+                  return;
+                }
+                setIsRenaming(true);
+                setRenameDraft(currentMap.document.meta.name);
+              }}
+              disabled={!currentMap}
+            >
+              重命名
+            </button>
+          )}
           <button
             onClick={async () => {
               if (!currentMap) {
@@ -494,7 +558,7 @@ export default function App() {
             <h2>地图列表</h2>
             {maps.length > 0 ? (
               <div className="map-list">
-                {maps.map((map) => {
+                {displayMaps.map((map) => {
                   const current = map.id === currentMapId;
                   return (
                     <button
