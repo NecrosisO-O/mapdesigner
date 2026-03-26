@@ -20,10 +20,12 @@
 如果你希望自己部署 `MapDesigner 0.1.0`，建议阅读：
 
 - [部署说明](/root/WorkSpace/MapDesigner/docs/deployment.md)
+- [Docker 部署说明](/root/WorkSpace/MapDesigner/docs/docker.md)
 
 这份文档适合：
 
 - 想以发布态方式运行项目
+- 想使用 Docker 直接启动 WebUI
 - 想了解 `pnpm build` 与 `pnpm start` 的使用方式
 - 想了解数据目录、端口和 `MAPDESIGNER_ROOT` 的用户
 
@@ -57,5 +59,6 @@
 对于大多数用户，建议按以下顺序阅读：
 
 1. [用户说明书](/root/WorkSpace/MapDesigner/docs/user-manual.md)
-2. [部署说明](/root/WorkSpace/MapDesigner/docs/deployment.md)
-3. 如果需要自动化调用，再看 [Agent CLI Guide](/root/WorkSpace/MapDesigner/docs/agent-cli.md)
+2. 若使用源码部署，阅读 [部署说明](/root/WorkSpace/MapDesigner/docs/deployment.md)
+3. 若使用 Docker 部署，阅读 [Docker 部署说明](/root/WorkSpace/MapDesigner/docs/docker.md)
+4. 如果需要自动化调用，再看 [Agent CLI Guide](/root/WorkSpace/MapDesigner/docs/agent-cli.md)

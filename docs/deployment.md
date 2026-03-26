@@ -2,6 +2,10 @@
 
 本文档面向希望自行部署 `MapDesigner 0.1.0` 的用户，说明发布态部署的推荐方式、运行命令、数据目录和常见注意事项。
 
+本页主要说明源码部署流程；如果你希望使用 Docker 直接运行，请优先阅读：
+
+- [Docker 部署说明](/root/WorkSpace/MapDesigner/docs/docker.md)
+
 ## 1. 支持范围
 
 `MapDesigner 0.1.0` 当前推荐的正式部署方式是：
@@ -9,6 +13,7 @@
 - 本地单机部署
 - 基于源码部署
 - Node.js + pnpm 环境运行
+- Docker 单容器部署
 
 当前版本更适合：
 
@@ -18,10 +23,13 @@
 
 当前不以以下方向作为正式支持目标：
 
-- Docker
 - 云托管部署
 - 多用户协作部署
 - 桌面安装包分发
+
+如果你希望使用 Docker 直接运行，可参考：
+
+- [Docker 部署说明](/root/WorkSpace/MapDesigner/docs/docker.md)
 
 ## 2. 环境要求
 
