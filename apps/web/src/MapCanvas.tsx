@@ -15,7 +15,7 @@ import {
 } from "@mapdesigner/map-render";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-const MIN_ZOOM = 0.2;
+const MIN_ZOOM = 0.1;
 const MAX_ZOOM = 2.6;
 const ZOOM_FACTOR = 1.1;
 

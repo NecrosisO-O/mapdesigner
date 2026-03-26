@@ -279,13 +279,13 @@ describe("App", () => {
     const mapCanvas = await prepareCanvasViewport();
     const initialTransform = parseViewportTransform();
 
-    for (let index = 0; index < 20; index += 1) {
+    for (let index = 0; index < 30; index += 1) {
       fireEvent.wheel(mapCanvas, { deltaY: 120, clientX: 400, clientY: 300 });
     }
 
     await waitFor(() => {
       const zoomedOutTransform = parseViewportTransform();
-      expect(zoomedOutTransform.scale).toBeCloseTo(initialTransform.scale * 0.2, 3);
+      expect(zoomedOutTransform.scale).toBeCloseTo(initialTransform.scale * 0.1, 3);
     });
   });
 
