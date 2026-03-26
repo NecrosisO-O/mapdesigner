@@ -3,14 +3,22 @@ import path from "node:path";
 import sharp from "sharp";
 import {
   applyCommand,
+  createCellId,
+  createDisplayCoord,
   createEmptyDocument,
   createRuntimeState,
+  getNeighborCoords,
   parseDocument,
+  type AreaInspectionResult,
+  type CellChangeDetail,
+  type CellInspectionResult,
   stringifyDocument,
+  type GridCoordinate,
   type ExportRenderOptions,
   type MapCommand,
   type MapDocument,
   type MapRuntimeState,
+  type NeighborInspectionResult,
   type ValidationIssue
 } from "@mapdesigner/map-core";
 import { buildExportScene, buildMapScene, renderSvgString } from "@mapdesigner/map-render";
@@ -35,6 +43,26 @@ export interface SaveMapAsInput {
   document: MapDocument;
   name: string;
   id?: string;
+}
+
+export interface ApplyCommandsOptions {
+  dryRun?: boolean;
+}
+
+export interface CommandExecutionReport {
+  index: number;
+  action: MapCommand["action"];
+  changed: GridCoordinate[];
+  details: CellChangeDetail[];
+  warnings: ValidationIssue[];
+}
+
+export interface ApplyCommandsResult {
+  map: MapRuntimeState;
+  warnings: ValidationIssue[];
+  dryRun: boolean;
+  command_results: CommandExecutionReport[];
+  changes: CellChangeDetail[];
 }
 
 async function ensureDirectories(): Promise<void> {
@@ -79,6 +107,58 @@ async function loadMapDocument(id: string): Promise<MapDocument> {
 
 function runtimeFromDocument(document: MapDocument): MapRuntimeState {
   return createRuntimeState(document);
+}
+
+function cloneActiveCell(cell: MapRuntimeState["activeCells"][number]) {
+  return {
+    ...cell,
+    tags: [...cell.tags]
+  };
+}
+
+function getCellFromRuntime(runtime: MapRuntimeState, target: GridCoordinate) {
+  const found = runtime.activeCells.find((cell) => cell.row === target.row && cell.col === target.col);
+  if (found) {
+    return cloneActiveCell(found);
+  }
+  return {
+    row: target.row,
+    col: target.col,
+    id: createCellId(target.row, target.col),
+    display_coord: createDisplayCoord(target.row, target.col),
+    status: "undesigned" as const,
+    terrain: null,
+    biome: null,
+    tags: [],
+    note: "",
+    is_seed: false
+  };
+}
+
+function hexDistance(left: GridCoordinate, right: GridCoordinate): number {
+  const rowDelta = left.row - right.row;
+  const colDelta = left.col - right.col;
+  return (Math.abs(rowDelta) + Math.abs(colDelta) + Math.abs(rowDelta + colDelta)) / 2;
+}
+
+function compareCoords(left: GridCoordinate, right: GridCoordinate): number {
+  if (left.row !== right.row) {
+    return left.row - right.row;
+  }
+  return left.col - right.col;
+}
+
+function buildAreaCells(runtime: MapRuntimeState, center: GridCoordinate, radius: number) {
+  const cells = [];
+  for (let row = center.row - radius; row <= center.row + radius; row += 1) {
+    for (let col = center.col - radius; col <= center.col + radius; col += 1) {
+      const target = { row, col };
+      if (hexDistance(center, target) <= radius) {
+        cells.push(getCellFromRuntime(runtime, target));
+      }
+    }
+  }
+  return cells.sort((left, right) => compareCoords(left, right));
 }
 
 export async function listMaps(): Promise<MapListItem[]> {
@@ -262,26 +342,93 @@ export async function exportPng(
   return { fileName, path: filePath };
 }
 
-export async function applyCommands(id: string, commands: MapCommand[]): Promise<{
-  map: MapRuntimeState;
-  warnings: ValidationIssue[];
-}> {
+export async function applyCommands(
+  id: string,
+  commands: MapCommand[],
+  options: ApplyCommandsOptions = {}
+): Promise<ApplyCommandsResult> {
   const normalizedId = assertMapId(id);
   const document = await loadMapDocument(normalizedId);
   let state = createRuntimeState(document);
   const warnings: ValidationIssue[] = [];
+  const commandResults: CommandExecutionReport[] = [];
+  const changes: CellChangeDetail[] = [];
 
-  for (const command of commands) {
+  for (const [index, command] of commands.entries()) {
     const result = applyCommand(state, command);
     if (!result.ok) {
       throw new Error(result.errors.map((entry) => entry.message).join("; "));
     }
     warnings.push(...result.warnings);
+    commandResults.push({
+      index,
+      action: command.action,
+      changed: result.changed.map((coord) => ({ row: coord.row, col: coord.col })),
+      details: result.details.map((detail) => ({
+        ...detail,
+        coord: { row: detail.coord.row, col: detail.coord.col },
+        before: detail.before ? cloneActiveCell(detail.before) : null,
+        after: detail.after ? cloneActiveCell(detail.after) : null
+      })),
+      warnings: result.warnings
+    });
+    changes.push(
+      ...result.details.map((detail) => ({
+        ...detail,
+        coord: { row: detail.coord.row, col: detail.coord.col },
+        before: detail.before ? cloneActiveCell(detail.before) : null,
+        after: detail.after ? cloneActiveCell(detail.after) : null
+      }))
+    );
     state = result.map;
   }
 
-  await fs.writeFile(mapFilePath(normalizedId), stringifyDocument(state.document), "utf8");
-  return { map: state, warnings };
+  if (!options.dryRun) {
+    await fs.writeFile(mapFilePath(normalizedId), stringifyDocument(state.document), "utf8");
+  }
+  return {
+    map: state,
+    warnings,
+    dryRun: options.dryRun ?? false,
+    command_results: commandResults,
+    changes
+  };
+}
+
+export async function inspectCell(id: string, target: GridCoordinate): Promise<CellInspectionResult> {
+  const runtime = await getMap(assertMapId(id));
+  return {
+    cell: getCellFromRuntime(runtime, target),
+    neighbors: getNeighborCoords(target)
+      .map((coord) => getCellFromRuntime(runtime, coord))
+      .sort((left, right) => compareCoords(left, right))
+  };
+}
+
+export async function inspectArea(
+  id: string,
+  center: GridCoordinate,
+  radius: number
+): Promise<AreaInspectionResult> {
+  if (!Number.isInteger(radius) || radius < 0) {
+    throw new Error("radius must be a non-negative integer");
+  }
+  const runtime = await getMap(assertMapId(id));
+  return {
+    center: { row: center.row, col: center.col },
+    radius,
+    cells: buildAreaCells(runtime, center, radius)
+  };
+}
+
+export async function getNeighbors(id: string, center: GridCoordinate): Promise<NeighborInspectionResult> {
+  const runtime = await getMap(assertMapId(id));
+  return {
+    center: getCellFromRuntime(runtime, center),
+    neighbors: getNeighborCoords(center)
+      .map((coord) => getCellFromRuntime(runtime, coord))
+      .sort((left, right) => compareCoords(left, right))
+  };
 }
 
 export async function renderInlineSvg(id: string): Promise<string> {

@@ -55,6 +55,30 @@ export interface ValidationIssue {
   target?: string;
 }
 
+export interface CellChangeDetail {
+  coord: GridCoordinate;
+  cell_id: string;
+  display_coord: string;
+  before: ActiveCell | null;
+  after: ActiveCell | null;
+}
+
+export interface CellInspectionResult {
+  cell: ActiveCell;
+  neighbors: ActiveCell[];
+}
+
+export interface AreaInspectionResult {
+  center: GridCoordinate;
+  radius: number;
+  cells: ActiveCell[];
+}
+
+export interface NeighborInspectionResult {
+  center: ActiveCell;
+  neighbors: ActiveCell[];
+}
+
 export interface RuntimeHistoryEntry {
   label: string;
   source: HistorySource;
@@ -148,6 +172,7 @@ export interface CommandResult {
   ok: boolean;
   map: MapRuntimeState;
   changed: GridCoordinate[];
+  details: CellChangeDetail[];
   warnings: ValidationIssue[];
   errors: ValidationIssue[];
 }

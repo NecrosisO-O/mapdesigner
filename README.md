@@ -125,6 +125,9 @@ pnpm exec tsx apps/server/src/cli.ts maps list
 ```bash
 pnpm exec tsx apps/server/src/cli.ts maps create --name "Demo Map"
 pnpm exec tsx apps/server/src/cli.ts maps inspect --map-id demo-map
+pnpm exec tsx apps/server/src/cli.ts maps inspect-cell --map-id demo-map --row 0 --col 0
+pnpm exec tsx apps/server/src/cli.ts maps inspect-area --map-id demo-map --row 0 --col 0 --radius 2
+pnpm exec tsx apps/server/src/cli.ts maps neighbors --map-id demo-map --row 0 --col 0
 pnpm exec tsx apps/server/src/cli.ts maps export-json --map-id demo-map
 pnpm exec tsx apps/server/src/cli.ts maps export-png --map-id demo-map --preset reference
 ```
@@ -144,16 +147,39 @@ echo '{
 }' | pnpm exec tsx apps/server/src/cli.ts maps apply --map-id demo-map --stdin
 ```
 
+先预演再落盘：
+
+```bash
+echo '{
+  "commands": [
+    {
+      "action": "set_cell",
+      "source": "cli",
+      "target": { "row": 0, "col": 0 },
+      "changes": { "terrain": "plain", "biome": "grassland" }
+    }
+  ]
+}' | pnpm exec tsx apps/server/src/cli.ts maps apply --map-id demo-map --stdin --dry-run
+```
+
 兼容性说明：
 
 - `maps apply` 正式输入格式为 `{ "commands": [...] }`
 - 当前也兼容单条 `MapCommand` 与 `MapCommand[]`，便于已有脚本平滑过渡
+- 推荐 AI agent 固定采用：
+  - `inspect`
+  - `dry-run`
+  - `apply`
+  - `inspect`
 
 CLI 当前支持：
 
 - `maps list`
 - `maps create`
 - `maps inspect`
+- `maps inspect-cell`
+- `maps inspect-area`
+- `maps neighbors`
 - `maps apply`
 - `maps import`
 - `maps export-json`
@@ -163,6 +189,10 @@ CLI 当前支持：
 
 CLI 输出固定为 JSON envelope，便于脚本和 AI agent 调用。
 
+AI agent CLI 工作流文档见：
+
+- [`docs/agent-cli.md`](./docs/agent-cli.md)
+
 ## 当前已实现范围
 
 - WebUI 六角地图渲染
@@ -171,6 +201,7 @@ CLI 输出固定为 JSON envelope，便于脚本和 AI agent 调用。
 - terrain 一级分类 + 具体地形两级选择
 - terrain / biome 双向联动筛选，缩小可选菜单范围
 - 结构化命令驱动的地图修改
+- 面向 AI agent 的 CLI 查询 / dry-run / diff 回显
 - 本地 JSON 保存、导入、导出
 - PNG 导出
 - 会话内撤销 / 重做

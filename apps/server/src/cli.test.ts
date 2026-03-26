@@ -95,7 +95,9 @@ describe("server cli", () => {
     );
     expect(applied.code).toBe(0);
     const appliedBody = JSON.parse(applied.stdout);
-    expect(appliedBody.result.document.cells).toHaveLength(1);
+    expect(appliedBody.result.map.document.cells).toHaveLength(1);
+    expect(appliedBody.result.command_results).toHaveLength(1);
+    expect(appliedBody.result.changes[0].after.terrain).toBe("plain");
 
     const exported = await runCli(
       ["maps", "export-png", "--map-id", mapId, "--preset", "reference"],
@@ -136,7 +138,91 @@ describe("server cli", () => {
     expect(applied.code).toBe(0);
     const appliedBody = JSON.parse(applied.stdout);
     expect(appliedBody.ok).toBe(true);
-    expect(appliedBody.result.document.cells).toHaveLength(1);
-    expect(appliedBody.result.document.cells[0].terrain).toBe("plain");
+    expect(appliedBody.result.map.document.cells).toHaveLength(1);
+    expect(appliedBody.result.map.document.cells[0].terrain).toBe("plain");
+  });
+
+  it("supports dry-run and query-style commands for agent workflows", async () => {
+    const created = await runCli(["maps", "create", "--name", "Agent CLI"], { tempRoot });
+    expect(created.code).toBe(0);
+    const createdBody = JSON.parse(created.stdout);
+    const mapId = createdBody.result.document.meta.id as string;
+
+    const preview = await runCli(
+      ["maps", "apply", "--map-id", mapId, "--stdin", "--dry-run"],
+      {
+        tempRoot,
+        input: JSON.stringify({
+          commands: [
+            {
+              action: "set_cell",
+              source: "cli",
+              target: { row: 0, col: 0 },
+              changes: {
+                terrain: "plain",
+                biome: "grassland"
+              }
+            }
+          ]
+        })
+      }
+    );
+    expect(preview.code).toBe(0);
+    const previewBody = JSON.parse(preview.stdout);
+    expect(previewBody.result.dryRun).toBe(true);
+    expect(previewBody.result.map.document.cells).toHaveLength(1);
+
+    const inspectedAfterPreview = await runCli(["maps", "inspect", "--map-id", mapId], { tempRoot });
+    const inspectedPreviewBody = JSON.parse(inspectedAfterPreview.stdout);
+    expect(inspectedPreviewBody.result.document.cells).toHaveLength(0);
+
+    const applied = await runCli(
+      ["maps", "apply", "--map-id", mapId, "--stdin"],
+      {
+        tempRoot,
+        input: JSON.stringify({
+          commands: [
+            {
+              action: "set_cell",
+              source: "cli",
+              target: { row: 0, col: 0 },
+              changes: {
+                terrain: "plain",
+                biome: "grassland"
+              }
+            }
+          ]
+        })
+      }
+    );
+    expect(applied.code).toBe(0);
+
+    const inspectCell = await runCli(
+      ["maps", "inspect-cell", "--map-id", mapId, "--row", "0", "--col", "0"],
+      { tempRoot }
+    );
+    expect(inspectCell.code).toBe(0);
+    const inspectCellBody = JSON.parse(inspectCell.stdout);
+    expect(inspectCellBody.result.cell.display_coord).toBe("R0C0");
+    expect(inspectCellBody.result.cell.status).toBe("designed");
+    expect(inspectCellBody.result.neighbors).toHaveLength(6);
+
+    const inspectArea = await runCli(
+      ["maps", "inspect-area", "--map-id", mapId, "--row", "0", "--col", "0", "--radius", "1"],
+      { tempRoot }
+    );
+    expect(inspectArea.code).toBe(0);
+    const inspectAreaBody = JSON.parse(inspectArea.stdout);
+    expect(inspectAreaBody.result.radius).toBe(1);
+    expect(inspectAreaBody.result.cells).toHaveLength(7);
+
+    const neighbors = await runCli(
+      ["maps", "neighbors", "--map-id", mapId, "--row", "0", "--col", "0"],
+      { tempRoot }
+    );
+    expect(neighbors.code).toBe(0);
+    const neighborsBody = JSON.parse(neighbors.stdout);
+    expect(neighborsBody.result.center.display_coord).toBe("R0C0");
+    expect(neighborsBody.result.neighbors).toHaveLength(6);
   });
 });

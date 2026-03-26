@@ -160,6 +160,11 @@ describe("commands", () => {
     expect(setResult.ok).toBe(true);
     expect(setResult.map.document.cells).toHaveLength(1);
     expect(setResult.map.document.cells[0]?.terrain).toBe("plain");
+    expect(setResult.details).toHaveLength(1);
+    expect(setResult.details[0]?.display_coord).toBe("R0C0");
+    expect(setResult.details[0]?.before?.status).toBe("undesigned");
+    expect(setResult.details[0]?.after?.status).toBe("designed");
+    expect(setResult.details[0]?.after?.terrain).toBe("plain");
 
     const clearResult = applyCommand(setResult.map, {
       action: "clear_cell",
@@ -169,6 +174,9 @@ describe("commands", () => {
     expect(clearResult.ok).toBe(true);
     expect(clearResult.map.document.cells).toHaveLength(0);
     expect(clearResult.map.activeCells).toHaveLength(7);
+    expect(clearResult.details).toHaveLength(1);
+    expect(clearResult.details[0]?.before?.status).toBe("designed");
+    expect(clearResult.details[0]?.after?.status).toBe("undesigned");
   });
 
   it("supports set_cells and replace_terrain", () => {
@@ -201,6 +209,9 @@ describe("commands", () => {
     });
     expect(replaced.ok).toBe(true);
     expect(replaced.map.document.cells.every((cell) => cell.terrain === "hill")).toBe(true);
+    expect(replaced.details).toHaveLength(2);
+    expect(replaced.details.every((entry) => entry.before?.terrain === "plain")).toBe(true);
+    expect(replaced.details.every((entry) => entry.after?.terrain === "hill")).toBe(true);
   });
 
   it("supports replace_biome and annotate_cell", () => {
@@ -242,6 +253,9 @@ describe("commands", () => {
     expect(annotated.ok).toBe(true);
     expect(annotated.map.document.cells[0]?.tags).toEqual(["peak"]);
     expect(annotated.map.document.cells[0]?.note).toBe("high point");
+    expect(annotated.details).toHaveLength(1);
+    expect(annotated.details[0]?.before?.note).toBe("");
+    expect(annotated.details[0]?.after?.note).toBe("high point");
   });
 
   it("rejects invalid command payloads", () => {
@@ -262,6 +276,7 @@ describe("commands", () => {
     });
     expect(result.ok).toBe(false);
     expect(result.errors.some((entry) => entry.severity === "invalid")).toBe(true);
+    expect(result.details).toHaveLength(0);
   });
 });
 

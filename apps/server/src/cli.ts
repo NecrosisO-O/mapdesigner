@@ -10,7 +10,10 @@ import {
   exportJson,
   exportPng,
   getMap,
+  getNeighbors,
   importMap,
+  inspectArea,
+  inspectCell,
   listMaps
 } from "./service.js";
 import { createEnvelope } from "./utils.js";
@@ -25,6 +28,18 @@ function readFlag(args: string[], name: string): string | undefined {
 
 function hasFlag(args: string[], name: string): boolean {
   return args.includes(name);
+}
+
+function readIntegerFlag(args: string[], name: string): number {
+  const raw = readFlag(args, name);
+  if (raw === undefined) {
+    printFailure(`${name} is required`);
+  }
+  const parsed = Number(raw);
+  if (!Number.isInteger(parsed)) {
+    printFailure(`${name} must be an integer`);
+  }
+  return parsed;
 }
 
 function printResult(result: unknown): void {
@@ -73,7 +88,7 @@ async function main(): Promise<void> {
   const [group, action] = args;
 
   if (group !== "maps" || !action) {
-    printFailure("usage: mapdesigner maps <list|create|inspect|apply|import|export-json|export-png|duplicate|delete>");
+    printFailure("usage: mapdesigner maps <list|create|inspect|inspect-cell|inspect-area|neighbors|apply|import|export-json|export-png|duplicate|delete>");
   }
 
   try {
@@ -99,14 +114,45 @@ async function main(): Promise<void> {
         printResult(createEnvelope({ result: await getMap(id) }));
         break;
       }
+      case "inspect-cell": {
+        const id = readFlag(args, "--map-id");
+        if (!id) {
+          printFailure("maps inspect-cell requires --map-id");
+        }
+        const row = readIntegerFlag(args, "--row");
+        const col = readIntegerFlag(args, "--col");
+        printResult(createEnvelope({ result: await inspectCell(id, { row, col }) }));
+        break;
+      }
+      case "inspect-area": {
+        const id = readFlag(args, "--map-id");
+        if (!id) {
+          printFailure("maps inspect-area requires --map-id");
+        }
+        const row = readIntegerFlag(args, "--row");
+        const col = readIntegerFlag(args, "--col");
+        const radius = readIntegerFlag(args, "--radius");
+        printResult(createEnvelope({ result: await inspectArea(id, { row, col }, radius) }));
+        break;
+      }
+      case "neighbors": {
+        const id = readFlag(args, "--map-id");
+        if (!id) {
+          printFailure("maps neighbors requires --map-id");
+        }
+        const row = readIntegerFlag(args, "--row");
+        const col = readIntegerFlag(args, "--col");
+        printResult(createEnvelope({ result: await getNeighbors(id, { row, col }) }));
+        break;
+      }
       case "apply": {
         const id = readFlag(args, "--map-id");
         if (!id) {
           printFailure("maps apply requires --map-id");
         }
         const commands = await readCommands(args);
-        const result = await applyCommands(id, commands);
-        printResult(createEnvelope({ result: result.map, warnings: result.warnings }));
+        const result = await applyCommands(id, commands, { dryRun: hasFlag(args, "--dry-run") });
+        printResult(createEnvelope({ result, warnings: result.warnings }));
         break;
       }
       case "import": {
