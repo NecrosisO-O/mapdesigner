@@ -40,6 +40,11 @@ export const api = {
       method: "PUT",
       body: JSON.stringify(input)
     }),
+  saveMapAs: (id: string, input: { document: MapDocument; name: string; id?: string }) =>
+    request<MapRuntimeState>(`/api/maps/${id}/save-as`, {
+      method: "POST",
+      body: JSON.stringify(input)
+    }),
   duplicateMap: (id: string) =>
     request<MapRuntimeState>(`/api/maps/${id}/duplicate`, {
       method: "POST"
