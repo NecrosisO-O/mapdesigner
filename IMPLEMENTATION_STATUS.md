@@ -61,12 +61,13 @@
 
 ### 2.5 WebUI
 
-- 已实现地图新建、打开、保存、导入 JSON、导出 JSON、导出 PNG
+- 已实现地图新建、打开、保存、导入 JSON、导出 PNG
 - 已实现单元格选中、编辑、清空、取消编辑
 - 已实现 `terrain / biome / tags / note` 编辑
 - 已实现脏状态基础提示
 - 已实现撤销 / 重做按钮
 - 已实现地图平移与缩放
+- WebUI 已移除“导出 JSON”按钮，JSON 导出能力当前仅保留在 server / CLI
 
 ## 3. 已实现但仍较粗糙的部分
 
@@ -110,3 +111,48 @@
 2. 评估是否为 CLI 增补更多地图管理命令能力
 3. 继续对照设计案梳理剩余产品化细节
 4. 再次审视 README 与使用说明，补齐操作文档
+
+## 7. 最新验收记录
+
+### 7.1 WebUI 验收结论
+
+- 已完成手工验收的核心项：
+  - 地图打开与状态显示
+  - 缩放与平移
+  - 单元格选中与右侧编辑
+  - 已设计格编辑与保存
+  - 外围 `undesigned` 设为 `designed` 后自动扩边
+  - 清空单元格后的状态回退与边界回收
+  - 地图保存、另存为、重命名
+  - 图片导出
+  - 脏状态切图确认
+  - 顶部地图切换
+- 本轮产品决策：
+  - WebUI 顶部移除“导出 JSON”入口
+  - JSON 导出保留给 server / CLI 使用
+
+### 7.2 CLI 验收结论
+
+- 已通过的 CLI 验收项：
+  - `maps list`
+  - `maps inspect`
+  - `maps apply` 的 `set_cell`
+  - `maps apply` 的 `clear_cell`
+  - `maps export-png`
+- 已确认 CLI 与 WebUI 共用同一套地图规则：
+  - CLI 把外围 `undesigned` 设为 `designed` 后，WebUI 能正确看到目标格转为已设计状态
+  - CLI 设格后，WebUI 能正确看到活动区域继续向外扩一圈
+  - CLI 清空后，WebUI 能正确看到目标格回退为 `undesigned`
+  - CLI 清空后，WebUI 能正确看到纯外围新增活动区被回收
+- 本轮 CLI 验收使用的地图：
+  - `manual-acceptance-map-copy-b72429`
+- 本轮 CLI 验收中实际验证过的目标格：
+  - `R1C2`
+
+### 7.3 已发现的实现偏差
+
+- `maps apply --stdin` 当前实现接收的是：
+  - 单条 `MapCommand`
+  - 或 `MapCommand[]`
+- 这与设计案 / 实施计划中约定的 `{ "commands": [...] }` 包装结构不一致
+- 该问题当前不影响 CLI 可用性，但应记录为后续待修正的接口契约偏差

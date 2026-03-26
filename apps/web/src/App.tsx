@@ -469,22 +469,6 @@ export default function App() {
             </button>
           )}
           <button
-            onClick={async () => {
-              if (!currentMap) {
-                return;
-              }
-              const response = await api.exportJson(currentMap.document.meta.id);
-              setMessage(
-                response.result
-                  ? `JSON 已导出到 ${response.result.path}`
-                  : formatStatusMessage(response.errors[0]?.message, "导出失败")
-              );
-            }}
-            disabled={!currentMap}
-          >
-            导出 JSON
-          </button>
-          <button
             onClick={() => void handleExportPng()}
             disabled={!currentMap || currentMap.document.cells.length === 0}
           >
