@@ -4,7 +4,7 @@
 [![Node.js](https://img.shields.io/badge/node-20_LTS-339933)](https://nodejs.org/)
 [![pnpm](https://img.shields.io/badge/pnpm-10-f69220)](https://pnpm.io/)
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-dc2626.svg)](./LICENSE)
-[![简体中文](https://img.shields.io/badge/docs-简体中文-0f766e)](./README.zh-CN.md)
+[简体中文说明](./README.zh-CN.md)
 
 When building a fictional world, the map often changes along with the setting. Coastlines shift, regions are redefined, climates are adjusted, and what began as a simple sketch can quickly turn into a messy mix of images and notes. MapDesigner is a local-first hex map design tool for keeping that process editable, structured, and easier to maintain.
 
