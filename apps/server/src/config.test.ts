@@ -16,9 +16,11 @@ describe("server config", () => {
 
     const config = await import("./config.js");
 
+    expect(config.REPO_ROOT).toBe(repoRoot);
     expect(config.PROJECT_ROOT).toBe(repoRoot);
     expect(config.MAP_STORAGE_DIR).toBe(path.join(repoRoot, "storage/maps"));
     expect(config.EXPORT_STORAGE_DIR).toBe(path.join(repoRoot, "storage/exports"));
+    expect(config.WEB_DIST_DIR).toBe(path.join(repoRoot, "apps/web/dist"));
   });
 
   it("respects MAPDESIGNER_ROOT overrides", async () => {
@@ -27,8 +29,10 @@ describe("server config", () => {
 
     const config = await import("./config.js");
 
+    expect(config.REPO_ROOT).toBe(repoRoot);
     expect(config.PROJECT_ROOT).toBe("/tmp/mapdesigner-custom-root");
     expect(config.MAP_STORAGE_DIR).toBe("/tmp/mapdesigner-custom-root/storage/maps");
     expect(config.EXPORT_STORAGE_DIR).toBe("/tmp/mapdesigner-custom-root/storage/exports");
+    expect(config.WEB_DIST_DIR).toBe(path.join(repoRoot, "apps/web/dist"));
   });
 });

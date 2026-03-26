@@ -1,9 +1,10 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import cors from "@fastify/cors";
-import Fastify, { type FastifyInstance } from "fastify";
+import fastifyStatic from "@fastify/static";
+import Fastify, { type FastifyInstance, type FastifyReply } from "fastify";
 import type { ExportRenderOptions, MapCommand } from "@mapdesigner/map-core";
-import { EXPORT_STORAGE_DIR, SERVER_PORT } from "./config.js";
+import { EXPORT_STORAGE_DIR, SERVER_PORT, WEB_DIST_DIR } from "./config.js";
 import {
   applyCommands,
   createMap,
@@ -19,6 +20,20 @@ import {
 } from "./service.js";
 import { createEnvelope } from "./utils.js";
 
+async function fileExists(filePath: string): Promise<boolean> {
+  try {
+    await fs.access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function sendWebIndex(indexPath: string, reply: FastifyReply) {
+  reply.type("text/html; charset=utf-8");
+  return reply.send(await fs.readFile(indexPath, "utf8"));
+}
+
 function assertExportFileName(fileName: string): string {
   const normalized = fileName.trim();
   if (!normalized || normalized !== path.basename(normalized) || !normalized.endsWith(".png")) {
@@ -30,6 +45,16 @@ function assertExportFileName(fileName: string): string {
 export async function createServer(): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
   await app.register(cors, { origin: true });
+  const webIndexPath = path.join(WEB_DIST_DIR, "index.html");
+  const webAssetsDir = path.join(WEB_DIST_DIR, "assets");
+  const hasWebBuild = await fileExists(webIndexPath);
+
+  if (hasWebBuild && await fileExists(webAssetsDir)) {
+    await app.register(fastifyStatic, {
+      root: webAssetsDir,
+      prefix: "/assets/"
+    });
+  }
 
   app.get("/api/health", async () => createEnvelope({ result: { status: "ok", port: SERVER_PORT } }));
 
@@ -197,6 +222,37 @@ export async function createServer(): Promise<FastifyInstance> {
       });
     }
   });
+
+  if (hasWebBuild) {
+    app.get("/", async (_request, reply) => sendWebIndex(webIndexPath, reply));
+
+    app.get("/*", async (request, reply) => {
+      const pathname = request.url.split("?")[0] ?? "/";
+      if (pathname === "/" || pathname.startsWith("/api/") || pathname.startsWith("/assets/")) {
+        return reply.callNotFound();
+      }
+      if (path.extname(pathname)) {
+        return reply.callNotFound();
+      }
+      return sendWebIndex(webIndexPath, reply);
+    });
+  } else {
+    app.get("/", async (_request, reply) => {
+      reply.status(503);
+      return {
+        ok: false,
+        result: null,
+        warnings: [],
+        errors: [
+          {
+            code: "web_build_missing",
+            message: "web build not found; run pnpm build before starting the production server",
+            severity: "invalid"
+          }
+        ]
+      };
+    });
+  }
 
   return app;
 }

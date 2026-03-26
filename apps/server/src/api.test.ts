@@ -139,4 +139,35 @@ describe("server api", () => {
       await app.close();
     }
   });
+
+  it("serves the built web app and preserves api routes", async () => {
+    const { createServer } = await loadApi(tempRoot);
+    const app = await createServer();
+    try {
+      const index = await app.inject({
+        method: "GET",
+        url: "/"
+      });
+      expect(index.statusCode).toBe(200);
+      expect(index.headers["content-type"]).toContain("text/html");
+      expect(index.body).toContain("<div id=\"root\"></div>");
+
+      const appRoute = await app.inject({
+        method: "GET",
+        url: "/maps/demo"
+      });
+      expect(appRoute.statusCode).toBe(200);
+      expect(appRoute.body).toContain("<div id=\"root\"></div>");
+
+      const api = await app.inject({
+        method: "GET",
+        url: "/api/health"
+      });
+      expect(api.statusCode).toBe(200);
+      const apiBody = api.json();
+      expect(apiBody.result.status).toBe("ok");
+    } finally {
+      await app.close();
+    }
+  });
 });
