@@ -46,13 +46,11 @@
 如果你正在整理版本发布资料或产品说明，可参考：
 
 - [0.1.0 产品功能与特点总览](/root/WorkSpace/MapDesigner/PRODUCT_OVERVIEW_0.1.0.md)
-- [0.1.0 自部署方案草案](/root/WorkSpace/MapDesigner/DEPLOYMENT_PLAN_0.1.0.md)
 
-这两份文档适合：
+这份文档适合：
 
 - 整理发布口径
 - 编写 README 与 Release Notes
-- 规划当前版本的部署支持边界
 
 ## 当前推荐阅读顺序
 
