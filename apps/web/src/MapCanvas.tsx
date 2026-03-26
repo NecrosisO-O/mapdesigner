@@ -19,6 +19,7 @@ interface MapCanvasProps {
   map: MapRuntimeState;
   selectedCellId: string | null;
   onSelectCell: (cell: ActiveCell) => void;
+  onHoverCellChange?: (cell: ActiveCell | null) => void;
   showCoordinates: boolean;
   showShorthand: boolean;
   showGrid: boolean;
@@ -132,6 +133,7 @@ export function MapCanvas(props: MapCanvasProps) {
       onMouseLeave={() => {
         dragState.current = null;
         setHoveredCellId(null);
+        props.onHoverCellChange?.(null);
       }}
     >
       <svg width="100%" height="100%" viewBox={`0 0 ${scene.width} ${scene.height}`} aria-label="Map canvas">
@@ -141,8 +143,14 @@ export function MapCanvas(props: MapCanvasProps) {
           {scene.layout.map((entry) => (
             <g
               key={entry.cell.id}
-              onMouseEnter={() => setHoveredCellId(entry.cell.id)}
-              onMouseLeave={() => setHoveredCellId((current) => (current === entry.cell.id ? null : current))}
+              onMouseEnter={() => {
+                setHoveredCellId(entry.cell.id);
+                props.onHoverCellChange?.(entry.cell);
+              }}
+              onMouseLeave={() => {
+                setHoveredCellId((current) => (current === entry.cell.id ? null : current));
+                props.onHoverCellChange?.(null);
+              }}
             >
               <CellGroup
                 cell={entry.cell}

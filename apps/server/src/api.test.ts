@@ -1,0 +1,63 @@
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+async function loadApi(tempRoot: string) {
+  process.env.MAPDESIGNER_ROOT = tempRoot;
+  vi.resetModules();
+  return import("./api.js");
+}
+
+describe("server api", () => {
+  let tempRoot: string;
+
+  beforeEach(async () => {
+    tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "mapdesigner-api-"));
+  });
+
+  afterEach(async () => {
+    delete process.env.MAPDESIGNER_ROOT;
+    await fs.rm(tempRoot, { recursive: true, force: true });
+  });
+
+  it("creates and fetches a map through http routes", async () => {
+    const { createServer } = await loadApi(tempRoot);
+    const app = await createServer();
+    try {
+      const created = await app.inject({
+        method: "POST",
+        url: "/api/maps",
+        payload: { name: "API Test" }
+      });
+      expect(created.statusCode).toBe(200);
+      const createdBody = created.json();
+      expect(createdBody.ok).toBe(true);
+      expect(createdBody.result.document.meta.name).toBe("API Test");
+
+      const fetched = await app.inject({
+        method: "GET",
+        url: `/api/maps/${createdBody.result.document.meta.id}`
+      });
+      expect(fetched.statusCode).toBe(200);
+      const fetchedBody = fetched.json();
+      expect(fetchedBody.result.document.meta.id).toBe(createdBody.result.document.meta.id);
+
+      const saveAs = await app.inject({
+        method: "POST",
+        url: `/api/maps/${createdBody.result.document.meta.id}/save-as`,
+        payload: {
+          document: createdBody.result.document,
+          name: "API Test Copy"
+        }
+      });
+      expect(saveAs.statusCode).toBe(200);
+      const saveAsBody = saveAs.json();
+      expect(saveAsBody.ok).toBe(true);
+      expect(saveAsBody.result.document.meta.name).toBe("API Test Copy");
+      expect(saveAsBody.result.document.meta.id).not.toBe(createdBody.result.document.meta.id);
+    } finally {
+      await app.close();
+    }
+  });
+});

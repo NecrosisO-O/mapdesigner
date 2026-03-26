@@ -12,6 +12,7 @@ import {
   getMap,
   importMap,
   listMaps,
+  saveMapAs,
   saveMap
 } from "./service.js";
 import { createEnvelope } from "./utils.js";
@@ -78,6 +79,32 @@ export async function createServer(): Promise<FastifyInstance> {
       reply.status(400);
       return createEnvelope({
         errors: [{ code: "duplicate_failed", message: (error as Error).message, severity: "invalid" }]
+      });
+    }
+  });
+
+  app.post<{
+    Params: { id: string };
+    Body: { document: Awaited<ReturnType<typeof getMap>>["document"]; name: string; id?: string };
+  }>("/api/maps/:id/save-as", async (request, reply) => {
+    try {
+      if (request.params.id !== request.body.document.meta.id) {
+        reply.status(400);
+        return createEnvelope({
+          errors: [{ code: "id_mismatch", message: "path id and document.meta.id must match", severity: "invalid" }]
+        });
+      }
+      return createEnvelope({
+        result: await saveMapAs({
+          document: request.body.document,
+          name: request.body.name,
+          id: request.body.id
+        })
+      });
+    } catch (error) {
+      reply.status(400);
+      return createEnvelope({
+        errors: [{ code: "save_as_failed", message: (error as Error).message, severity: "invalid" }]
       });
     }
   });

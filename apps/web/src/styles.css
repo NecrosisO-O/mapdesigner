@@ -113,8 +113,20 @@ input {
   margin-bottom: 12px;
 }
 
+.checkbox-row {
+  flex-direction: row !important;
+  align-items: center;
+  gap: 8px !important;
+}
+
 .panel input[type="checkbox"] {
   margin-right: 8px;
+}
+
+.panel input[type="color"] {
+  inline-size: 100%;
+  block-size: 44px;
+  padding: 4px;
 }
 
 .canvas-panel {
@@ -182,6 +194,58 @@ select {
 .meta-list p,
 .status-panel p {
   margin: 0 0 8px;
+}
+
+.map-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.map-list-item {
+  text-align: left;
+  border: 1px solid rgba(88, 72, 52, 0.18);
+  background: rgba(255, 252, 245, 0.9);
+  border-radius: 14px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.map-list-item strong {
+  font-size: 0.98rem;
+}
+
+.map-list-item span {
+  color: #5f554a;
+  font-size: 0.88rem;
+}
+
+.map-list-item.current {
+  border-color: rgba(174, 92, 45, 0.45);
+  background: rgba(250, 236, 220, 0.92);
+}
+
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.history-entry {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 252, 245, 0.75);
+  border: 1px solid rgba(88, 72, 52, 0.12);
+}
+
+.history-entry span {
+  color: #685d50;
+  font-size: 0.85rem;
 }
 
 @media (max-width: 1200px) {

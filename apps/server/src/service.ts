@@ -31,6 +31,12 @@ export interface SaveMapInput {
   expectedRevision: number;
 }
 
+export interface SaveMapAsInput {
+  document: MapDocument;
+  name: string;
+  id?: string;
+}
+
 async function ensureDirectories(): Promise<void> {
   await fs.mkdir(MAP_STORAGE_DIR, { recursive: true });
   await fs.mkdir(EXPORT_STORAGE_DIR, { recursive: true });
@@ -125,6 +131,31 @@ export async function saveMap(input: SaveMapInput): Promise<MapRuntimeState> {
   }
   await fs.writeFile(mapFilePath(input.document.meta.id), stringifyDocument(input.document), "utf8");
   return runtimeFromDocument(input.document);
+}
+
+export async function saveMapAs(input: SaveMapAsInput): Promise<MapRuntimeState> {
+  await ensureDirectories();
+  const now = new Date().toISOString();
+  const nextId = input.id ?? createMapId(input.name);
+  const nextPath = mapFilePath(nextId);
+  if (await fileExists(nextPath)) {
+    throw new Error(`map id ${nextId} already exists`);
+  }
+
+  const document: MapDocument = {
+    ...input.document,
+    meta: {
+      ...input.document.meta,
+      id: nextId,
+      name: input.name,
+      created_at: now,
+      updated_at: now,
+      revision: 1
+    }
+  };
+
+  await fs.writeFile(nextPath, stringifyDocument(document), "utf8");
+  return runtimeFromDocument(document);
 }
 
 export async function deleteMap(id: string): Promise<void> {
