@@ -63,7 +63,7 @@ export const api = {
       method: "POST"
     }),
   exportPng: (id: string, options: Partial<ExportRenderOptions>) =>
-    request<{ fileName: string; path: string }>(`/api/maps/${id}/export-png`, {
+    request<{ fileName: string; path: string; downloadUrl: string }>(`/api/maps/${id}/export-png`, {
       method: "POST",
       body: JSON.stringify(options)
     })

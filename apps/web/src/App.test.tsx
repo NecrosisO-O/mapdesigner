@@ -178,7 +178,11 @@ describe("App", () => {
     });
     apiMock.exportPng.mockResolvedValue({
       ok: true,
-      result: { fileName: "sample-map-reference.png", path: "/tmp/sample-map-reference.png" },
+      result: {
+        fileName: "sample-map-reference.png",
+        path: "/tmp/sample-map-reference.png",
+        downloadUrl: "/api/exports/sample-map-reference.png"
+      },
       warnings: [],
       errors: []
     });
@@ -263,6 +267,8 @@ describe("App", () => {
     await screen.findByText("已打开 Sample Map");
     fireEvent.click(screen.getByText("R0C0"));
     expect(await screen.findByText("坐标：R0C0 | ID：cell@0,0")).toBeTruthy();
+    const terrainCategoryField = screen.getByLabelText("Terrain 分类") as HTMLSelectElement;
+    expect(terrainCategoryField.value).toBe("plain");
     const terrainField = screen.getByLabelText("Terrain") as HTMLSelectElement;
     expect(terrainField.value).toBe("plain");
     const cellPanel = terrainField.closest("section");
@@ -270,6 +276,77 @@ describe("App", () => {
     expect(within(cellPanel as HTMLElement).getByRole("button", { name: "保存" })).toBeTruthy();
     expect(within(cellPanel as HTMLElement).getByRole("button", { name: "撤销" })).toBeTruthy();
     expect(within(cellPanel as HTMLElement).getByRole("button", { name: "清空" })).toBeTruthy();
+  });
+
+  it("filters terrain options by the selected terrain category", async () => {
+    render(<App />);
+    await screen.findByText("已打开 Sample Map");
+    fireEvent.click(screen.getByText("R0C0"));
+
+    const terrainCategoryField = screen.getByLabelText("Terrain 分类") as HTMLSelectElement;
+    const terrainField = screen.getByLabelText("Terrain") as HTMLSelectElement;
+    const biomeField = screen.getByLabelText("Biome") as HTMLSelectElement;
+
+    fireEvent.change(biomeField, { target: { value: "" } });
+
+    fireEvent.change(terrainCategoryField, { target: { value: "water" } });
+
+    expect(terrainCategoryField.value).toBe("water");
+    expect(terrainField.value).toBe("");
+    expect(Array.from(terrainField.options).map((option) => option.value)).toContain("ocean");
+    expect(Array.from(terrainField.options).map((option) => option.value)).not.toContain("plain");
+  });
+
+  it("filters biome options after selecting a terrain", async () => {
+    render(<App />);
+    await screen.findByText("已打开 Sample Map");
+    fireEvent.click(screen.getByText("R0C0"));
+
+    const terrainCategoryField = screen.getByLabelText("Terrain 分类") as HTMLSelectElement;
+    const terrainField = screen.getByLabelText("Terrain") as HTMLSelectElement;
+    const biomeField = screen.getByLabelText("Biome") as HTMLSelectElement;
+
+    fireEvent.change(biomeField, { target: { value: "" } });
+    fireEvent.change(terrainCategoryField, { target: { value: "water" } });
+    fireEvent.change(terrainField, { target: { value: "ocean" } });
+
+    expect(terrainField.value).toBe("ocean");
+    expect(biomeField.value).toBe("");
+    expect(Array.from(biomeField.options).map((option) => option.value)).toEqual([
+      "",
+      "marine",
+      "coral",
+      "seagrass",
+      "pack_ice"
+    ]);
+  });
+
+  it("filters terrain categories and terrain options after selecting a biome", async () => {
+    render(<App />);
+    await screen.findByText("已打开 Sample Map");
+    fireEvent.click(screen.getByText("R0C0"));
+
+    const terrainCategoryField = screen.getByLabelText("Terrain 分类") as HTMLSelectElement;
+    const terrainField = screen.getByLabelText("Terrain") as HTMLSelectElement;
+    const biomeField = screen.getByLabelText("Biome") as HTMLSelectElement;
+
+    fireEvent.change(terrainField, { target: { value: "" } });
+    fireEvent.change(biomeField, { target: { value: "marine" } });
+
+    expect(biomeField.value).toBe("marine");
+    expect(terrainCategoryField.value).toBe("");
+    expect(terrainField.value).toBe("");
+    expect(Array.from(terrainCategoryField.options).map((option) => option.value)).toEqual(["", "water", "coast"]);
+
+    fireEvent.change(terrainCategoryField, { target: { value: "coast" } });
+
+    expect(Array.from(terrainField.options).map((option) => option.value)).toEqual([
+      "",
+      "coast",
+      "beach",
+      "tidal_flat",
+      "reef"
+    ]);
   });
 
   it("allows zooming out further than the previous minimum", async () => {
@@ -343,6 +420,7 @@ describe("App", () => {
   });
 
   it("exports png with configured options", async () => {
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
     render(<App />);
     await screen.findByText("已打开 Sample Map");
     expect(screen.queryByLabelText("预设")).toBeNull();
@@ -368,6 +446,8 @@ describe("App", () => {
         })
       )
     );
+    expect(clickSpy).toHaveBeenCalledTimes(1);
+    expect(await screen.findByText("PNG 已导出并开始下载：sample-map-reference.png")).toBeTruthy();
   });
 
   it("can collapse the export panel after opening it", async () => {

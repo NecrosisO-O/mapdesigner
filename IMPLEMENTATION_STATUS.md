@@ -149,10 +149,89 @@
 - 本轮 CLI 验收中实际验证过的目标格：
   - `R1C2`
 
-### 7.3 已发现的实现偏差
+### 7.3 Phase A 已修正项
 
-- `maps apply --stdin` 当前实现接收的是：
+- `maps apply --stdin` / `--file` 已对齐为支持设计案中的正式输入格式：
+  - `{ "commands": [...] }`
+- 同时保留兼容输入：
   - 单条 `MapCommand`
-  - 或 `MapCommand[]`
-- 这与设计案 / 实施计划中约定的 `{ "commands": [...] }` 包装结构不一致
-- 该问题当前不影响 CLI 可用性，但应记录为后续待修正的接口契约偏差
+  - `MapCommand[]`
+- server 默认存储目录已回归仓库根目录：
+  - `storage/maps`
+  - `storage/exports`
+- `MAPDESIGNER_ROOT` 覆盖能力保留不变，用于测试与隔离环境
+
+### 7.4 Phase B 已修正项
+
+- WebUI 的 PNG 导出已从“仅服务端落盘”升级为“服务端落盘 + 浏览器直接下载”
+- server 新增导出文件下载路由，供 WebUI 在导出成功后直接获取 PNG
+- `POST /api/maps/:id/export-png` 现已返回：
+  - `fileName`
+  - `path`
+  - `downloadUrl`
+- CLI 导出行为保持不变，仍以文件落盘为主
+
+### 7.5 Phase C 已修正项
+
+- WebUI 的 terrain 选择已从单层扁平下拉升级为“两级选择”：
+  - `Terrain 分类`
+  - `Terrain`
+- terrain 一级分类基于 `map-core` 字典统一导出，当前分为：
+  - 水域
+  - 海岸
+  - 平原与低地
+  - 高地与山地
+  - 切割地貌
+  - 干旱地貌
+  - 寒冷地貌
+  - 火山地貌
+- 地图持久化格式、CLI terrain key、已有地图文件结构均保持不变
+- 打开已有地图时，WebUI 会根据当前 terrain 自动回填对应分类
+
+### 7.6 Phase D 已修正项
+
+- WebUI 已升级为 `Terrain 分类 / Terrain / Biome` 双向联动筛选
+- 当前联动行为为：
+  - 先选 `Terrain` 时，`Biome` 下拉缩小为该地形的可选生态
+  - 先选 `Biome` 时，`Terrain 分类` 与 `Terrain` 缩小为仍可选项
+  - 若修改一侧后另一侧不再兼容，界面会自动清空不兼容值
+- 本轮目标是缩小菜单范围、提升编辑舒适度，不新增 warning 流程，也不把这套关系提升为严格硬校验
+- 主规则表已集中在 `map-core`，供 WebUI 复用：
+  - `ALLOWED_BIOMES_BY_TERRAIN`
+
+### 7.7 Phase E 验收收口结论
+
+- 已完成无需用户参与的第一阶段验收：
+  - `map-core` 测试通过：15 项
+  - `web` 测试通过：16 项
+  - `server` 测试通过：12 项
+  - 三侧 `typecheck` 全部通过
+  - 全量 `build` 通过
+- 已完成 CLI 与文件行为验收：
+  - `maps create` 正常
+  - `maps apply --stdin` 使用 `{ "commands": [...] }` 正常
+  - `maps inspect` 可顺序读取更新后的 revision 与 cell 内容
+  - `maps export-png` 正常
+  - 默认目录已核实为仓库根：
+    - `/root/WorkSpace/MapDesigner/storage/maps`
+    - `/root/WorkSpace/MapDesigner/storage/exports`
+  - 下载路由已核实可返回真实 PNG：
+    - `GET /api/exports/:fileName`
+- 已完成需要用户参与的第二阶段手工验收：
+  - 页面正常打开
+  - 选中已有格子后，`Terrain 分类 / Terrain / Biome` 回填正常
+  - 先选 `Terrain` 时，`Biome` 缩小正常
+  - 先选 `Biome` 时，`Terrain 分类` 与 `Terrain` 反向缩小正常
+  - 由于 UI 已前置约束，不兼容组合在正常操作路径中通常无法先被选出；该行为已被确认是合理且符合预期的
+  - 右侧编辑保存正常
+  - 顶部保存正常
+  - 重新打开后数据恢复正常
+  - PNG 导出可直接触发浏览器下载
+- 当前可确认：
+  - Phase A 已验收通过
+  - Phase B 已验收通过
+  - Phase C 已验收通过
+  - Phase D 已验收通过
+- 当前阶段状态：
+  - 本轮“下一阶段计划”中的核心功能与验收目标已完成
+  - 尚未执行的主要收口动作只剩提交 / 推送与后续是否继续扩展新功能的决策

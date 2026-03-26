@@ -106,4 +106,37 @@ describe("server cli", () => {
     expect(exportedBody.result.fileName).toMatch(/cli-test-reference\.png$/);
     await expect(fs.stat(exportedBody.result.path)).resolves.toBeTruthy();
   });
+
+  it("accepts the documented commands envelope for maps apply", async () => {
+    const created = await runCli(["maps", "create", "--name", "Envelope Test"], { tempRoot });
+    expect(created.code).toBe(0);
+    const createdBody = JSON.parse(created.stdout);
+    const mapId = createdBody.result.document.meta.id as string;
+
+    const applied = await runCli(
+      ["maps", "apply", "--map-id", mapId, "--stdin"],
+      {
+        tempRoot,
+        input: JSON.stringify({
+          commands: [
+            {
+              action: "set_cell",
+              source: "cli",
+              target: { row: 0, col: 0 },
+              changes: {
+                terrain: "plain",
+                biome: "grassland"
+              }
+            }
+          ]
+        })
+      }
+    );
+
+    expect(applied.code).toBe(0);
+    const appliedBody = JSON.parse(applied.stdout);
+    expect(appliedBody.ok).toBe(true);
+    expect(appliedBody.result.document.cells).toHaveLength(1);
+    expect(appliedBody.result.document.cells[0].terrain).toBe("plain");
+  });
 });

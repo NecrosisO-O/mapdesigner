@@ -36,20 +36,33 @@ function printFailure(message: string): never {
   process.exit(1);
 }
 
+function normalizeCommands(input: unknown): MapCommand[] {
+  if (Array.isArray(input)) {
+    return input as MapCommand[];
+  }
+  if (input && typeof input === "object" && Array.isArray((input as { commands?: unknown }).commands)) {
+    return (input as { commands: MapCommand[] }).commands;
+  }
+  if (input && typeof input === "object" && "action" in input) {
+    return [input as MapCommand];
+  }
+  throw new Error("maps apply input must be a MapCommand, a MapCommand[], or an object with a commands array");
+}
+
 async function readCommands(args: string[]): Promise<MapCommand[]> {
   if (hasFlag(args, "--stdin")) {
     const chunks: Buffer[] = [];
     for await (const chunk of process.stdin) {
       chunks.push(Buffer.from(chunk));
     }
-    const parsed = JSON.parse(Buffer.concat(chunks).toString("utf8")) as MapCommand | MapCommand[];
-    return Array.isArray(parsed) ? parsed : [parsed];
+    const parsed = JSON.parse(Buffer.concat(chunks).toString("utf8")) as unknown;
+    return normalizeCommands(parsed);
   }
 
   const filePath = readFlag(args, "--file");
   if (filePath) {
-    const parsed = JSON.parse(await fs.readFile(path.resolve(filePath), "utf8")) as MapCommand | MapCommand[];
-    return Array.isArray(parsed) ? parsed : [parsed];
+    const parsed = JSON.parse(await fs.readFile(path.resolve(filePath), "utf8")) as unknown;
+    return normalizeCommands(parsed);
   }
 
   printFailure("maps apply requires --stdin or --file");
