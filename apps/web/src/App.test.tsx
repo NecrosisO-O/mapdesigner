@@ -266,7 +266,9 @@ describe("App", () => {
     render(<App />);
     await screen.findByText("已打开 Sample Map");
     fireEvent.click(screen.getByText("R0C0"));
-    expect(await screen.findByText("坐标：R0C0 | ID：cell@0,0")).toBeTruthy();
+    expect(await screen.findByLabelText("当前选中信息")).toBeTruthy();
+    expect(screen.getByLabelText("当前选中信息").textContent).toContain("R0C0 | designed");
+    expect(screen.queryByRole("heading", { name: "当前选中" })).toBeNull();
     const terrainCategoryField = screen.getByLabelText("Terrain 分类") as HTMLSelectElement;
     expect(terrainCategoryField.value).toBe("plain");
     const terrainField = screen.getByLabelText("Terrain") as HTMLSelectElement;
@@ -313,7 +315,8 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("button", { name: "格式刷" }));
     fireEvent.click(screen.getByText("R0C1"));
 
-    expect(await screen.findByText("坐标：R0C1 | ID：cell@0,1")).toBeTruthy();
+    expect(await screen.findByLabelText("当前选中信息")).toBeTruthy();
+    expect(screen.getByLabelText("当前选中信息").textContent).toContain("R0C1 | designed");
     expect((screen.getByLabelText("Terrain") as HTMLSelectElement).value).toBe("plain");
     expect((screen.getByLabelText("Biome") as HTMLSelectElement).value).toBe("");
   });
@@ -340,6 +343,7 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("button", { name: "格式刷" }));
     fireEvent.click(screen.getByText("R0C1"));
 
+    expect(screen.getByLabelText("当前选中信息").textContent).toContain("R0C1 | designed");
     expect((screen.getByLabelText("Terrain") as HTMLSelectElement).value).toBe("plain");
     expect((screen.getByLabelText("Biome") as HTMLSelectElement).value).toBe("grassland");
   });
@@ -353,7 +357,8 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("button", { name: "格式刷" }));
     fireEvent.click(screen.getByText("R0C1"));
 
-    expect(await screen.findByText("坐标：R0C1 | ID：cell@0,1")).toBeTruthy();
+    expect(await screen.findByLabelText("当前选中信息")).toBeTruthy();
+    expect(screen.getByLabelText("当前选中信息").textContent).toContain("R0C1 | undesigned");
   });
 
   it("filters terrain options by the selected terrain category", async () => {
@@ -502,6 +507,7 @@ describe("App", () => {
     render(<App />);
     await screen.findByText("已打开 Sample Map");
     expect(screen.queryByLabelText("预设")).toBeNull();
+    expect(screen.queryByText("导出图片")).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "展开" }));
 
@@ -534,10 +540,11 @@ describe("App", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "展开" }));
     expect(screen.getByLabelText("预设")).toBeTruthy();
+    expect(screen.getByText("导出图片")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "收起" }));
     expect(screen.queryByLabelText("预设")).toBeNull();
-    expect(screen.getByText("展开后可配置 PNG 导出的预设、比例和参考信息。")).toBeTruthy();
+    expect(screen.queryByText("导出图片")).toBeNull();
   });
 
   it("does not render a hover details panel for map cells", async () => {

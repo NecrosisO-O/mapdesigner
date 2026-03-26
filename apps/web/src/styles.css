@@ -183,6 +183,7 @@ input {
 }
 
 .map-canvas {
+  position: relative;
   height: 100%;
   min-height: 0;
   border-radius: 24px;
@@ -191,6 +192,30 @@ input {
   border: 1px solid rgba(93, 76, 55, 0.16);
   background: #f4f0e6;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.32);
+}
+
+.canvas-selection-overlay {
+  position: absolute;
+  top: 16px;
+  right: 18px;
+  z-index: 2;
+  pointer-events: none;
+  max-width: calc(100% - 36px);
+  text-align: right;
+}
+
+.canvas-selection-overlay span {
+  display: inline-block;
+  color: #fff8ea;
+  font-weight: 800;
+  font-size: 0.98rem;
+  letter-spacing: 0.01em;
+  text-shadow:
+    -1px -1px 0 rgba(38, 26, 16, 0.95),
+    1px -1px 0 rgba(38, 26, 16, 0.95),
+    -1px 1px 0 rgba(38, 26, 16, 0.95),
+    1px 1px 0 rgba(38, 26, 16, 0.95),
+    0 2px 6px rgba(38, 26, 16, 0.35);
 }
 
 .rename-editor {
@@ -279,6 +304,24 @@ select {
   font-size: 0.92rem;
 }
 
+.export-action-row {
+  display: flex;
+  justify-content: flex-start;
+  margin-bottom: 12px;
+}
+
+.export-action-row button {
+  border: 1px solid rgba(88, 72, 52, 0.24);
+  background: #fbf6ea;
+  color: #231e18;
+  border-radius: 999px;
+  padding: 8px 14px;
+}
+
+.export-action-row button:hover {
+  background: #f2ead7;
+}
+
 .empty-state {
   display: flex;
   height: 100%;
@@ -297,9 +340,15 @@ select {
   margin: 0 0 8px;
 }
 
-.panel-collapsed-hint {
-  margin: 0;
-  color: #685d50;
+.status-message-banner {
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #fff3d2, #f7d88d);
+  border: 1px solid rgba(170, 118, 27, 0.28);
+  color: #5a3b0b;
+  font-weight: 700;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
 }
 
 .history-list {
