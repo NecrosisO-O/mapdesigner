@@ -1,12 +1,12 @@
 # MapDesigner 文档索引
 
-本文档用于作为 `MapDesigner` 当前文档的统一入口，帮助用户根据自己的使用场景快速找到对应说明。
+本文档作为 `MapDesigner` 当前文档的统一入口，帮助用户根据自己的使用场景快速找到对应说明。
 
 ## 面向普通用户
 
 如果你想直接开始使用 `MapDesigner`，建议优先阅读：
 
-- [用户说明书](/root/WorkSpace/MapDesigner/docs/user-manual.md)
+- [用户说明书](./user-manual.md)
 
 这份文档适合：
 
@@ -19,8 +19,8 @@
 
 如果你希望自己部署 `MapDesigner 0.1.0`，建议阅读：
 
-- [部署说明](/root/WorkSpace/MapDesigner/docs/deployment.md)
-- [Docker 部署说明](/root/WorkSpace/MapDesigner/docs/docker.md)
+- [部署说明](./deployment.md)
+- [Docker 部署说明](./docker.md)
 
 这份文档适合：
 
@@ -33,7 +33,7 @@
 
 如果你希望通过 CLI 或 AI agent 调用本项目，建议阅读：
 
-- [Agent CLI Guide](/root/WorkSpace/MapDesigner/docs/agent-cli.md)
+- [Agent CLI Guide](./agent-cli.md)
 
 这份文档适合：
 
@@ -45,7 +45,8 @@
 
 如果你正在整理版本发布资料或产品说明，可参考：
 
-- [0.1.0 产品功能与特点总览](/root/WorkSpace/MapDesigner/PRODUCT_OVERVIEW_0.1.0.md)
+- [0.1.0 产品功能与特点总览](../PRODUCT_OVERVIEW_0.1.0.md)
+- [变更记录](../CHANGELOG.md)
 
 这份文档适合：
 
@@ -56,7 +57,7 @@
 
 对于大多数用户，建议按以下顺序阅读：
 
-1. [用户说明书](/root/WorkSpace/MapDesigner/docs/user-manual.md)
-2. 若使用源码部署，阅读 [部署说明](/root/WorkSpace/MapDesigner/docs/deployment.md)
-3. 若使用 Docker 部署，阅读 [Docker 部署说明](/root/WorkSpace/MapDesigner/docs/docker.md)
-4. 如果需要自动化调用，再看 [Agent CLI Guide](/root/WorkSpace/MapDesigner/docs/agent-cli.md)
+1. [用户说明书](./user-manual.md)
+2. 若使用源码部署，阅读 [部署说明](./deployment.md)
+3. 若使用 Docker 部署，阅读 [Docker 部署说明](./docker.md)
+4. 如果需要自动化调用，再看 [Agent CLI Guide](./agent-cli.md)
