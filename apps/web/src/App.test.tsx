@@ -64,6 +64,62 @@ vi.mock("./api.js", () => ({
   api: apiMock
 }));
 
+function getViewportTransform(): SVGGElement {
+  const svg = screen.getByLabelText("Map canvas");
+  const viewport = svg.querySelector("g[transform]");
+  expect(viewport).toBeTruthy();
+  return viewport as SVGGElement;
+}
+
+function parseViewportTransform() {
+  const transform = getViewportTransform().getAttribute("transform") ?? "";
+  const match = transform.match(
+    /translate\(([-\d.]+)\s+([-\d.]+)\)\s+scale\(([-\d.]+)\)/
+  );
+
+  expect(match).toBeTruthy();
+
+  return {
+    tx: Number(match?.[1]),
+    ty: Number(match?.[2]),
+    scale: Number(match?.[3])
+  };
+}
+
+function getScenePointAtScreenPoint(
+  pointer: { x: number; y: number },
+  transform = parseViewportTransform()
+) {
+  return {
+    x: (pointer.x - transform.tx) / transform.scale,
+    y: (pointer.y - transform.ty) / transform.scale
+  };
+}
+
+async function prepareCanvasViewport() {
+  const mapCanvas = screen.getByLabelText("Map canvas").parentElement as HTMLDivElement;
+
+  vi.spyOn(mapCanvas, "getBoundingClientRect").mockReturnValue({
+    x: 0,
+    y: 0,
+    width: 800,
+    height: 600,
+    top: 0,
+    left: 0,
+    right: 800,
+    bottom: 600,
+    toJSON: () => ({})
+  });
+
+  fireEvent(window, new Event("resize"));
+
+  await waitFor(() => {
+    expect(parseViewportTransform().scale).toBeGreaterThan(1);
+  });
+
+  return mapCanvas;
+}
+
 describe("App", () => {
   afterEach(() => {
     cleanup();
@@ -214,6 +270,43 @@ describe("App", () => {
     expect(within(cellPanel as HTMLElement).getByRole("button", { name: "保存" })).toBeTruthy();
     expect(within(cellPanel as HTMLElement).getByRole("button", { name: "撤销" })).toBeTruthy();
     expect(within(cellPanel as HTMLElement).getByRole("button", { name: "清空" })).toBeTruthy();
+  });
+
+  it("allows zooming out further than the previous minimum", async () => {
+    render(<App />);
+    await screen.findByText("已打开 Sample Map");
+
+    const mapCanvas = await prepareCanvasViewport();
+    const initialTransform = parseViewportTransform();
+
+    for (let index = 0; index < 20; index += 1) {
+      fireEvent.wheel(mapCanvas, { deltaY: 120, clientX: 400, clientY: 300 });
+    }
+
+    await waitFor(() => {
+      const zoomedOutTransform = parseViewportTransform();
+      expect(zoomedOutTransform.scale).toBeCloseTo(initialTransform.scale * 0.2, 3);
+    });
+  });
+
+  it("zooms around the mouse position instead of staying centered", async () => {
+    render(<App />);
+    await screen.findByText("已打开 Sample Map");
+
+    const mapCanvas = await prepareCanvasViewport();
+    const pointer = { x: 120, y: 80 };
+    const beforeZoom = getScenePointAtScreenPoint(pointer);
+
+    fireEvent.wheel(mapCanvas, { deltaY: -120, clientX: pointer.x, clientY: pointer.y });
+
+    await waitFor(() => {
+      const afterZoom = getScenePointAtScreenPoint(pointer);
+      const transform = parseViewportTransform();
+
+      expect(transform.scale).toBeGreaterThan(1);
+      expect(afterZoom.x).toBeCloseTo(beforeZoom.x, 2);
+      expect(afterZoom.y).toBeCloseTo(beforeZoom.y, 2);
+    });
   });
 
   it("can create a map from the toolbar", async () => {
