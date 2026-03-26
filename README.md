@@ -16,9 +16,6 @@ V1 当前交付形态为：
 - `packages/map-render`: SVG 场景构建、程序化地形/生态视觉、导出渲染
 - `storage/maps`: 地图 JSON 主文件目录
 - `storage/exports`: 导出的 JSON / PNG 文件目录
-- `DESIGN.md`: 当前设计案
-- `IMPLEMENTATION_PLAN.md`: 开工计划
-- `IMPLEMENTATION_STATUS.md`: 当前实现核查与落地状态
 
 ## 环境要求
 
