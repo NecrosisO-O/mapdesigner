@@ -674,12 +674,6 @@ export default function App() {
               重命名
             </button>
           )}
-          <button
-            onClick={() => void handleExportPng()}
-            disabled={!currentMap || currentMap.document.cells.length === 0}
-          >
-            导出图片
-          </button>
           <button onClick={() => fileInputRef.current?.click()}>导入 JSON</button>
           <button
             onClick={async () => {
@@ -774,7 +768,9 @@ export default function App() {
         <aside className="sidebar">
           <section className="panel status-panel" aria-label="当前状态">
             <h2>当前状态</h2>
-            <p>{loading ? "加载中..." : message}</p>
+            <div className="status-message-banner" aria-live="polite">
+              {loading ? "加载中..." : message}
+            </div>
             {currentMap ? (
               <div className="meta-list">
                 <p>
@@ -812,6 +808,14 @@ export default function App() {
             </div>
             {exportPanelOpen ? (
               <div id="export-panel-content">
+                <div className="export-action-row">
+                  <button
+                    onClick={() => void handleExportPng()}
+                    disabled={!currentMap || currentMap.document.cells.length === 0}
+                  >
+                    导出图片
+                  </button>
+                </div>
                 <label>
                   预设
                   <select
@@ -928,9 +932,7 @@ export default function App() {
                   导出简写
                 </label>
               </div>
-            ) : (
-              <p className="panel-collapsed-hint">展开后可配置 PNG 导出的预设、比例和参考信息。</p>
-            )}
+            ) : null}
           </section>
           <section className="panel">
             <h2>说明</h2>
@@ -943,6 +945,7 @@ export default function App() {
           {currentMap ? (
             <MapCanvas
               map={currentMap}
+              selectedCell={selectedCell}
               selectedCellId={selectedCellId}
               onHoverCellChange={setHoveredCell}
               onSelectCell={(cell) => {
@@ -970,18 +973,6 @@ export default function App() {
         </section>
 
         <aside className="detail-panel">
-          <section className="panel">
-            <h2>当前选中</h2>
-            {selectedCell ? (
-              <div className="meta-list">
-                <p>坐标：{selectedCell.display_coord} | ID：{selectedCell.id}</p>
-                <p>状态：{selectedCell.status}</p>
-              </div>
-            ) : (
-              <p>请选择一个单元格</p>
-            )}
-          </section>
-
           <section className="panel">
             <div className="panel-header">
               <div className="action-row action-row-inline">

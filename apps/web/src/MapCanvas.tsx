@@ -21,6 +21,7 @@ const ZOOM_FACTOR = 1.1;
 
 interface MapCanvasProps {
   map: MapRuntimeState;
+  selectedCell: ActiveCell | null;
   selectedCellId: string | null;
   onSelectCell: (cell: ActiveCell) => void;
   onHoverCellChange?: (cell: ActiveCell | null) => void;
@@ -240,6 +241,13 @@ export function MapCanvas(props: MapCanvasProps) {
         props.onHoverCellChange?.(null);
       }}
     >
+      {props.selectedCell ? (
+        <div className="canvas-selection-overlay" aria-label="当前选中信息">
+          <span>
+            {props.selectedCell.display_coord} | {props.selectedCell.status}
+          </span>
+        </div>
+      ) : null}
       <svg
         width="100%"
         height="100%"
