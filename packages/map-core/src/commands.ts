@@ -1,7 +1,9 @@
-import { createCellId } from "./coords.js";
+import { createCellId, createDisplayCoord, sameCoord } from "./coords.js";
 import { pushHistory } from "./history.js";
 import { cloneDocument, normalizeDocument } from "./serialization.js";
 import type {
+  ActiveCell,
+  CellChangeDetail,
   CommandResult,
   DesignedCellRecord,
   GridCoordinate,
@@ -66,6 +68,53 @@ function validateTags(tags: unknown, target: string): ValidationIssue[] {
   return [];
 }
 
+function cloneActiveCell(cell: ActiveCell): ActiveCell {
+  return {
+    ...cell,
+    tags: [...cell.tags]
+  };
+}
+
+function synthesizeUndesignedCell(target: GridCoordinate): ActiveCell {
+  return {
+    row: target.row,
+    col: target.col,
+    id: createCellId(target.row, target.col),
+    display_coord: createDisplayCoord(target.row, target.col),
+    status: "undesigned",
+    terrain: null,
+    biome: null,
+    tags: [],
+    note: ""
+  };
+}
+
+function snapshotCell(state: MapRuntimeState, target: GridCoordinate): ActiveCell | null {
+  const found = state.activeCells.find((cell) => sameCoord(cell, target));
+  if (found) {
+    return cloneActiveCell(found);
+  }
+  const existsInDocument = state.document.cells.some((cell) => sameCoord(cell, target));
+  if (existsInDocument) {
+    return null;
+  }
+  return synthesizeUndesignedCell(target);
+}
+
+function buildChangeDetails(
+  previous: MapRuntimeState,
+  next: MapRuntimeState,
+  changed: GridCoordinate[]
+): CellChangeDetail[] {
+  return changed.map((target) => ({
+    coord: { row: target.row, col: target.col },
+    cell_id: createCellId(target.row, target.col),
+    display_coord: createDisplayCoord(target.row, target.col),
+    before: snapshotCell(previous, target),
+    after: snapshotCell(next, target)
+  }));
+}
+
 function finalize(
   previous: MapRuntimeState,
   document: typeof previous.document,
@@ -80,6 +129,7 @@ function finalize(
       ok: false,
       map: previous,
       changed: [],
+      details: [],
       warnings,
       errors
     };
@@ -87,10 +137,12 @@ function finalize(
 
   const normalized = normalizeDocument(document);
   const map = pushHistory(previous, previous.document, normalized, label, source);
+  const details = buildChangeDetails(previous, map, changed);
   return {
     ok: true,
     map,
     changed,
+    details,
     warnings,
     errors
   };

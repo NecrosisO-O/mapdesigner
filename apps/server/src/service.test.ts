@@ -63,12 +63,81 @@ describe("server service", () => {
       }
     ]);
     expect(applied.map.document.cells).toHaveLength(1);
+    expect(applied.dryRun).toBe(false);
+    expect(applied.command_results).toHaveLength(1);
+    expect(applied.changes[0]?.after?.terrain).toBe("plain");
 
     const jsonExport = await service.exportJson(created.document.meta.id);
     expect(await fs.stat(jsonExport.path)).toBeTruthy();
 
     const pngExport = await service.exportPng(created.document.meta.id, { preset: "reference" });
     expect(await fs.stat(pngExport.path)).toBeTruthy();
+  });
+
+  it("supports dry-run without writing the map file", async () => {
+    const service = await loadService(tempRoot);
+    const created = await service.createMap({ name: "Dry Run Test" });
+
+    const preview = await service.applyCommands(
+      created.document.meta.id,
+      [
+        {
+          action: "set_cell",
+          source: "cli",
+          target: { row: 0, col: 0 },
+          changes: {
+            terrain: "plain",
+            biome: "grassland"
+          }
+        }
+      ],
+      { dryRun: true }
+    );
+
+    expect(preview.dryRun).toBe(true);
+    expect(preview.map.document.cells).toHaveLength(1);
+    expect(preview.changes[0]?.before?.status).toBe("undesigned");
+    expect(preview.changes[0]?.after?.status).toBe("designed");
+
+    const persisted = await service.getMap(created.document.meta.id);
+    expect(persisted.document.cells).toHaveLength(0);
+    expect(persisted.document.meta.revision).toBe(1);
+  });
+
+  it("provides inspect-cell, inspect-area, and neighbors queries", async () => {
+    const service = await loadService(tempRoot);
+    const created = await service.createMap({ name: "Inspect Test" });
+    await service.applyCommands(created.document.meta.id, [
+      {
+        action: "set_cell",
+        source: "cli",
+        target: { row: 0, col: 0 },
+        changes: {
+          terrain: "plain",
+          biome: "grassland"
+        }
+      }
+    ]);
+
+    const cell = await service.inspectCell(created.document.meta.id, { row: 0, col: 0 });
+    expect(cell.cell.display_coord).toBe("R0C0");
+    expect(cell.cell.status).toBe("designed");
+    expect(cell.neighbors).toHaveLength(6);
+
+    const area = await service.inspectArea(created.document.meta.id, { row: 0, col: 0 }, 1);
+    expect(area.radius).toBe(1);
+    expect(area.cells).toHaveLength(7);
+    expect(area.cells.some((entry) => entry.display_coord === "R0C0" && entry.status === "designed")).toBe(true);
+
+    const neighbors = await service.getNeighbors(created.document.meta.id, { row: 0, col: 0 });
+    expect(neighbors.center.display_coord).toBe("R0C0");
+    expect(neighbors.neighbors).toHaveLength(6);
+    expect(neighbors.neighbors.some((entry) => entry.display_coord === "R1C0")).toBe(true);
+
+    const fallbackCell = await service.inspectCell(created.document.meta.id, { row: 2, col: 0 });
+    expect("is_seed" in fallbackCell.cell).toBe(true);
+    expect(fallbackCell.cell.is_seed).toBe(false);
+    expect(fallbackCell.neighbors.every((entry) => "is_seed" in entry)).toBe(true);
   });
 
   it("supports duplicate and import with generateNewId", async () => {

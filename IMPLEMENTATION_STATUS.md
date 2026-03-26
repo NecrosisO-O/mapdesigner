@@ -227,14 +227,48 @@
   - 顶部保存正常
   - 重新打开后数据恢复正常
   - PNG 导出可直接触发浏览器下载
+
+### 7.8 Agent CLI 增强
+
+- 已新增面向 AI agent 的 CLI 查询命令：
+  - `maps inspect-cell`
+  - `maps inspect-area`
+  - `maps neighbors`
+- `maps apply` 已支持 `--dry-run`
+  - 预演会完整执行命令链
+  - 会返回 warnings、逐条命令结果与聚合 diff
+  - 不会写回 `storage/maps`
+- `maps apply` 的结果已升级为更适合 agent 消费的结构：
+  - `dryRun`
+  - `map`
+  - `command_results`
+  - `changes`
+- 单条命令 diff 现已包含：
+  - `coord`
+  - `cell_id`
+  - `display_coord`
+  - `before`
+  - `after`
+- 已新增 agent 使用文档：
+  - `docs/agent-cli.md`
+- 当前推荐的 agent 工作流固定为：
+  - `inspect`
+  - `dry-run`
+  - `apply`
+  - `inspect`
+  - `export-png`
 - 当前可确认：
   - Phase A 已验收通过
   - Phase B 已验收通过
   - Phase C 已验收通过
   - Phase D 已验收通过
-- 当前阶段状态：
-  - 本轮“下一阶段计划”中的核心功能与验收目标已完成
-  - 尚未执行的主要收口动作只剩提交 / 推送与后续是否继续扩展新功能的决策
-- 仓库收尾约定已补充：
-  - `apps/server/storage/` 视为历史开发期本地运行目录，不再作为正式数据位置
-  - `.gitignore` 已补充本地测试地图与导出产物的默认忽略规则
+
+### 7.9 当前阶段状态
+
+- 本轮“下一阶段计划”中的核心功能与验收目标已完成
+- 尚未执行的主要收口动作只剩提交 / 推送与后续是否继续扩展新功能的决策
+
+### 7.10 仓库收尾约定
+
+- `apps/server/storage/` 视为历史开发期本地运行目录，不再作为正式数据位置
+- `.gitignore` 已补充本地测试地图与导出产物的默认忽略规则
