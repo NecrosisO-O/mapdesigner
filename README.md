@@ -71,6 +71,10 @@ More examples and command conventions are documented in [Agent CLI Guide](./docs
 
 `v0.1.0` is the first usable public release. The core workflow is already covered: create maps, edit hex cells in the browser, save and reopen JSON files, export PNG references, and drive the same map data through a structured CLI.
 
+## Development Note
+
+AI assistance was used during the development of this project.
+
 ## License
 
 This project is licensed under the [GNU General Public License v3.0](./LICENSE).
