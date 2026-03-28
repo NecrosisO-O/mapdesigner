@@ -48,6 +48,10 @@ docker run --rm -p 3010:3010 -e MAPDESIGNER_ROOT=/data -v "$(pwd)/mapdesigner-da
 
 当前公开版本为 `v0.1.0`。这一版已经可以完成基础地图创建、单元格编辑、JSON 保存与导入、PNG 导出，以及面向 AI agent 的结构化 CLI 操作。
 
+## 开发说明
+
+本项目在开发过程中使用了 AI 辅助。
+
 ## 许可证
 
 本项目采用 [GNU General Public License v3.0](./LICENSE)。
