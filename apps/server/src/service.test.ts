@@ -66,6 +66,13 @@ describe("server service", () => {
     expect(applied.dryRun).toBe(false);
     expect(applied.command_results).toHaveLength(1);
     expect(applied.changes[0]?.after?.terrain).toBe("plain");
+    expect(applied.stats.command_count).toBe(1);
+    expect(applied.stats.changed_count).toBe(1);
+    expect(applied.stats.created_count).toBe(1);
+    expect(applied.stats.updated_count).toBe(0);
+    expect(applied.stats.cleared_count).toBe(0);
+    expect(applied.stats.terrain_summary.after.plain).toBe(1);
+    expect(applied.stats.biome_summary.after.grassland).toBe(1);
 
     const jsonExport = await service.exportJson(created.document.meta.id);
     expect(await fs.stat(jsonExport.path)).toBeTruthy();
@@ -98,6 +105,7 @@ describe("server service", () => {
     expect(preview.map.document.cells).toHaveLength(1);
     expect(preview.changes[0]?.before?.status).toBe("undesigned");
     expect(preview.changes[0]?.after?.status).toBe("designed");
+    expect(preview.stats.created_count).toBe(1);
 
     const persisted = await service.getMap(created.document.meta.id);
     expect(persisted.document.cells).toHaveLength(0);

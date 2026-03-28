@@ -1,5 +1,5 @@
 import { buildActiveCells } from "./activity.js";
-import { cloneDocument, normalizeDocument } from "./serialization.js";
+import { cloneDocument, getHistoryLimitForDesignedCellCount, normalizeDocument } from "./serialization.js";
 import type {
   HistorySource,
   MapDocument,
@@ -14,6 +14,8 @@ export function pushHistory(
   label: string,
   source: HistorySource = "system"
 ): MapRuntimeState {
+  const normalized = normalizeDocument(after);
+  const nextLimit = getHistoryLimitForDesignedCellCount(normalized.cells.length);
   const entry: RuntimeHistoryEntry = {
     label,
     source,
@@ -22,15 +24,14 @@ export function pushHistory(
     after: cloneDocument(after)
   };
   const past = [...state.history.past, entry];
-  const boundedPast = past.slice(-state.history.limit);
-  const normalized = normalizeDocument(after);
+  const boundedPast = past.slice(-nextLimit);
   return {
     document: normalized,
     activeCells: buildActiveCells(normalized),
     history: {
       past: boundedPast,
       future: [],
-      limit: state.history.limit
+      limit: nextLimit
     }
   };
 }
@@ -42,13 +43,14 @@ export function undo(state: MapRuntimeState): MapRuntimeState {
   }
   const past = state.history.past.slice(0, -1);
   const restored = normalizeDocument(previous.before);
+  const nextLimit = getHistoryLimitForDesignedCellCount(restored.cells.length);
   return {
     document: restored,
     activeCells: buildActiveCells(restored),
     history: {
-      past,
+      past: past.slice(-nextLimit),
       future: [previous, ...state.history.future],
-      limit: state.history.limit
+      limit: nextLimit
     }
   };
 }
@@ -59,13 +61,14 @@ export function redo(state: MapRuntimeState): MapRuntimeState {
     return state;
   }
   const restored = normalizeDocument(next.after);
+  const nextLimit = getHistoryLimitForDesignedCellCount(restored.cells.length);
   return {
     document: restored,
     activeCells: buildActiveCells(restored),
     history: {
-      past: [...state.history.past, next].slice(-state.history.limit),
+      past: [...state.history.past, next].slice(-nextLimit),
       future: state.history.future.slice(1),
-      limit: state.history.limit
+      limit: nextLimit
     }
   };
 }

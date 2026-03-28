@@ -398,8 +398,6 @@ describe("App", () => {
     expect(Array.from(biomeField.options).map((option) => option.value)).toEqual([
       "",
       "marine",
-      "coral",
-      "seagrass",
       "pack_ice"
     ]);
   });
@@ -432,7 +430,7 @@ describe("App", () => {
     ]);
   });
 
-  it("allows zooming out further than the previous minimum", async () => {
+  it("allows zooming out without clamping to the previous minimum", async () => {
     render(<App />);
     await screen.findByText("已打开 Sample Map");
 
@@ -445,7 +443,25 @@ describe("App", () => {
 
     await waitFor(() => {
       const zoomedOutTransform = parseViewportTransform();
-      expect(zoomedOutTransform.scale).toBeCloseTo(initialTransform.scale * 0.1, 3);
+      expect(zoomedOutTransform.scale).toBeCloseTo(initialTransform.scale * (1 / 1.1) ** 30, 3);
+    });
+  });
+
+  it("allows zooming in without clamping to the previous maximum", async () => {
+    render(<App />);
+    await screen.findByText("已打开 Sample Map");
+
+    const mapCanvas = await prepareCanvasViewport();
+    const initialTransform = parseViewportTransform();
+    const previousMaxScale = initialTransform.scale * 2.6;
+
+    for (let index = 0; index < 15; index += 1) {
+      fireEvent.wheel(mapCanvas, { deltaY: -120, clientX: 400, clientY: 300 });
+    }
+
+    await waitFor(() => {
+      const zoomedInTransform = parseViewportTransform();
+      expect(zoomedInTransform.scale).toBeGreaterThan(previousMaxScale);
     });
   });
 

@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   BIOME_KEYS,
+  TERRAIN_KEYS,
   applyCommand,
   buildActiveCells,
   createEmptyDocument,
   createRuntimeState,
+  getHistoryLimitForDesignedCellCount,
   getAllowedBiomesForTerrain,
   getAllowedTerrainCategoriesForBiome,
   getAllowedTerrainsForBiome,
@@ -125,7 +127,7 @@ describe("validation", () => {
   });
 
   it("provides relaxed terrain to biome filtering helpers", () => {
-    expect(getAllowedBiomesForTerrain("ocean")).toEqual(["marine", "coral", "seagrass", "pack_ice"]);
+    expect(getAllowedBiomesForTerrain("ocean")).toEqual(["marine", "pack_ice"]);
     expect(getAllowedTerrainsForBiome("marine")).toContain("ocean");
     expect(getAllowedTerrainsForBiome("marine")).not.toContain("plain");
     expect(getAllowedTerrainCategoriesForBiome("marine")).toEqual(["water", "coast"]);
@@ -135,6 +137,28 @@ describe("validation", () => {
     expect(getAllowedBiomesForTerrain("plain")).not.toContain("marine");
     expect(getAllowedTerrainCategoriesForBiome("")).toEqual(expect.arrayContaining(["water", "coast", "plain"]));
     expect(BIOME_KEYS).toContain("grassland");
+  });
+
+  it("keeps filtering helpers aligned with invalid-pair validation", () => {
+    for (const terrain of TERRAIN_KEYS) {
+      for (const biome of getAllowedBiomesForTerrain(terrain)) {
+        const issues = validateTerrainBiomePair(terrain, biome);
+        expect(
+          issues.some((entry) => entry.severity === "invalid"),
+          `${terrain} -> ${biome} should not be invalid`
+        ).toBe(false);
+      }
+    }
+
+    for (const biome of BIOME_KEYS) {
+      for (const terrain of getAllowedTerrainsForBiome(biome)) {
+        const issues = validateTerrainBiomePair(terrain, biome);
+        expect(
+          issues.some((entry) => entry.severity === "invalid"),
+          `${biome} -> ${terrain} should not be invalid`
+        ).toBe(false);
+      }
+    }
   });
 });
 
@@ -301,6 +325,33 @@ describe("history", () => {
     expect(undone.document.cells).toHaveLength(0);
     const redone = redo(undone);
     expect(redone.document.cells).toHaveLength(1);
+  });
+
+  it("adjusts runtime history limits based on designed cell count", () => {
+    expect(getHistoryLimitForDesignedCellCount(0)).toBe(100);
+    expect(getHistoryLimitForDesignedCellCount(300)).toBe(100);
+    expect(getHistoryLimitForDesignedCellCount(301)).toBe(60);
+    expect(getHistoryLimitForDesignedCellCount(1000)).toBe(60);
+    expect(getHistoryLimitForDesignedCellCount(1001)).toBe(30);
+    expect(getHistoryLimitForDesignedCellCount(3001)).toBe(20);
+
+    const document = createEmptyDocument({
+      id: "large-history-test",
+      name: "Large History Test"
+    });
+    for (let index = 0; index < 1200; index += 1) {
+      document.cells.push({
+        row: index,
+        col: 0,
+        terrain: "plain",
+        biome: "grassland",
+        tags: [],
+        note: ""
+      });
+    }
+
+    const runtime = createRuntimeState(document);
+    expect(runtime.history.limit).toBe(30);
   });
 });
 

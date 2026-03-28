@@ -49,6 +49,21 @@ export interface ApplyCommandsOptions {
   dryRun?: boolean;
 }
 
+export interface ApplyValueSummary {
+  before: Record<string, number>;
+  after: Record<string, number>;
+}
+
+export interface ApplyChangeStats {
+  command_count: number;
+  changed_count: number;
+  created_count: number;
+  updated_count: number;
+  cleared_count: number;
+  terrain_summary: ApplyValueSummary;
+  biome_summary: ApplyValueSummary;
+}
+
 export interface CommandExecutionReport {
   index: number;
   action: MapCommand["action"];
@@ -63,6 +78,7 @@ export interface ApplyCommandsResult {
   dryRun: boolean;
   command_results: CommandExecutionReport[];
   changes: CellChangeDetail[];
+  stats: ApplyChangeStats;
 }
 
 async function ensureDirectories(): Promise<void> {
@@ -159,6 +175,52 @@ function buildAreaCells(runtime: MapRuntimeState, center: GridCoordinate, radius
     }
   }
   return cells.sort((left, right) => compareCoords(left, right));
+}
+
+function incrementCount(bucket: Record<string, number>, key: string | null | undefined): void {
+  if (!key) {
+    return;
+  }
+  bucket[key] = (bucket[key] ?? 0) + 1;
+}
+
+function buildApplyChangeStats(
+  commands: MapCommand[],
+  changes: CellChangeDetail[]
+): ApplyChangeStats {
+  const terrainSummary: ApplyValueSummary = { before: {}, after: {} };
+  const biomeSummary: ApplyValueSummary = { before: {}, after: {} };
+  let createdCount = 0;
+  let updatedCount = 0;
+  let clearedCount = 0;
+
+  for (const change of changes) {
+    const beforeDesigned = change.before?.status === "designed";
+    const afterDesigned = change.after?.status === "designed";
+
+    if (!beforeDesigned && afterDesigned) {
+      createdCount += 1;
+    } else if (beforeDesigned && !afterDesigned) {
+      clearedCount += 1;
+    } else if (beforeDesigned && afterDesigned) {
+      updatedCount += 1;
+    }
+
+    incrementCount(terrainSummary.before, beforeDesigned ? change.before?.terrain : null);
+    incrementCount(terrainSummary.after, afterDesigned ? change.after?.terrain : null);
+    incrementCount(biomeSummary.before, beforeDesigned ? change.before?.biome : null);
+    incrementCount(biomeSummary.after, afterDesigned ? change.after?.biome : null);
+  }
+
+  return {
+    command_count: commands.length,
+    changed_count: changes.length,
+    created_count: createdCount,
+    updated_count: updatedCount,
+    cleared_count: clearedCount,
+    terrain_summary: terrainSummary,
+    biome_summary: biomeSummary
+  };
 }
 
 export async function listMaps(): Promise<MapListItem[]> {
@@ -391,7 +453,8 @@ export async function applyCommands(
     warnings,
     dryRun: options.dryRun ?? false,
     command_results: commandResults,
-    changes
+    changes,
+    stats: buildApplyChangeStats(commands, changes)
   };
 }
 

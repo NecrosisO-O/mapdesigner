@@ -140,6 +140,47 @@ describe("server api", () => {
     }
   });
 
+  it("returns apply statistics from the api route", async () => {
+    const { createServer } = await loadApi(tempRoot);
+    const app = await createServer();
+    try {
+      const created = await app.inject({
+        method: "POST",
+        url: "/api/maps",
+        payload: { name: "Apply API Test" }
+      });
+      const createdBody = created.json();
+      const mapId = createdBody.result.document.meta.id as string;
+
+      const applied = await app.inject({
+        method: "POST",
+        url: `/api/maps/${mapId}/apply`,
+        payload: {
+          commands: [
+            {
+              action: "set_cell",
+              source: "cli",
+              target: { row: 0, col: 0 },
+              changes: {
+                terrain: "plain",
+                biome: "grassland"
+              }
+            }
+          ]
+        }
+      });
+      expect(applied.statusCode).toBe(200);
+      const appliedBody = applied.json();
+      expect(appliedBody.ok).toBe(true);
+      expect(appliedBody.result.map.document.cells).toHaveLength(1);
+      expect(appliedBody.result.stats.command_count).toBe(1);
+      expect(appliedBody.result.stats.created_count).toBe(1);
+      expect(appliedBody.result.stats.terrain_summary.after.plain).toBe(1);
+    } finally {
+      await app.close();
+    }
+  });
+
   it("serves the built web app and preserves api routes", async () => {
     const { createServer } = await loadApi(tempRoot);
     const app = await createServer();

@@ -7,6 +7,19 @@ import type {
 } from "./types.js";
 import { validateMapDocument } from "./validation.js";
 
+export function getHistoryLimitForDesignedCellCount(designedCellCount: number): number {
+  if (designedCellCount <= 300) {
+    return 100;
+  }
+  if (designedCellCount <= 1000) {
+    return 60;
+  }
+  if (designedCellCount <= 3000) {
+    return 30;
+  }
+  return 20;
+}
+
 function sortCells(cells: DesignedCellRecord[]): DesignedCellRecord[] {
   return [...cells].sort((a, b) => {
     if (a.row !== b.row) {
@@ -89,7 +102,7 @@ export function createRuntimeState(document: MapDocument): MapRuntimeState {
     history: {
       past: [],
       future: [],
-      limit: 100
+      limit: getHistoryLimitForDesignedCellCount(normalized.cells.length)
     }
   };
 }

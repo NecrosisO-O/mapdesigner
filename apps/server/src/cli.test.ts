@@ -98,6 +98,8 @@ describe("server cli", () => {
     expect(appliedBody.result.map.document.cells).toHaveLength(1);
     expect(appliedBody.result.command_results).toHaveLength(1);
     expect(appliedBody.result.changes[0].after.terrain).toBe("plain");
+    expect(appliedBody.result.stats.created_count).toBe(1);
+    expect(appliedBody.result.stats.terrain_summary.after.plain).toBe(1);
 
     const exported = await runCli(
       ["maps", "export-png", "--map-id", mapId, "--preset", "reference"],
@@ -224,5 +226,41 @@ describe("server cli", () => {
     const neighborsBody = JSON.parse(neighbors.stdout);
     expect(neighborsBody.result.center.display_coord).toBe("R0C0");
     expect(neighborsBody.result.neighbors).toHaveLength(6);
+  });
+
+  it("supports compact apply summaries for large automation workflows", async () => {
+    const created = await runCli(["maps", "create", "--name", "Summary CLI"], { tempRoot });
+    expect(created.code).toBe(0);
+    const createdBody = JSON.parse(created.stdout);
+    const mapId = createdBody.result.document.meta.id as string;
+
+    const applied = await runCli(
+      ["maps", "apply", "--map-id", mapId, "--stdin", "--summary"],
+      {
+        tempRoot,
+        input: JSON.stringify({
+          commands: [
+            {
+              action: "set_cell",
+              source: "cli",
+              target: { row: 0, col: 0 },
+              changes: {
+                terrain: "plain",
+                biome: "grassland"
+              }
+            }
+          ]
+        })
+      }
+    );
+
+    expect(applied.code).toBe(0);
+    const appliedBody = JSON.parse(applied.stdout);
+    expect(appliedBody.result.map_id).toBe(mapId);
+    expect(appliedBody.result.command_count).toBe(1);
+    expect(appliedBody.result.changed_count).toBe(1);
+    expect(appliedBody.result.created_count).toBe(1);
+    expect(appliedBody.result.designed_cell_count).toBe(1);
+    expect(appliedBody.result.terrain_summary.after.plain).toBe(1);
   });
 });

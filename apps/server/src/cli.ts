@@ -4,6 +4,7 @@ import path from "node:path";
 import type { ExportRenderOptions, MapCommand } from "@mapdesigner/map-core";
 import {
   applyCommands,
+  type ApplyCommandsResult,
   createMap,
   deleteMap,
   duplicateMap,
@@ -49,6 +50,18 @@ function printResult(result: unknown): void {
 function printFailure(message: string): never {
   process.stderr.write(`${message}\n`);
   process.exit(1);
+}
+
+function buildApplySummary(result: ApplyCommandsResult) {
+  return {
+    map_id: result.map.document.meta.id,
+    map_name: result.map.document.meta.name,
+    revision: result.map.document.meta.revision,
+    designed_cell_count: result.map.document.cells.length,
+    dry_run: result.dryRun,
+    warning_count: result.warnings.length,
+    ...result.stats
+  };
 }
 
 function normalizeCommands(input: unknown): MapCommand[] {
@@ -152,7 +165,8 @@ async function main(): Promise<void> {
         }
         const commands = await readCommands(args);
         const result = await applyCommands(id, commands, { dryRun: hasFlag(args, "--dry-run") });
-        printResult(createEnvelope({ result, warnings: result.warnings }));
+        const envelopeResult = hasFlag(args, "--summary") ? buildApplySummary(result) : result;
+        printResult(createEnvelope({ result: envelopeResult, warnings: result.warnings }));
         break;
       }
       case "import": {

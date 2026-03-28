@@ -214,7 +214,15 @@ export async function createServer(): Promise<FastifyInstance> {
   app.post<{ Params: { id: string }; Body: { commands: MapCommand[] } }>("/api/maps/:id/apply", async (request, reply) => {
     try {
       const result = await applyCommands(request.params.id, request.body.commands);
-      return createEnvelope({ result: result.map, warnings: result.warnings });
+      return createEnvelope({
+        result: {
+          map: result.map,
+          dryRun: result.dryRun,
+          warnings: result.warnings,
+          stats: result.stats
+        },
+        warnings: result.warnings
+      });
     } catch (error) {
       reply.status(400);
       return createEnvelope({

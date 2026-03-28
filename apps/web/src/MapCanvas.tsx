@@ -15,9 +15,11 @@ import {
 } from "@mapdesigner/map-render";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-const MIN_ZOOM = 0.1;
-const MAX_ZOOM = 2.6;
 const ZOOM_FACTOR = 1.1;
+const COORDINATE_VISIBILITY_SCALE = 0.78;
+const SHORTHAND_VISIBILITY_SCALE = 1.12;
+const TAG_VISIBILITY_SCALE = 1.12;
+const PATTERN_VISIBILITY_SCALE = 0.42;
 
 interface MapCanvasProps {
   map: MapRuntimeState;
@@ -40,14 +42,16 @@ function CellGroup(props: {
   hovered: boolean;
   showCoordinates: boolean;
   showShorthand: boolean;
+  showPattern: boolean;
+  showPrimaryTag: boolean;
   showGrid: boolean;
   onSelect: () => void;
 }) {
   const { cell } = props;
-  const patternFill = buildPatternOverlay(cell.biome);
+  const patternFill = props.showPattern ? buildPatternOverlay(cell.biome) : null;
   const shorthand = props.showShorthand ? getCellShorthand(cell) : null;
   const primaryTag = getPrimaryTag(cell);
-  const primaryTagText = getPrimaryTagSymbol(primaryTag as TagKey | null);
+  const primaryTagText = props.showPrimaryTag ? getPrimaryTagSymbol(primaryTag as TagKey | null) : null;
   const stroke = buildCellStroke(cell, props.selected, props.hovered);
   const opacity = buildCellOpacity(cell);
   const textFill = cell.status === "designed" ? "#1D1B18" : "#6F675D";
@@ -122,6 +126,19 @@ export function MapCanvas(props: MapCanvasProps) {
     x: (viewportSize.width - scene.width * baseScale) / 2,
     y: 0
   };
+  const effectiveScale = baseScale * zoom;
+  const effectiveShowCoordinates = props.showCoordinates && effectiveScale >= COORDINATE_VISIBILITY_SCALE;
+  const effectiveShowShorthand = props.showShorthand && effectiveScale >= SHORTHAND_VISIBILITY_SCALE;
+  const effectiveShowPrimaryTag = effectiveScale >= TAG_VISIBILITY_SCALE;
+  const effectiveShowPattern = effectiveScale >= PATTERN_VISIBILITY_SCALE;
+  const renderDetail =
+    effectiveScale >= SHORTHAND_VISIBILITY_SCALE
+      ? "near"
+      : effectiveScale >= COORDINATE_VISIBILITY_SCALE
+        ? "mid"
+        : effectiveScale >= PATTERN_VISIBILITY_SCALE
+          ? "far"
+          : "extreme-far";
 
   const updateViewportSize = () => {
     const node = containerRef.current;
@@ -179,19 +196,7 @@ export function MapCanvas(props: MapCanvasProps) {
       const pointerY = event.clientY - rect.top;
       const currentZoom = zoomRef.current;
       const currentOffset = offsetRef.current;
-      const nextZoom = Number(
-        Math.max(
-          MIN_ZOOM,
-          Math.min(
-            MAX_ZOOM,
-            currentZoom * (event.deltaY < 0 ? ZOOM_FACTOR : 1 / ZOOM_FACTOR)
-          )
-        ).toFixed(3)
-      );
-
-      if (nextZoom === currentZoom) {
-        return;
-      }
+      const nextZoom = currentZoom * (event.deltaY < 0 ? ZOOM_FACTOR : 1 / ZOOM_FACTOR);
 
       setViewportSize(viewport);
 
@@ -200,8 +205,8 @@ export function MapCanvas(props: MapCanvasProps) {
       const sceneY = (pointerY - nextBaseOffset.y - currentOffset.y) / currentScale;
       const nextScale = nextBaseScale * nextZoom;
       const nextOffset = {
-        x: Number((pointerX - nextBaseOffset.x - sceneX * nextScale).toFixed(2)),
-        y: Number((pointerY - nextBaseOffset.y - sceneY * nextScale).toFixed(2))
+        x: pointerX - nextBaseOffset.x - sceneX * nextScale,
+        y: pointerY - nextBaseOffset.y - sceneY * nextScale
       };
 
       zoomRef.current = nextZoom;
@@ -254,13 +259,12 @@ export function MapCanvas(props: MapCanvasProps) {
         viewBox={`0 0 ${viewportSize.width} ${viewportSize.height}`}
         preserveAspectRatio="none"
         aria-label="Map canvas"
+        data-render-detail={renderDetail}
       >
         <defs dangerouslySetInnerHTML={{ __html: scene.defs.join("") }} />
         <rect width={viewportSize.width} height={viewportSize.height} fill={scene.background} />
         <g
-          transform={`translate(${Number((baseOffset.x + offset.x).toFixed(2))} ${Number(
-            (baseOffset.y + offset.y).toFixed(2)
-          )}) scale(${Number((baseScale * zoom).toFixed(3))})`}
+          transform={`translate(${baseOffset.x + offset.x} ${baseOffset.y + offset.y}) scale(${baseScale * zoom})`}
         >
           {scene.layout.map((entry) => (
             <g
@@ -281,8 +285,10 @@ export function MapCanvas(props: MapCanvasProps) {
                 centerY={entry.centerY}
                 selected={props.selectedCellId === entry.cell.id}
                 hovered={hoveredCellId === entry.cell.id}
-                showCoordinates={props.showCoordinates}
-                showShorthand={props.showShorthand}
+                showCoordinates={effectiveShowCoordinates}
+                showShorthand={effectiveShowShorthand}
+                showPattern={effectiveShowPattern}
+                showPrimaryTag={effectiveShowPrimaryTag}
                 showGrid={props.showGrid}
                 onSelect={() => props.onSelectCell(entry.cell)}
               />
