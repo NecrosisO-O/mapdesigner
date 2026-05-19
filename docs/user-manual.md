@@ -4,15 +4,15 @@
 
 如果你想了解项目定位、功能总览与发布口径，可参考：
 
-- [PRODUCT_OVERVIEW_0.1.0.md](/root/WorkSpace/MapDesigner/PRODUCT_OVERVIEW_0.1.0.md)
+- [PRODUCT_OVERVIEW_0.1.0.md](../PRODUCT_OVERVIEW_0.1.0.md)
 
 如果你想了解面向 AI agent 的 CLI 工作流，可参考：
 
-- [agent-cli.md](/root/WorkSpace/MapDesigner/docs/agent-cli.md)
+- [agent-cli.md](./agent-cli.md)
 
 如果你想了解用户自部署与发布态启动方式，可参考：
 
-- [deployment.md](/root/WorkSpace/MapDesigner/docs/deployment.md)
+- [deployment.md](./deployment.md)
 
 ## 1. 适用对象
 
@@ -507,7 +507,7 @@ echo '{
 
 更完整的 agent 使用说明请参考：
 
-- [agent-cli.md](/root/WorkSpace/MapDesigner/docs/agent-cli.md)
+- [agent-cli.md](./agent-cli.md)
 
 ## 17. 常见问题
 
