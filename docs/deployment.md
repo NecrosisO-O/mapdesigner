@@ -4,7 +4,7 @@
 
 本页主要说明源码部署流程；如果你希望使用 Docker 直接运行，请优先阅读：
 
-- [Docker 部署说明](/root/WorkSpace/MapDesigner/docs/docker.md)
+- [Docker 部署说明](./docker.md)
 
 ## 1. 支持范围
 
@@ -29,7 +29,7 @@
 
 如果你希望使用 Docker 直接运行，可参考：
 
-- [Docker 部署说明](/root/WorkSpace/MapDesigner/docs/docker.md)
+- [Docker 部署说明](./docker.md)
 
 ## 2. 环境要求
 
@@ -267,6 +267,6 @@ curl http://localhost:3010/api/health
 
 如果你还希望通过 CLI 或 AI agent 调用本项目，可参考：
 
-- [agent-cli.md](/root/WorkSpace/MapDesigner/docs/agent-cli.md)
+- [agent-cli.md](./agent-cli.md)
 
 CLI 与 WebUI 共享同一套地图规则，因此可以对同一张地图交叉使用。
