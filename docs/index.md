@@ -17,7 +17,7 @@
 
 ## 面向自部署用户
 
-如果你希望自己部署 `MapDesigner 0.1.0`，建议阅读：
+如果你希望自己部署 `MapDesigner`，建议阅读：
 
 - [部署说明](./deployment.md)
 - [Docker 部署说明](./docker.md)

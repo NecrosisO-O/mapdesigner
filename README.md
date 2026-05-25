@@ -1,6 +1,6 @@
 # MapDesigner
 
-[![Version](https://img.shields.io/badge/version-0.1.0-2563eb)](./package.json)
+[![Version](https://img.shields.io/badge/version-0.2.0-2563eb)](./package.json)
 [![Node.js](https://img.shields.io/badge/node-20_LTS-339933)](https://nodejs.org/)
 [![pnpm](https://img.shields.io/badge/pnpm-10-f69220)](https://pnpm.io/)
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-dc2626.svg)](./LICENSE)
@@ -39,8 +39,8 @@ Then open `http://localhost:3010`.
 ### Run with Docker
 
 ```bash
-docker build -t mapdesigner:0.1.0 .
-docker run --rm -p 3010:3010 -e MAPDESIGNER_ROOT=/data -v "$(pwd)/mapdesigner-data:/data" mapdesigner:0.1.0
+docker build -t mapdesigner:0.2.0 .
+docker run --rm -p 3010:3010 -e MAPDESIGNER_ROOT=/data -v "$(pwd)/mapdesigner-data:/data" mapdesigner:0.2.0
 ```
 
 Then open `http://localhost:3010`.
@@ -69,7 +69,7 @@ More examples and command conventions are documented in [Agent CLI Guide](./docs
 
 ## Current Status
 
-`v0.1.0` is the first usable public release. The core workflow is already covered: create maps, edit hex cells in the browser, save and reopen JSON files, export PNG references, and drive the same map data through a structured CLI.
+`v0.2.0` focuses on a more practical editor surface, smoother deep zoom behavior, safer local storage handling, and richer structured CLI/export workflows.
 
 ## Development Note
 

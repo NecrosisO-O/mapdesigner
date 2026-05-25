@@ -32,7 +32,12 @@ export function SidebarPanel(props: SidebarPanelProps) {
   return (
     <aside className="sidebar">
       <section className="panel status-panel" aria-label="当前状态">
-        <h2>当前状态</h2>
+        <div className="panel-title-row">
+          <h2>地图</h2>
+          <span className={props.mapDirty ? "status-chip status-chip-dirty" : "status-chip"}>
+            {props.mapDirty ? "未保存" : "已保存"}
+          </span>
+        </div>
         <div className="status-message-banner" aria-live="polite">
           {props.loading ? "加载中..." : props.message}
         </div>
@@ -41,20 +46,33 @@ export function SidebarPanel(props: SidebarPanelProps) {
             <p>
               当前地图：<strong>{props.currentMap.document.meta.name}</strong>
             </p>
-            <p>ID：{props.currentMap.document.meta.id}</p>
-            <p>Designed：{props.currentMap.document.cells.length}</p>
-            <p>Revision：{props.currentMap.document.meta.revision}</p>
-            <p>更新时间：{formatDateTime(props.currentMap.document.meta.updated_at)}</p>
-            <p>保存状态：{props.mapDirty ? "未保存修改" : "已保存"}</p>
+            <dl>
+              <div>
+                <dt>ID</dt>
+                <dd>{props.currentMap.document.meta.id}</dd>
+              </div>
+              <div>
+                <dt>已设计</dt>
+                <dd>{props.currentMap.document.cells.length}</dd>
+              </div>
+              <div>
+                <dt>版本</dt>
+                <dd>{props.currentMap.document.meta.revision}</dd>
+              </div>
+              <div>
+                <dt>更新时间</dt>
+                <dd>{formatDateTime(props.currentMap.document.meta.updated_at)}</dd>
+              </div>
+            </dl>
           </div>
         ) : (
           <p>当前没有打开地图。</p>
         )}
       </section>
 
-      <section className="panel">
-        <h2>显示控制</h2>
-        <label className="checkbox-row">
+      <section className="panel tool-panel">
+        <h2>视图</h2>
+        <label className="checkbox-row switch-row">
           <input
             type="checkbox"
             checked={props.showCoordinates}
@@ -62,7 +80,7 @@ export function SidebarPanel(props: SidebarPanelProps) {
           />
           显示坐标
         </label>
-        <label className="checkbox-row">
+        <label className="checkbox-row switch-row">
           <input
             type="checkbox"
             checked={props.showShorthand}
@@ -70,7 +88,7 @@ export function SidebarPanel(props: SidebarPanelProps) {
           />
           显示简写
         </label>
-        <label className="checkbox-row">
+        <label className="checkbox-row switch-row">
           <input
             type="checkbox"
             checked={props.showGrid}
@@ -78,7 +96,7 @@ export function SidebarPanel(props: SidebarPanelProps) {
           />
           显示网格线
         </label>
-        <label className="checkbox-row">
+        <label className="checkbox-row switch-row">
           <input
             type="checkbox"
             checked={props.showUndesigned}
@@ -88,7 +106,7 @@ export function SidebarPanel(props: SidebarPanelProps) {
         </label>
       </section>
 
-      <section className="panel collapsible-panel">
+      <section className="panel collapsible-panel tool-panel">
         <div className="panel-header">
           <h2>图片导出</h2>
           <button
@@ -105,6 +123,7 @@ export function SidebarPanel(props: SidebarPanelProps) {
           <div id="export-panel-content">
             <div className="export-action-row">
               <button
+                className="primary-button"
                 onClick={props.onExportPng}
                 disabled={!props.currentMap || props.currentMap.document.cells.length === 0}
               >
@@ -186,12 +205,6 @@ export function SidebarPanel(props: SidebarPanelProps) {
             </label>
           </div>
         ) : null}
-      </section>
-
-      <section className="panel">
-        <h2>说明</h2>
-        <p>滚轮缩放，拖拽平移。默认展示扩展坐标，内部编号用于程序定位。</p>
-        <p>编辑单元格后只会先更新当前地图内存，点击顶部“保存”才会写回 `storage/maps`。</p>
       </section>
     </aside>
   );

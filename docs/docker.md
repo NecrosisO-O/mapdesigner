@@ -1,10 +1,10 @@
-# MapDesigner 0.1.0 Docker 部署说明
+# MapDesigner 0.2.0 Docker 部署说明
 
-本文档面向希望使用 Docker 自行部署 `MapDesigner 0.1.0` 的用户，说明推荐的容器运行方式、数据挂载方式，以及启动后的访问方式。
+本文档面向希望使用 Docker 自行部署 `MapDesigner 0.2.0` 的用户，说明推荐的容器运行方式、数据挂载方式，以及启动后的访问方式。
 
 ## 1. 当前支持的 Docker 形态
 
-`MapDesigner 0.1.0` 当前提供的是最小可用的单容器部署方案：
+`MapDesigner 0.2.0` 当前提供的是最小可用的单容器部署方案：
 
 - 一个容器同时运行后端服务与 WebUI
 - 容器内由 `server` 直接托管前端构建产物
@@ -25,12 +25,12 @@
 在项目根目录执行：
 
 ```bash
-docker build -t mapdesigner:0.1.0 .
+docker build -t mapdesigner:0.2.0 .
 ```
 
 如果构建成功，你会得到一个可直接运行的本地镜像：
 
-- `mapdesigner:0.1.0`
+- `mapdesigner:0.2.0`
 
 ## 4. 启动容器
 
@@ -43,7 +43,7 @@ docker run --rm \
   -e MAPDESIGNER_ROOT=/data \
   -v "$(pwd)/mapdesigner-data:/data" \
   --name mapdesigner \
-  mapdesigner:0.1.0
+  mapdesigner:0.2.0
 ```
 
 启动后，在浏览器打开：
@@ -83,7 +83,7 @@ docker run --rm \
   -p 4010:3010 \
   -e MAPDESIGNER_ROOT=/data \
   -v "$(pwd)/mapdesigner-data:/data" \
-  mapdesigner:0.1.0
+  mapdesigner:0.2.0
 ```
 
 此时浏览器访问：
@@ -148,7 +148,7 @@ curl http://localhost:3010/api/health
 
 推荐的最小流程如下：
 
-1. 构建镜像：`docker build -t mapdesigner:0.1.0 .`
+1. 构建镜像：`docker build -t mapdesigner:0.2.0 .`
 2. 准备宿主机数据目录
 3. 启动容器并映射端口与 volume
 4. 浏览器打开 `http://localhost:3010`

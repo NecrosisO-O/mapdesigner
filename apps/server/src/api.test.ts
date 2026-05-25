@@ -98,7 +98,40 @@ describe("server api", () => {
       expect(mismatch.statusCode).toBe(400);
       const mismatchBody = mismatch.json();
       expect(mismatchBody.ok).toBe(false);
-      expect(mismatchBody.errors[0].code).toBe("id_mismatch");
+      expect(mismatchBody.errors[0].code).toBe("bad_request");
+      expect(mismatchBody.errors[0].message).toMatch(/path id and document.meta.id/);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("validates malformed create and save request bodies", async () => {
+    const { createServer } = await loadApi(tempRoot);
+    const app = await createServer();
+    try {
+      const missingName = await app.inject({
+        method: "POST",
+        url: "/api/maps",
+        payload: {}
+      });
+      expect(missingName.statusCode).toBe(400);
+      expect(missingName.json().errors[0].code).toBe("bad_request");
+
+      const created = await app.inject({
+        method: "POST",
+        url: "/api/maps",
+        payload: { name: "Save Body Test" }
+      });
+      const createdBody = created.json();
+      const saveMissingRevision = await app.inject({
+        method: "PUT",
+        url: `/api/maps/${createdBody.result.document.meta.id}`,
+        payload: {
+          document: createdBody.result.document
+        }
+      });
+      expect(saveMissingRevision.statusCode).toBe(400);
+      expect(saveMissingRevision.json().errors[0].message).toMatch(/expectedRevision/);
     } finally {
       await app.close();
     }
@@ -176,6 +209,93 @@ describe("server api", () => {
       expect(appliedBody.result.stats.command_count).toBe(1);
       expect(appliedBody.result.stats.created_count).toBe(1);
       expect(appliedBody.result.stats.terrain_summary.after.plain).toBe(1);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("rejects invalid apply and export payloads with structured errors", async () => {
+    const { createServer } = await loadApi(tempRoot);
+    const app = await createServer();
+    try {
+      const created = await app.inject({
+        method: "POST",
+        url: "/api/maps",
+        payload: { name: "Invalid Payload Test" }
+      });
+      const createdBody = created.json();
+      const mapId = createdBody.result.document.meta.id as string;
+
+      const commandsNotArray = await app.inject({
+        method: "POST",
+        url: `/api/maps/${mapId}/apply`,
+        payload: { commands: { action: "set_cell" } }
+      });
+      expect(commandsNotArray.statusCode).toBe(400);
+      expect(commandsNotArray.json().errors[0].message).toMatch(/commands must be an array/);
+
+      const invalidCommand = await app.inject({
+        method: "POST",
+        url: `/api/maps/${mapId}/apply`,
+        payload: {
+          commands: [
+            {
+              action: "set_cell",
+              source: "cli",
+              target: { row: 0, col: 0 },
+              changes: {
+                terrain: "missing-terrain",
+                biome: "grassland"
+              }
+            }
+          ]
+        }
+      });
+      expect(invalidCommand.statusCode).toBe(400);
+      const invalidCommandBody = invalidCommand.json();
+      expect(invalidCommandBody.errors[0].code).toBe("bad_request");
+      expect(invalidCommandBody.errors[0].issues[0].code).toBe("invalid_terrain");
+
+      const invalidExport = await app.inject({
+        method: "POST",
+        url: `/api/maps/${mapId}/export-png`,
+        payload: { preset: "poster", scale: 5 }
+      });
+      expect(invalidExport.statusCode).toBe(400);
+      expect(invalidExport.json().errors[0].message).toMatch(/preset must be clean or reference/);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("rejects path traversal ids and export file names without leaking filesystem paths", async () => {
+    const { createServer } = await loadApi(tempRoot);
+    const app = await createServer();
+    try {
+      const traversalMap = await app.inject({
+        method: "GET",
+        url: `/api/maps/${encodeURIComponent("../evil")}`
+      });
+      expect(traversalMap.statusCode).toBe(400);
+      const traversalMapBody = traversalMap.json();
+      expect(traversalMapBody.errors[0].code).toBe("bad_request");
+      expect(JSON.stringify(traversalMapBody.errors)).not.toContain(tempRoot);
+
+      const traversalExport = await app.inject({
+        method: "GET",
+        url: `/api/exports/${encodeURIComponent("../secret.png")}`
+      });
+      expect(traversalExport.statusCode).toBe(400);
+      const traversalExportBody = traversalExport.json();
+      expect(traversalExportBody.errors[0].code).toBe("bad_request");
+      expect(JSON.stringify(traversalExportBody.errors)).not.toContain(tempRoot);
+
+      const backslashExport = await app.inject({
+        method: "GET",
+        url: `/api/exports/${encodeURIComponent("..\\secret.png")}`
+      });
+      expect(backslashExport.statusCode).toBe(400);
+      expect(backslashExport.json().errors[0].code).toBe("bad_request");
     } finally {
       await app.close();
     }

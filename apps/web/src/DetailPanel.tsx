@@ -3,8 +3,10 @@ import {
   TAG_ENTRIES,
   TERRAIN_CATEGORY_LABELS,
   type ActiveCell,
+  type BiomeKey,
   type MapRuntimeState
 } from "@mapdesigner/map-core";
+import type { TerrainCategoryKey } from "@mapdesigner/map-core";
 import type { CellDraft, FormatBrushScope } from "./useCellEditor.js";
 import { formatDateTime } from "./useMapWorkspace.js";
 
@@ -22,9 +24,9 @@ interface DetailPanelProps {
   selectedCell: ActiveCell | null;
   draft: CellDraft;
   terrainCategory: string;
-  filteredTerrainCategories: string[];
+  filteredTerrainCategories: TerrainCategoryKey[];
   terrainOptions: Array<{ key: string; label: string; short: string }>;
-  biomeOptions: string[];
+  biomeOptions: BiomeKey[];
   formatBrushEnabled: boolean;
   formatBrushScope: FormatBrushScope;
   canUseFormatBrush: boolean;
@@ -45,14 +47,26 @@ interface DetailPanelProps {
 export function DetailPanel(props: DetailPanelProps) {
   return (
     <aside className="detail-panel">
-      <section className="panel">
+      <section className="panel cell-editor-panel">
+        <div className="cell-editor-heading">
+          <div>
+            <h2>当前单元格</h2>
+            <p>
+              {props.selectedCell
+                ? `${props.selectedCell.display_coord} · ${props.selectedCell.status}`
+                : "未选择单元格"}
+            </p>
+          </div>
+          {props.cellDirty ? <span className="status-chip status-chip-dirty">未应用</span> : null}
+        </div>
+
         <div className="panel-header">
           <div className="action-row action-row-inline">
-            <button onClick={props.onApplyDraft} disabled={!props.selectedCell}>
-              保存
+            <button className="primary-button" onClick={props.onApplyDraft} disabled={!props.selectedCell}>
+              应用
             </button>
             <button onClick={props.onRevertDraft} disabled={!props.selectedCell || !props.cellDirty}>
-              撤销
+              还原
             </button>
             <button onClick={props.onClearSelected} disabled={!props.selectedCell}>
               清空
@@ -68,9 +82,10 @@ export function DetailPanel(props: DetailPanelProps) {
             </button>
           </div>
         </div>
+
         <div className="format-brush-panel">
           <div className="format-brush-options">
-            <label className="checkbox-row">
+            <label className="checkbox-row switch-row">
               <input
                 type="checkbox"
                 checked={props.formatBrushScope.terrain}
@@ -79,7 +94,7 @@ export function DetailPanel(props: DetailPanelProps) {
               />
               刷地形
             </label>
-            <label className="checkbox-row">
+            <label className="checkbox-row switch-row">
               <input
                 type="checkbox"
                 checked={props.formatBrushScope.biome}
@@ -99,76 +114,92 @@ export function DetailPanel(props: DetailPanelProps) {
             </p>
           )}
         </div>
-        <label>
-          Terrain 分类
-          <select
-            value={props.terrainCategory}
-            onChange={(event) => props.onTerrainCategoryChange(event.target.value)}
-            disabled={!props.selectedCell}
-          >
-            <option value="">请选择分类</option>
-            {props.filteredTerrainCategories.map((categoryKey) => (
-              <option key={categoryKey} value={categoryKey}>
-                {TERRAIN_CATEGORY_LABELS[categoryKey]}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Terrain
-          <select
-            value={props.draft.terrain}
-            onChange={(event) => props.onTerrainChange(event.target.value)}
-            disabled={!props.selectedCell || !props.terrainCategory}
-          >
-            <option value="">{props.terrainCategory ? "未设置" : "请先选择 Terrain 分类"}</option>
-            {props.terrainOptions.map((entry) => (
-              <option key={entry.key} value={entry.key}>
-                {entry.label} ({entry.short})
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Biome
-          <select
-            value={props.draft.biome}
-            onChange={(event) => props.onBiomeChange(event.target.value)}
-            disabled={!props.selectedCell}
-          >
-            <option value="">未设置</option>
-            {props.biomeOptions.map((key) => (
-              <option key={key} value={key}>
-                {BIOME_ENTRIES[key].label} ({BIOME_ENTRIES[key].short})
-              </option>
-            ))}
-          </select>
-        </label>
-        <div className="tag-grid">
-          {Object.entries(TAG_ENTRIES).map(([key, entry]) => (
-            <label key={key}>
-              <input
-                type="checkbox"
-                checked={props.draft.tags.includes(key)}
-                disabled={!props.selectedCell}
-                onChange={(event) => props.onTagChange(key, event.target.checked)}
-              />
-              {entry.label}
-            </label>
-          ))}
+
+        <div className="editor-section">
+          <h3>地貌</h3>
+          <label>
+            Terrain 分类
+            <select
+              value={props.terrainCategory}
+              onChange={(event) => props.onTerrainCategoryChange(event.target.value)}
+              disabled={!props.selectedCell}
+            >
+              <option value="">请选择分类</option>
+              {props.filteredTerrainCategories.map((categoryKey) => (
+                <option key={categoryKey} value={categoryKey}>
+                  {TERRAIN_CATEGORY_LABELS[categoryKey]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Terrain
+            <select
+              value={props.draft.terrain}
+              onChange={(event) => props.onTerrainChange(event.target.value)}
+              disabled={!props.selectedCell || !props.terrainCategory}
+            >
+              <option value="">{props.terrainCategory ? "未设置" : "请先选择 Terrain 分类"}</option>
+              {props.terrainOptions.map((entry) => (
+                <option key={entry.key} value={entry.key}>
+                  {entry.label} ({entry.short})
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
-        <label>
-          Note
-          <textarea
-            rows={6}
-            value={props.draft.note}
-            disabled={!props.selectedCell}
-            onChange={(event) => props.onNoteChange(event.target.value)}
-          />
-        </label>
+
+        <div className="editor-section">
+          <h3>生态</h3>
+          <label>
+            Biome
+            <select
+              value={props.draft.biome}
+              onChange={(event) => props.onBiomeChange(event.target.value)}
+              disabled={!props.selectedCell}
+            >
+              <option value="">未设置</option>
+              {props.biomeOptions.map((key) => (
+                <option key={key} value={key}>
+                  {BIOME_ENTRIES[key].label} ({BIOME_ENTRIES[key].short})
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        <div className="editor-section">
+          <h3>标记</h3>
+          <div className="tag-grid">
+            {Object.entries(TAG_ENTRIES).map(([key, entry]) => (
+              <label key={key}>
+                <input
+                  type="checkbox"
+                  checked={props.draft.tags.includes(key)}
+                  disabled={!props.selectedCell}
+                  onChange={(event) => props.onTagChange(key, event.target.checked)}
+                />
+                {entry.label}
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <div className="editor-section">
+          <h3>备注</h3>
+          <label>
+            Note
+            <textarea
+              rows={6}
+              value={props.draft.note}
+              disabled={!props.selectedCell}
+              onChange={(event) => props.onNoteChange(event.target.value)}
+            />
+          </label>
+        </div>
       </section>
 
-      <section className="panel">
+      <section className="panel history-panel">
         <h2>编辑历史</h2>
         {props.currentMap ? (
           <>

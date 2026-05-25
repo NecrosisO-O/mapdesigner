@@ -109,6 +109,31 @@ echo '{
 }' | pnpm exec tsx apps/server/src/cli.ts maps apply --map-id demo-map --stdin
 ```
 
+### 6. 导出参考图
+
+```bash
+pnpm exec tsx apps/server/src/cli.ts maps export-png \
+  --map-id demo-map \
+  --preset reference \
+  --scale 2 \
+  --padding 32 \
+  --background "#F4F0E6" \
+  --include-grid \
+  --include-coordinates \
+  --include-shorthand
+```
+
+`maps export-png` 支持的参数：
+
+- `--preset clean|reference`
+- `--scale 1..4`
+- `--padding 0..256`
+- `--background #RRGGBB`
+- `--include-grid`
+- `--include-coordinates`
+- `--include-shorthand`
+- `--include-undesigned`
+
 ## 输入格式
 
 `maps apply` 正式输入格式为：
@@ -140,6 +165,7 @@ echo '{
 - 程序内部稳定定位可使用 `cell_id`
 - 写入前优先使用 `--dry-run`
 - 批量操作后优先再次调用 `inspect-cell` 或 `inspect-area`
+- `inspect-area --radius` 最大为 `50`
 - 若命令失败，优先读取 envelope 中的 `errors`
 
 ## 当前适合 agent 调用的命令

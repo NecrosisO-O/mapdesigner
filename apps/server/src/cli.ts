@@ -17,6 +17,8 @@ import {
   inspectCell,
   listMaps
 } from "./service.js";
+import { badRequest, isServiceError } from "./errors.js";
+import { normalizeExportOptions } from "./storage.js";
 import { createEnvelope } from "./utils.js";
 
 function readFlag(args: string[], name: string): string | undefined {
@@ -24,7 +26,11 @@ function readFlag(args: string[], name: string): string | undefined {
   if (index === -1) {
     return undefined;
   }
-  return args[index + 1];
+  const value = args[index + 1];
+  if (value === undefined || value.startsWith("--")) {
+    throw badRequest(`${name} requires a value`);
+  }
+  return value;
 }
 
 function hasFlag(args: string[], name: string): boolean {
@@ -41,6 +47,31 @@ function readIntegerFlag(args: string[], name: string): number {
     printFailure(`${name} must be an integer`);
   }
   return parsed;
+}
+
+function readOptionalIntegerFlag(args: string[], name: string): number | undefined {
+  const raw = readFlag(args, name);
+  if (raw === undefined) {
+    return undefined;
+  }
+  const parsed = Number(raw);
+  if (!Number.isInteger(parsed)) {
+    throw badRequest(`${name} must be an integer`);
+  }
+  return parsed;
+}
+
+function readOptionalColorFlag(args: string[], name: string): string | undefined {
+  return readFlag(args, name);
+}
+
+function assertKnownFlags(args: string[], allowed: string[]): void {
+  const allowedSet = new Set(allowed);
+  for (const arg of args.slice(2)) {
+    if (arg.startsWith("--") && !allowedSet.has(arg)) {
+      throw badRequest(`unknown flag ${arg}`);
+    }
+  }
 }
 
 function printResult(result: unknown): void {
@@ -74,7 +105,18 @@ function normalizeCommands(input: unknown): MapCommand[] {
   if (input && typeof input === "object" && "action" in input) {
     return [input as MapCommand];
   }
-  throw new Error("maps apply input must be a MapCommand, a MapCommand[], or an object with a commands array");
+  throw badRequest("maps apply input must be a MapCommand, a MapCommand[], or an object with a commands array");
+}
+
+function parseCommandsJson(content: string): MapCommand[] {
+  try {
+    return normalizeCommands(JSON.parse(content) as unknown);
+  } catch (error) {
+    if (isServiceError(error)) {
+      throw error;
+    }
+    throw badRequest("commands JSON is invalid");
+  }
 }
 
 async function readCommands(args: string[]): Promise<MapCommand[]> {
@@ -83,14 +125,12 @@ async function readCommands(args: string[]): Promise<MapCommand[]> {
     for await (const chunk of process.stdin) {
       chunks.push(Buffer.from(chunk));
     }
-    const parsed = JSON.parse(Buffer.concat(chunks).toString("utf8")) as unknown;
-    return normalizeCommands(parsed);
+    return parseCommandsJson(Buffer.concat(chunks).toString("utf8"));
   }
 
   const filePath = readFlag(args, "--file");
   if (filePath) {
-    const parsed = JSON.parse(await fs.readFile(path.resolve(filePath), "utf8")) as unknown;
-    return normalizeCommands(parsed);
+    return parseCommandsJson(await fs.readFile(path.resolve(filePath), "utf8"));
   }
 
   printFailure("maps apply requires --stdin or --file");
@@ -107,9 +147,11 @@ async function main(): Promise<void> {
   try {
     switch (action) {
       case "list":
+        assertKnownFlags(args, []);
         printResult(createEnvelope({ result: await listMaps() }));
         break;
       case "create": {
+        assertKnownFlags(args, ["--name", "--description", "--id"]);
         const name = readFlag(args, "--name");
         if (!name) {
           printFailure("maps create requires --name");
@@ -120,6 +162,7 @@ async function main(): Promise<void> {
         break;
       }
       case "inspect": {
+        assertKnownFlags(args, ["--map-id"]);
         const id = readFlag(args, "--map-id");
         if (!id) {
           printFailure("maps inspect requires --map-id");
@@ -128,6 +171,7 @@ async function main(): Promise<void> {
         break;
       }
       case "inspect-cell": {
+        assertKnownFlags(args, ["--map-id", "--row", "--col"]);
         const id = readFlag(args, "--map-id");
         if (!id) {
           printFailure("maps inspect-cell requires --map-id");
@@ -138,6 +182,7 @@ async function main(): Promise<void> {
         break;
       }
       case "inspect-area": {
+        assertKnownFlags(args, ["--map-id", "--row", "--col", "--radius"]);
         const id = readFlag(args, "--map-id");
         if (!id) {
           printFailure("maps inspect-area requires --map-id");
@@ -149,6 +194,7 @@ async function main(): Promise<void> {
         break;
       }
       case "neighbors": {
+        assertKnownFlags(args, ["--map-id", "--row", "--col"]);
         const id = readFlag(args, "--map-id");
         if (!id) {
           printFailure("maps neighbors requires --map-id");
@@ -159,6 +205,7 @@ async function main(): Promise<void> {
         break;
       }
       case "apply": {
+        assertKnownFlags(args, ["--map-id", "--stdin", "--file", "--dry-run", "--summary"]);
         const id = readFlag(args, "--map-id");
         if (!id) {
           printFailure("maps apply requires --map-id");
@@ -170,6 +217,7 @@ async function main(): Promise<void> {
         break;
       }
       case "import": {
+        assertKnownFlags(args, ["--file", "--generate-new-id"]);
         const filePath = readFlag(args, "--file");
         if (!filePath) {
           printFailure("maps import requires --file");
@@ -183,6 +231,7 @@ async function main(): Promise<void> {
         break;
       }
       case "export-json": {
+        assertKnownFlags(args, ["--map-id"]);
         const id = readFlag(args, "--map-id");
         if (!id) {
           printFailure("maps export-json requires --map-id");
@@ -191,15 +240,36 @@ async function main(): Promise<void> {
         break;
       }
       case "export-png": {
+        assertKnownFlags(args, [
+          "--map-id",
+          "--preset",
+          "--scale",
+          "--padding",
+          "--background",
+          "--include-grid",
+          "--include-coordinates",
+          "--include-shorthand",
+          "--include-undesigned"
+        ]);
         const id = readFlag(args, "--map-id");
         if (!id) {
           printFailure("maps export-png requires --map-id");
         }
-        const preset = (readFlag(args, "--preset") ?? "clean") as ExportRenderOptions["preset"];
-        printResult(createEnvelope({ result: await exportPng(id, { preset }) }));
+        const options = normalizeExportOptions({
+          preset: (readFlag(args, "--preset") ?? "clean") as ExportRenderOptions["preset"],
+          scale: readOptionalIntegerFlag(args, "--scale"),
+          padding: readOptionalIntegerFlag(args, "--padding"),
+          background: readOptionalColorFlag(args, "--background"),
+          includeGrid: hasFlag(args, "--include-grid") ? true : undefined,
+          includeCoordinates: hasFlag(args, "--include-coordinates") ? true : undefined,
+          includeShorthand: hasFlag(args, "--include-shorthand") ? true : undefined,
+          includeUndesigned: hasFlag(args, "--include-undesigned") ? true : undefined
+        });
+        printResult(createEnvelope({ result: await exportPng(id, options) }));
         break;
       }
       case "duplicate": {
+        assertKnownFlags(args, ["--map-id"]);
         const id = readFlag(args, "--map-id");
         if (!id) {
           printFailure("maps duplicate requires --map-id");
@@ -208,6 +278,7 @@ async function main(): Promise<void> {
         break;
       }
       case "delete": {
+        assertKnownFlags(args, ["--map-id"]);
         const id = readFlag(args, "--map-id");
         if (!id) {
           printFailure("maps delete requires --map-id");
@@ -220,12 +291,13 @@ async function main(): Promise<void> {
         printFailure(`unknown action: ${action}`);
     }
   } catch (error) {
+    const serviceError = isServiceError(error) ? error : null;
     printResult(
       createEnvelope({
         errors: [
           {
-            code: "command_failed",
-            message: (error as Error).message,
+            code: serviceError?.code ?? "command_failed",
+            message: serviceError?.message ?? (error as Error).message,
             severity: "invalid"
           }
         ]

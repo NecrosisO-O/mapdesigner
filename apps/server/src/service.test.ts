@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { createEmptyDocument, stringifyDocument } from "@mapdesigner/map-core";
 
 async function loadService(tempRoot: string) {
   process.env.MAPDESIGNER_ROOT = tempRoot;
@@ -180,5 +181,111 @@ describe("server service", () => {
   it("rejects empty map ids with a clear error", async () => {
     const service = await loadService(tempRoot);
     await expect(service.getMap("")).rejects.toThrow(/map id is required/);
+  });
+
+  it("rejects unsafe map ids before touching storage paths", async () => {
+    const service = await loadService(tempRoot);
+
+    await expect(service.createMap({ name: "Unsafe", id: "../evil" })).rejects.toThrow(/map id may only contain/);
+    await expect(service.getMap("bad/id")).rejects.toThrow(/map id may only contain/);
+    await expect(service.deleteMap("")).rejects.toThrow(/map id is required/);
+  });
+
+  it("keeps existing slug behavior for CJK map names and ids", async () => {
+    const service = await loadService(tempRoot);
+
+    const created = await service.createMap({ name: "山海图" });
+
+    expect(created.document.meta.id).toMatch(/^山海图-/);
+    await expect(service.getMap(created.document.meta.id)).resolves.toBeTruthy();
+  });
+
+  it("rejects imported documents with unsafe ids and writes no escaped file", async () => {
+    const service = await loadService(tempRoot);
+    const unsafe = createEmptyDocument({
+      id: "../evil",
+      name: "Unsafe Import"
+    });
+
+    await expect(service.importMap({ content: stringifyDocument(unsafe) })).rejects.toThrow(/map id may only contain/);
+    await expect(fs.access(path.join(tempRoot, "evil.json"))).rejects.toThrow();
+  });
+
+  it("rejects invalid documents without corrupting the current saved map", async () => {
+    const service = await loadService(tempRoot);
+    const created = await service.createMap({ name: "Atomic Save Test" });
+    const invalidDocument = structuredClone(created.document);
+    invalidDocument.cells.push({
+      row: 0,
+      col: 0,
+      terrain: "not-a-terrain" as never,
+      biome: null,
+      tags: [],
+      note: ""
+    });
+
+    await expect(
+      service.saveMap({
+        document: invalidDocument,
+        expectedRevision: 1
+      })
+    ).rejects.toThrow(/map document failed validation/);
+
+    const persisted = await service.getMap(created.document.meta.id);
+    expect(persisted.document.cells).toHaveLength(0);
+    expect(persisted.document.meta.revision).toBe(1);
+  });
+
+  it("returns structured bad request issues for invalid apply commands", async () => {
+    const service = await loadService(tempRoot);
+    const created = await service.createMap({ name: "Bad Apply Test" });
+
+    await expect(
+      service.applyCommands(created.document.meta.id, [
+        {
+          action: "set_cell",
+          source: "cli",
+          target: { row: 0, col: 0 },
+          changes: {
+            terrain: "missing-terrain" as never,
+            biome: "grassland"
+          }
+        }
+      ])
+    ).rejects.toMatchObject({
+      code: "bad_request",
+      issues: expect.arrayContaining([
+        expect.objectContaining({
+          code: "invalid_terrain"
+        })
+      ])
+    });
+  });
+
+  it("rejects oversized area inspection requests", async () => {
+    const service = await loadService(tempRoot);
+    const created = await service.createMap({ name: "Large Area Test" });
+
+    await expect(service.inspectArea(created.document.meta.id, { row: 0, col: 0 }, 51)).rejects.toThrow(
+      /less than or equal to 50/
+    );
+  });
+
+  it("rejects invalid png export options", async () => {
+    const service = await loadService(tempRoot);
+    const created = await service.createMap({ name: "Bad Export Test" });
+
+    await expect(service.exportPng(created.document.meta.id, { preset: "poster" as never })).rejects.toThrow(
+      /preset must be clean or reference/
+    );
+    await expect(service.exportPng(created.document.meta.id, { scale: 5 })).rejects.toThrow(
+      /scale must be an integer between 1 and 4/
+    );
+    await expect(service.exportPng(created.document.meta.id, { padding: 300 })).rejects.toThrow(
+      /padding must be an integer between 0 and 256/
+    );
+    await expect(service.exportPng(created.document.meta.id, { background: "white" })).rejects.toThrow(
+      /background must be a #RRGGBB color/
+    );
   });
 });

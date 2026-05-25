@@ -28,8 +28,8 @@ pnpm start
 ### Docker 运行
 
 ```bash
-docker build -t mapdesigner:0.1.0 .
-docker run --rm -p 3010:3010 -e MAPDESIGNER_ROOT=/data -v "$(pwd)/mapdesigner-data:/data" mapdesigner:0.1.0
+docker build -t mapdesigner:0.2.0 .
+docker run --rm -p 3010:3010 -e MAPDESIGNER_ROOT=/data -v "$(pwd)/mapdesigner-data:/data" mapdesigner:0.2.0
 ```
 
 然后访问 `http://localhost:3010`。
@@ -46,7 +46,7 @@ docker run --rm -p 3010:3010 -e MAPDESIGNER_ROOT=/data -v "$(pwd)/mapdesigner-da
 
 ## 当前版本
 
-当前公开版本为 `v0.1.0`。这一版已经可以完成基础地图创建、单元格编辑、JSON 保存与导入、PNG 导出，以及面向 AI agent 的结构化 CLI 操作。
+当前公开版本为 `v0.2.0`。这一版重点改进了编辑器布局、深度缩放手感、坐标标签性能、本地存储安全性，以及面向 AI agent 的结构化 CLI 与导出能力。
 
 ## 开发说明
 

@@ -1,6 +1,6 @@
 {
   "name": "@mapdesigner/map-render",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "main": "./dist/map-render/src/index.js",

@@ -102,7 +102,24 @@ describe("server cli", () => {
     expect(appliedBody.result.stats.terrain_summary.after.plain).toBe(1);
 
     const exported = await runCli(
-      ["maps", "export-png", "--map-id", mapId, "--preset", "reference"],
+      [
+        "maps",
+        "export-png",
+        "--map-id",
+        mapId,
+        "--preset",
+        "reference",
+        "--scale",
+        "3",
+        "--padding",
+        "24",
+        "--background",
+        "#FFFFFF",
+        "--include-grid",
+        "--include-coordinates",
+        "--include-shorthand",
+        "--include-undesigned"
+      ],
       { tempRoot }
     );
     expect(exported.code).toBe(0);
@@ -262,5 +279,60 @@ describe("server cli", () => {
     expect(appliedBody.result.created_count).toBe(1);
     expect(appliedBody.result.designed_cell_count).toBe(1);
     expect(appliedBody.result.terrain_summary.after.plain).toBe(1);
+  });
+
+  it("reports missing flag values and unknown flags as structured errors", async () => {
+    const missingValue = await runCli(["maps", "create", "--name"], { tempRoot });
+    expect(missingValue.code).toBe(1);
+    const missingValueBody = JSON.parse(missingValue.stdout);
+    expect(missingValueBody.ok).toBe(false);
+    expect(missingValueBody.errors[0].code).toBe("bad_request");
+    expect(missingValueBody.errors[0].message).toMatch(/--name requires a value/);
+
+    const unknown = await runCli(["maps", "list", "--verbose"], { tempRoot });
+    expect(unknown.code).toBe(1);
+    const unknownBody = JSON.parse(unknown.stdout);
+    expect(unknownBody.errors[0].code).toBe("bad_request");
+    expect(unknownBody.errors[0].message).toMatch(/unknown flag --verbose/);
+  });
+
+  it("reports invalid apply JSON and invalid apply envelopes cleanly", async () => {
+    const created = await runCli(["maps", "create", "--name", "Invalid CLI Apply"], { tempRoot });
+    expect(created.code).toBe(0);
+    const mapId = JSON.parse(created.stdout).result.document.meta.id as string;
+
+    const invalidJson = await runCli(["maps", "apply", "--map-id", mapId, "--stdin"], {
+      tempRoot,
+      input: "{"
+    });
+    expect(invalidJson.code).toBe(1);
+    const invalidJsonBody = JSON.parse(invalidJson.stdout);
+    expect(invalidJsonBody.errors[0].code).toBe("bad_request");
+    expect(invalidJsonBody.errors[0].message).toBe("commands JSON is invalid");
+
+    const invalidEnvelope = await runCli(["maps", "apply", "--map-id", mapId, "--stdin"], {
+      tempRoot,
+      input: JSON.stringify({ commands: "not-an-array" })
+    });
+    expect(invalidEnvelope.code).toBe(1);
+    const invalidEnvelopeBody = JSON.parse(invalidEnvelope.stdout);
+    expect(invalidEnvelopeBody.errors[0].code).toBe("bad_request");
+    expect(invalidEnvelopeBody.errors[0].message).toMatch(/maps apply input/);
+  });
+
+  it("rejects invalid export-png flags and options", async () => {
+    const created = await runCli(["maps", "create", "--name", "Invalid Export CLI"], { tempRoot });
+    expect(created.code).toBe(0);
+    const mapId = JSON.parse(created.stdout).result.document.meta.id as string;
+
+    const unknownFlag = await runCli(["maps", "export-png", "--map-id", mapId, "--mystery"], { tempRoot });
+    expect(unknownFlag.code).toBe(1);
+    expect(JSON.parse(unknownFlag.stdout).errors[0].message).toMatch(/unknown flag --mystery/);
+
+    const invalidScale = await runCli(["maps", "export-png", "--map-id", mapId, "--scale", "5"], { tempRoot });
+    expect(invalidScale.code).toBe(1);
+    const invalidScaleBody = JSON.parse(invalidScale.stdout);
+    expect(invalidScaleBody.errors[0].code).toBe("bad_request");
+    expect(invalidScaleBody.errors[0].message).toMatch(/scale must be an integer between 1 and 4/);
   });
 });
