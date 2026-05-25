@@ -127,6 +127,15 @@ function isPointInSceneBounds(point: { x: number; y: number }, bounds: SceneBoun
   return point.x >= bounds.left && point.x <= bounds.right && point.y >= bounds.top && point.y <= bounds.bottom;
 }
 
+function getCellFromEventTarget(target: EventTarget | null, cellsById: Map<string, ActiveCell>): ActiveCell | null {
+  if (!(target instanceof Element)) {
+    return null;
+  }
+  const cellElement = target.closest("[data-cell-id]");
+  const cellId = cellElement?.getAttribute("data-cell-id");
+  return cellId ? cellsById.get(cellId) ?? null : null;
+}
+
 function CellGroup(props: {
   cell: ActiveCell;
   points: string;
@@ -209,6 +218,7 @@ export function MapCanvas(props: MapCanvasProps) {
     startOffsetX: number;
     startOffsetY: number;
     moved: boolean;
+    startCell: ActiveCell | null;
   } | null>(null);
   const suppressNextCellClickRef = useRef(false);
 
@@ -221,6 +231,10 @@ export function MapCanvas(props: MapCanvasProps) {
         includeUndesigned: props.showUndesigned
       }),
     [props.map, props.showCoordinates, props.showGrid, props.showShorthand, props.showUndesigned]
+  );
+  const sceneCellsById = useMemo(
+    () => new Map(scene.layout.map((entry) => [entry.cell.id, entry.cell])),
+    [scene.layout]
   );
   const [viewportSize, setViewportSize] = useState({ width: scene.width, height: scene.height });
   const viewportMetrics = getViewportMetrics(viewportSize.width, viewportSize.height, scene.width, scene.height);
@@ -365,8 +379,12 @@ export function MapCanvas(props: MapCanvasProps) {
     props.onHoverCellChange?.(null);
   };
 
-  const finishDrag = (pointerId: number, target: HTMLDivElement) => {
-    const shouldSuppressClick = dragState.current?.pointerId === pointerId && dragState.current.moved;
+  const finishDrag = (pointerId: number, target: HTMLDivElement, allowClickSelection = true) => {
+    const currentDrag = dragState.current;
+    const isCurrentPointer = currentDrag?.pointerId === pointerId;
+    const clickedCell =
+      allowClickSelection && isCurrentPointer && !currentDrag.moved ? currentDrag.startCell : null;
+    const shouldSuppressClick = Boolean(isCurrentPointer && (currentDrag.moved || clickedCell));
     if (typeof target.hasPointerCapture === "function" && target.hasPointerCapture(pointerId)) {
       target.releasePointerCapture(pointerId);
     }
@@ -376,6 +394,9 @@ export function MapCanvas(props: MapCanvasProps) {
     window.setTimeout(() => {
       suppressNextCellClickRef.current = false;
     }, 0);
+    if (clickedCell) {
+      props.onSelectCell(clickedCell);
+    }
   };
 
   const isEntryInLabelViewport = (entry: { centerX: number; centerY: number }) =>
@@ -406,7 +427,8 @@ export function MapCanvas(props: MapCanvasProps) {
           startClientY: event.clientY,
           startOffsetX: cameraRef.current.offset.x,
           startOffsetY: cameraRef.current.offset.y,
-          moved: false
+          moved: false,
+          startCell: getCellFromEventTarget(event.target, sceneCellsById)
         };
         setIsDragging(true);
       }}
@@ -434,7 +456,7 @@ export function MapCanvas(props: MapCanvasProps) {
         finishDrag(event.pointerId, event.currentTarget);
       }}
       onPointerCancel={(event) => {
-        finishDrag(event.pointerId, event.currentTarget);
+        finishDrag(event.pointerId, event.currentTarget, false);
         clearHover();
       }}
       onPointerLeave={() => {

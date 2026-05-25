@@ -149,6 +149,39 @@ describe("MapCanvas", () => {
     });
   });
 
+  it("selects cells from the real pointer path while preserving drag panning", async () => {
+    const onSelectCell = vi.fn();
+    render(
+      <MapCanvas
+        map={sampleMap}
+        selectedCell={null}
+        selectedCellId={null}
+        onSelectCell={onSelectCell}
+        showCoordinates
+        showShorthand
+        showGrid
+        showUndesigned
+      />
+    );
+
+    const container = screen.getByLabelText("Map canvas").parentElement as HTMLDivElement;
+    const designedCell = screen.getByRole("button", { name: "R0C0 designed" });
+    mockCanvasRect(container);
+    fireEvent(window, new Event("resize"));
+
+    fireEvent.pointerDown(designedCell, { button: 0, pointerId: 1, clientX: 400, clientY: 300 });
+    fireEvent.pointerUp(container, { pointerId: 1, clientX: 400, clientY: 300 });
+
+    expect(onSelectCell).toHaveBeenCalledTimes(1);
+    expect(onSelectCell).toHaveBeenLastCalledWith(expect.objectContaining({ id: "cell@0,0" }));
+
+    fireEvent.pointerDown(designedCell, { button: 0, pointerId: 2, clientX: 400, clientY: 300 });
+    fireEvent.pointerMove(container, { pointerId: 2, clientX: 430, clientY: 300 });
+    fireEvent.pointerUp(container, { pointerId: 2, clientX: 430, clientY: 300 });
+
+    expect(onSelectCell).toHaveBeenCalledTimes(1);
+  });
+
   it("limits coordinate labels by viewport and density instead of rendering every cell at once", async () => {
     const largeMap = buildLargeMap();
     render(
