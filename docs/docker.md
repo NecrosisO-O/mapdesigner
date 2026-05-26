@@ -158,6 +158,6 @@ curl http://localhost:3010/api/health
 
 如果你更希望直接以源码方式运行项目，可参考：
 
-- [部署说明](./deployment.md)
+- [部署说明](/root/WorkSpace/MapDesigner/docs/deployment.md)
 
 如果你只是想直接使用当前版本，Docker 部署通常会更省事。

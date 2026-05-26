@@ -7,16 +7,21 @@ import type { ExportRenderOptions, MapCommand } from "@mapdesigner/map-core";
 import { EXPORT_STORAGE_DIR, SERVER_PORT, WEB_DIST_DIR } from "./config.js";
 import {
   applyCommands,
+  canUndo,
   createMap,
   deleteMap,
   duplicateMap,
+  executeSingleCommand,
   exportJson,
   exportPng,
+  getCellsInRange,
   getMap,
   importMap,
   listMaps,
+  mergeMap,
   saveMapAs,
-  saveMap
+  saveMap,
+  undoMap
 } from "./service.js";
 import { createEnvelope } from "./utils.js";
 
@@ -43,7 +48,7 @@ function assertExportFileName(fileName: string): string {
 }
 
 export async function createServer(): Promise<FastifyInstance> {
-  const app = Fastify({ logger: false });
+  const app = Fastify({ logger: false, bodyLimit: 2147483648 });
   await app.register(cors, { origin: true });
   const webIndexPath = path.join(WEB_DIST_DIR, "index.html");
   const webAssetsDir = path.join(WEB_DIST_DIR, "assets");
@@ -71,9 +76,10 @@ export async function createServer(): Promise<FastifyInstance> {
     }
   });
 
-  app.post<{ Body: { name: string; description?: string; id?: string } }>("/api/maps", async (request, reply) => {
+  app.post<{ Body: { name: string; description?: string; id?: string; layout?: string } }>("/api/maps", async (request, reply) => {
     try {
-      return createEnvelope({ result: await createMap(request.body) });
+      const layout = request.body.layout === "square" ? "square" as const : undefined;
+      return createEnvelope({ result: await createMap({ ...request.body, layout }) });
     } catch (error) {
       reply.status(400);
       return createEnvelope({
@@ -114,6 +120,27 @@ export async function createServer(): Promise<FastifyInstance> {
       reply.status(400);
       return createEnvelope({
         errors: [{ code: "duplicate_failed", message: (error as Error).message, severity: "invalid" }]
+      });
+    }
+  });
+
+  // Merge source map into target map with offset
+  app.post<{
+    Params: { id: string };
+    Body: { sourceMapId: string; rowOffset: number; colOffset: number };
+  }>("/api/maps/:id/merge", async (request, reply) => {
+    try {
+      const result = await mergeMap(
+        request.params.id,
+        request.body.sourceMapId,
+        request.body.rowOffset,
+        request.body.colOffset
+      );
+      return createEnvelope({ result });
+    } catch (error) {
+      reply.status(400);
+      return createEnvelope({
+        errors: [{ code: "merge_failed", message: (error as Error).message, severity: "invalid" }]
       });
     }
   });
@@ -220,6 +247,64 @@ export async function createServer(): Promise<FastifyInstance> {
       return createEnvelope({
         errors: [{ code: "apply_failed", message: (error as Error).message, severity: "invalid" }]
       });
+    }
+  });
+
+  // NEW: Range query — fetch cells visible in a viewport rectangle
+  app.get<{
+    Params: { id: string };
+    Querystring: { minRow: string; maxRow: string; minCol: string; maxCol: string; includeUndesigned?: string };
+  }>("/api/maps/:id/cells", async (request, reply) => {
+    try {
+      const { minRow, maxRow, minCol, maxCol, includeUndesigned } = request.query;
+      const cells = await getCellsInRange(request.params.id, {
+        minRow: Number(minRow),
+        maxRow: Number(maxRow),
+        minCol: Number(minCol),
+        maxCol: Number(maxCol)
+      }, { includeUndesigned: includeUndesigned !== "false" });
+      return createEnvelope({ result: { cells } });
+    } catch (error) {
+      reply.status(400);
+      return createEnvelope({
+        errors: [{ code: "cells_query_failed", message: (error as Error).message, severity: "invalid" }]
+      });
+    }
+  });
+
+  // NEW: Execute a single command (for WebUI editing)
+  app.post<{ Params: { id: string }; Body: { command: MapCommand } }>("/api/maps/:id/command", async (request, reply) => {
+    try {
+      const result = await executeSingleCommand(request.params.id, request.body.command);
+      return createEnvelope({ result: { state: result.state, changed: result.changed, warnings: result.warnings } });
+    } catch (error) {
+      reply.status(400);
+      return createEnvelope({
+        errors: [{ code: "command_failed", message: (error as Error).message, severity: "invalid" }]
+      });
+    }
+  });
+
+  // NEW: Undo last command
+  app.post<{ Params: { id: string } }>("/api/maps/:id/undo", async (request, reply) => {
+    try {
+      const result = await undoMap(request.params.id);
+      return createEnvelope({ result });
+    } catch (error) {
+      reply.status(400);
+      return createEnvelope({
+        errors: [{ code: "undo_failed", message: (error as Error).message, severity: "invalid" }]
+      });
+    }
+  });
+
+  // NEW: Check undo availability
+  app.get<{ Params: { id: string } }>("/api/maps/:id/undo-status", async (request, reply) => {
+    try {
+      const available = await canUndo(request.params.id);
+      return createEnvelope({ result: { canUndo: available } });
+    } catch {
+      return createEnvelope({ result: { canUndo: false } });
     }
   });
 

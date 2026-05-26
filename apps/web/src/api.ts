@@ -27,10 +27,30 @@ async function request<T>(input: RequestInfo, init?: RequestInit): Promise<ApiEn
   return response.json() as Promise<ApiEnvelope<T>>;
 }
 
+export interface CellRange {
+  minRow: number;
+  maxRow: number;
+  minCol: number;
+  maxCol: number;
+}
+
+export interface MapMetaResult {
+  /** Full MapRuntimeState for small maps; partial for large maps */
+  state: MapRuntimeState;
+  /** Map extent (all designed cells bounding box) */
+  extent: CellRange | null;
+}
+
+export interface CommandResult {
+  state: MapRuntimeState;
+  changed: Array<{ row: number; col: number }>;
+  warnings: Array<{ code: string; message: string; severity: string }>;
+}
+
 export const api = {
   listMaps: () => request<MapListItem[]>("/api/maps"),
   getMap: (id: string) => request<MapRuntimeState>(`/api/maps/${id}`),
-  createMap: (input: { name: string; description?: string }) =>
+  createMap: (input: { name: string; description?: string; layout?: string }) =>
     request<MapRuntimeState>("/api/maps", {
       method: "POST",
       body: JSON.stringify(input)
@@ -47,7 +67,8 @@ export const api = {
     }),
   duplicateMap: (id: string) =>
     request<MapRuntimeState>(`/api/maps/${id}/duplicate`, {
-      method: "POST"
+      method: "POST",
+      body: "{}"
     }),
   deleteMap: (id: string) =>
     request<{ deleted: true }>(`/api/maps/${id}`, {
@@ -60,11 +81,43 @@ export const api = {
     }),
   exportJson: (id: string) =>
     request<{ fileName: string; path: string }>(`/api/maps/${id}/export-json`, {
-      method: "POST"
+      method: "POST",
+      body: "{}"
     }),
   exportPng: (id: string, options: Partial<ExportRenderOptions>) =>
     request<{ fileName: string; path: string; downloadUrl: string }>(`/api/maps/${id}/export-png`, {
       method: "POST",
       body: JSON.stringify(options)
+    }),
+
+  /** Fetch cells in a viewport range (virtual rendering) */
+  getCellsInRange: (id: string, range: CellRange, includeUndesigned = true) =>
+    request<{ cells: MapRuntimeState["activeCells"] }>(
+      `/api/maps/${encodeURIComponent(id)}/cells?minRow=${range.minRow}&maxRow=${range.maxRow}&minCol=${range.minCol}&maxCol=${range.maxCol}&includeUndesigned=${includeUndesigned}`
+    ),
+
+  /** Execute a single command on the server */
+  executeCommand: (id: string, command: Record<string, unknown>) =>
+    request<CommandResult>(`/api/maps/${encodeURIComponent(id)}/command`, {
+      method: "POST",
+      body: JSON.stringify({ command })
+    }),
+
+  /** Undo last command */
+  undoMap: (id: string) =>
+    request<{ cellsChanged: number; label: string } | null>(`/api/maps/${encodeURIComponent(id)}/undo`, {
+      method: "POST",
+      body: "{}"
+    }),
+
+  /** Check if undo is available */
+  getUndoStatus: (id: string) =>
+    request<{ canUndo: boolean }>(`/api/maps/${encodeURIComponent(id)}/undo-status`),
+
+  /** Merge source map into target map with offset */
+  mergeMap: (targetId: string, sourceMapId: string, rowOffset: number, colOffset: number) =>
+    request<{ cellsAdded: number; cellsOverwritten: number }>(`/api/maps/${encodeURIComponent(targetId)}/merge`, {
+      method: "POST",
+      body: JSON.stringify({ sourceMapId, rowOffset, colOffset })
     })
 };

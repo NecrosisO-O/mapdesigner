@@ -41,7 +41,7 @@ export function buildMapScene(map: MapRuntimeState, options: MapRenderOptions = 
   const layout = buildHexLayout(cells, {
     size: resolved.size,
     padding: resolved.padding
-  });
+  }, map.document.grid.layout);
   return {
     width: layout.width,
     height: layout.height,
@@ -94,17 +94,18 @@ function renderCell(scene: MapScene, entry: MapScene["layout"][number]): string 
 export function renderSvgString(scene: MapScene): string {
   const defs = `<defs>${scene.defs.join("")}</defs>`;
   const cells = scene.layout.map((entry) => renderCell(scene, entry)).join("");
+  const bg = scene.transparent ? "" : `<rect width="100%" height="100%" fill="${scene.background}" />`;
   return [
     `<svg xmlns="http://www.w3.org/2000/svg" width="${scene.width}" height="${scene.height}" viewBox="0 0 ${scene.width} ${scene.height}" role="img" aria-label="MapDesigner export">`,
     defs,
-    `<rect width="100%" height="100%" fill="${scene.background}" />`,
+    bg,
     cells,
     `</svg>`
   ].join("");
 }
 
 export function buildExportScene(input: ExportSceneInput): MapScene {
-  return buildMapScene(input.map, {
+  const scene = buildMapScene(input.map, {
     size: 36 * input.options.scale,
     padding: input.options.padding,
     background: input.options.background,
@@ -113,4 +114,8 @@ export function buildExportScene(input: ExportSceneInput): MapScene {
     includeGrid: input.options.includeGrid,
     includeUndesigned: input.options.includeUndesigned
   });
+  if (input.options.transparent) {
+    scene.transparent = true;
+  }
+  return scene;
 }

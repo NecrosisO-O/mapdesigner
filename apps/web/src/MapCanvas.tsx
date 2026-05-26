@@ -1,5 +1,6 @@
 import {
   type ActiveCell,
+  type LayoutType,
   type MapRuntimeState,
   type TagKey
 } from "@mapdesigner/map-core";
@@ -14,10 +15,12 @@ import {
   getTerrainColor
 } from "@mapdesigner/map-render";
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { CellRange } from "./api.js";
 
 const MIN_ZOOM = 0.1;
 const MAX_ZOOM = 2.6;
 const ZOOM_FACTOR = 1.1;
+const SQRT3 = Math.sqrt(3);
 
 interface MapCanvasProps {
   map: MapRuntimeState;
@@ -29,6 +32,93 @@ interface MapCanvasProps {
   showShorthand: boolean;
   showGrid: boolean;
   showUndesigned: boolean;
+  /** Only show cells matching these tags (empty = show all) */
+  tagFilters?: string[];
+  /** Called when the viewport hex range changes (for virtual fetching) */
+  onViewportChange?: (range: CellRange) => void;
+}
+
+/** Convert scene X coordinate to approximate grid column */
+function sceneXToCol(sceneX: number, minX: number, size: number): number {
+  return (sceneX + minX) / (1.5 * size);
+}
+
+/** Square variant: centerX = size * col - minX */
+function sceneXToColSquare(sceneX: number, minX: number, size: number): number {
+  return (sceneX + minX) / size;
+}
+
+/** Convert scene Y coordinate to approximate hex row (needs col for correction) */
+function sceneYToRow(sceneY: number, minY: number, size: number, col: number): number {
+  return -((sceneY + minY) / (SQRT3 * size)) - col / 2;
+}
+
+/** Square variant: centerY = size * row - minY */
+function sceneYToRowSquare(sceneY: number, minY: number, size: number): number {
+  return (sceneY + minY) / size;
+}
+
+/** Round fractional axial coordinates to nearest integer hex */
+function hexRound(q: number, r: number): { col: number; row: number } {
+  const s = -q - r;
+  let rq = Math.round(q);
+  let rr = Math.round(r);
+  const rs = Math.round(s);
+  const dq = Math.abs(rq - q);
+  const dr = Math.abs(rr - r);
+  const ds = Math.abs(rs - s);
+  if (dq > dr && dq > ds) {
+    rq = -rr - rs;
+  } else if (dr > ds) {
+    rr = -rq - rs;
+  }
+  return { col: rq, row: rr };
+}
+
+/** Compute the grid cell range visible in the given viewport rectangle */
+function computeVisibleRange(
+  left: number, top: number,
+  right: number, bottom: number,
+  minX: number, minY: number, size: number,
+  buffer: number,
+  layout: LayoutType
+): CellRange {
+  const corners = [
+    { x: left, y: top }, { x: right, y: top },
+    { x: left, y: bottom }, { x: right, y: bottom }
+  ];
+
+  let minCol = Infinity, maxCol = -Infinity;
+  let minRow = Infinity, maxRow = -Infinity;
+
+  if (layout === "square") {
+    for (const { x, y } of corners) {
+      const col = Math.round(sceneXToColSquare(x, minX, size));
+      const row = Math.round(sceneYToRowSquare(y, minY, size));
+      if (col < minCol) minCol = col;
+      if (col > maxCol) maxCol = col;
+      if (row < minRow) minRow = row;
+      if (row > maxRow) maxRow = row;
+    }
+  } else {
+    for (const { x, y } of corners) {
+      const cf = sceneXToCol(x, minX, size);
+      const rf = sceneYToRow(y, minY, size, cf);
+      const { col, row } = hexRound(cf, rf);
+      if (col < minCol) minCol = col;
+      if (col > maxCol) maxCol = col;
+      if (row < minRow) minRow = row;
+      if (row > maxRow) maxRow = row;
+    }
+  }
+
+  const pad = Math.max(1, buffer);
+  return {
+    minRow: Math.floor(minRow) - pad,
+    maxRow: Math.ceil(maxRow) + pad,
+    minCol: Math.floor(minCol) - pad,
+    maxCol: Math.ceil(maxCol) + pad
+  };
 }
 
 function CellGroup(props: {
@@ -101,6 +191,7 @@ export function MapCanvas(props: MapCanvasProps) {
   const zoomRef = useRef(zoom);
   const offsetRef = useRef(offset);
   const dragState = useRef<{ dragging: boolean; startX: number; startY: number } | null>(null);
+  const lastReportedRange = useRef<CellRange | null>(null);
 
   const scene = useMemo(
     () =>
@@ -134,6 +225,62 @@ export function MapCanvas(props: MapCanvasProps) {
       height: rect.height > 0 ? rect.height : scene.height
     });
   };
+
+  /* ---- Virtual rendering: compute which cells are visible ---- */
+  const cellSize = scene.options.size;
+  const visibleLayout = useMemo(() => {
+    const vpLeft = (-baseOffset.x - offset.x) / (baseScale * zoom);
+    const vpTop = (-baseOffset.y - offset.y) / (baseScale * zoom);
+    const vpRight = vpLeft + viewportSize.width / (baseScale * zoom);
+    const vpBottom = vpTop + viewportSize.height / (baseScale * zoom);
+    const bufferPx = cellSize * 3;
+
+    const tagFilters = props.tagFilters;
+    const hasTagFilter = tagFilters && tagFilters.length > 0;
+
+    return scene.layout.filter((entry) => {
+      // Viewport filter
+      if (
+        entry.centerX < vpLeft - bufferPx ||
+        entry.centerX > vpRight + bufferPx ||
+        entry.centerY < vpTop - bufferPx ||
+        entry.centerY > vpBottom + bufferPx
+      ) {
+        return false;
+      }
+      // Tag filter
+      if (hasTagFilter && entry.cell.status === "designed") {
+        const cellTags = entry.cell.tags;
+        if (!cellTags || !tagFilters!.some((t) => cellTags.includes(t as never))) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [scene.layout, baseOffset, baseScale, zoom, offset, viewportSize, cellSize, props.tagFilters]);
+
+  /* ---- Report viewport hex range to parent ---- */
+  useEffect(() => {
+    if (!props.onViewportChange) return;
+    const vpLeft = (-baseOffset.x - offset.x) / (baseScale * zoom);
+    const vpTop = (-baseOffset.y - offset.y) / (baseScale * zoom);
+    const vpRight = vpLeft + viewportSize.width / (baseScale * zoom);
+    const vpBottom = vpTop + viewportSize.height / (baseScale * zoom);
+
+    const range = computeVisibleRange(
+      vpLeft, vpTop, vpRight, vpBottom,
+      scene.minX, scene.minY, cellSize, 5,
+      props.map.document.grid.layout
+    );
+
+    const prev = lastReportedRange.current;
+    if (!prev ||
+        prev.minRow !== range.minRow || prev.maxRow !== range.maxRow ||
+        prev.minCol !== range.minCol || prev.maxCol !== range.maxCol) {
+      lastReportedRange.current = range;
+      props.onViewportChange(range);
+    }
+  });
 
   useEffect(() => {
     zoomRef.current = zoom;
@@ -262,7 +409,7 @@ export function MapCanvas(props: MapCanvasProps) {
             (baseOffset.y + offset.y).toFixed(2)
           )}) scale(${Number((baseScale * zoom).toFixed(3))})`}
         >
-          {scene.layout.map((entry) => (
+          {visibleLayout.map((entry) => (
             <g
               key={entry.cell.id}
               onMouseEnter={() => {

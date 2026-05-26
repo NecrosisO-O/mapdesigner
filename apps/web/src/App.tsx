@@ -2,6 +2,7 @@ import {
   BIOME_ENTRIES,
   BIOME_KEYS,
   TAG_ENTRIES,
+  TAG_ENTRIES,
   TERRAIN_ENTRIES,
   TERRAIN_CATEGORY_LABELS,
   TERRAIN_CATEGORY_ORDER,
@@ -15,11 +16,10 @@ import {
   type ActiveCell,
   type ExportRenderOptions,
   type MapRuntimeState,
-  redo,
-  undo
+  redo
 } from "@mapdesigner/map-core";
 import { startTransition, useEffect, useRef, useState } from "react";
-import { api, type MapListItem } from "./api.js";
+import { api, type MapListItem, type CellRange } from "./api.js";
 import { MapCanvas } from "./MapCanvas.js";
 
 interface CellDraft {
@@ -41,6 +41,7 @@ const DEFAULT_PNG_OPTIONS: ExportRenderOptions = {
   includeGrid: true,
   includeUndesigned: false,
   background: "#F4F0E6",
+  transparent: false,
   padding: 32,
   scale: 2
 };
@@ -136,7 +137,20 @@ export default function App() {
   const [hoveredCell, setHoveredCell] = useState<ActiveCell | null>(null);
   const [pngOptions, setPngOptions] = useState<ExportRenderOptions>(DEFAULT_PNG_OPTIONS);
   const [loading, setLoading] = useState(false);
+  const [darkMode, setDarkMode] = useState(() => window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false);
+  const [activeTagFilters, setActiveTagFilters] = useState<string[]>([]);
+
+  // Merge state
+  const [mergePanelOpen, setMergePanelOpen] = useState(false);
+  const [mergeSourceId, setMergeSourceId] = useState("");
+  const [mergeRowOffset, setMergeRowOffset] = useState(0);
+  const [mergeColOffset, setMergeColOffset] = useState(0);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Apply dark mode class
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", darkMode);
+  }, [darkMode]);
 
   const selectedCell =
     currentMap?.activeCells.find((cell) => cell.id === selectedCellId) ?? null;
@@ -326,7 +340,9 @@ export default function App() {
     if (!name) {
       return;
     }
-    const response = await api.createMap({ name });
+    const isSquare = window.confirm("使用方格网格吗？\n\n确定 = 方格 | 取消 = 六边形");
+    const layout = isSquare ? "square" : undefined;
+    const response = await api.createMap({ name, layout });
     if (!response.ok || !response.result) {
       setMessage(formatStatusMessage(response.errors[0]?.message, "新建地图失败"));
       return;
@@ -338,7 +354,7 @@ export default function App() {
     setSelectedCellId(null);
     syncDraftFromCell(null);
     setFormatBrushEnabled(false);
-    setMessage(`已新建 ${response.result.document.meta.name}`);
+    setMessage(`已新建${isSquare ? "方格" : "六边形"}地图：${response.result.document.meta.name}`);
   }
 
   async function handleSaveMap(): Promise<void> {
@@ -432,7 +448,7 @@ export default function App() {
     setMessage(`PNG 已导出并开始下载：${response.result.fileName}`);
   }
 
-  function applyDraft(): void {
+  async function handleApplyDraft(): Promise<void> {
     if (!currentMap || !selectedCell) {
       return;
     }
@@ -440,7 +456,9 @@ export default function App() {
       setMessage("设置为 designed 时必须选择 terrain");
       return;
     }
-    const result = applyCommand(currentMap, {
+
+    // Apply locally for instant feedback
+    const localResult = applyCommand(currentMap, {
       action: "set_cell",
       source: "webui",
       target: { row: selectedCell.row, col: selectedCell.col },
@@ -451,40 +469,73 @@ export default function App() {
         note: draft.note
       }
     });
-    if (!result.ok) {
-      setMessage(result.errors[0]?.message ?? "应用修改失败");
+    if (!localResult.ok) {
+      setMessage(localResult.errors[0]?.message ?? "应用修改失败");
       return;
     }
-    setCurrentMap(result.map);
+    setCurrentMap(localResult.map);
     setSelectedCellId(createCellId(selectedCell.row, selectedCell.col));
     syncDraftFromCell(
-      result.map.activeCells.find((cell) => cell.row === selectedCell.row && cell.col === selectedCell.col) ?? null
+      localResult.map.activeCells.find((cell) => cell.row === selectedCell.row && cell.col === selectedCell.col) ?? null
     );
-    setMessage(result.warnings[0]?.message ?? "单元格修改已应用，等待保存到文件");
+
+    // Persist via server command
+    const response = await api.executeCommand(currentMap.document.meta.id, {
+      action: "set_cell",
+      source: "webui",
+      target: { row: selectedCell.row, col: selectedCell.col },
+      changes: {
+        terrain: draft.terrain,
+        biome: draft.biome || null,
+        tags: draft.tags,
+        note: draft.note
+      }
+    });
+    if (response.ok && response.result) {
+      setPersistedRevision(response.result.state.document.meta.revision);
+    }
+    setMessage(
+      (localResult.warnings[0]?.message ?? "单元格修改已应用") +
+      (response.ok ? "" : "，但保存到服务器失败")
+    );
   }
 
-  function clearSelected(): void {
+  async function handleClearSelected(): Promise<void> {
     if (!currentMap || !selectedCell) {
       return;
     }
-    const result = applyCommand(currentMap, {
+
+    // Apply locally for instant feedback
+    const localResult = applyCommand(currentMap, {
       action: "clear_cell",
       source: "webui",
       target: { row: selectedCell.row, col: selectedCell.col }
     });
-    if (!result.ok) {
-      setMessage(result.errors[0]?.message ?? "清空失败");
+    if (!localResult.ok) {
+      setMessage(localResult.errors[0]?.message ?? "清空失败");
       return;
     }
-    setCurrentMap(result.map);
+    setCurrentMap(localResult.map);
     const updatedCell =
-      result.map.activeCells.find((cell) => cell.row === selectedCell.row && cell.col === selectedCell.col) ?? null;
+      localResult.map.activeCells.find((cell) => cell.row === selectedCell.row && cell.col === selectedCell.col) ?? null;
     setSelectedCellId(updatedCell?.id ?? null);
     syncDraftFromCell(updatedCell);
     if (updatedCell?.status !== "designed") {
       setFormatBrushEnabled(false);
     }
-    setMessage("单元格已清空，等待保存到文件");
+
+    // Persist via server command
+    const response = await api.executeCommand(currentMap.document.meta.id, {
+      action: "clear_cell",
+      source: "webui",
+      target: { row: selectedCell.row, col: selectedCell.col }
+    });
+    if (response.ok && response.result) {
+      setPersistedRevision(response.result.state.document.meta.revision);
+    }
+    setMessage(
+      "单元格已清空" + (response.ok ? "" : "，但保存到服务器失败")
+    );
   }
 
   function toggleFormatBrush(): void {
@@ -498,10 +549,10 @@ export default function App() {
       return;
     }
     setFormatBrushEnabled(true);
-    setMessage(`已进入格式刷模式：${selectedCell.display_coord}，当前刷入 ${getFormatBrushLabel()}`);
+    setMessage(`已进入格式刷模式，当前刷{selectedCell.display_coord}，当前刷：${getFormatBrushLabel()}`);
   }
 
-  function applyFormatBrush(targetCell: ActiveCell): void {
+  async function handleApplyFormatBrush(targetCell: ActiveCell): Promise<void> {
     if (!currentMap || !selectedCell || selectedCell.status !== "designed") {
       setFormatBrushEnabled(false);
       return;
@@ -525,7 +576,8 @@ export default function App() {
       return;
     }
 
-    const result = applyCommand(currentMap, {
+    // Apply locally
+    const localResult = applyCommand(currentMap, {
       action: "set_cell",
       source: "webui",
       target: { row: targetCell.row, col: targetCell.col },
@@ -537,19 +589,36 @@ export default function App() {
       }
     });
 
-    if (!result.ok) {
-      setMessage(result.errors[0]?.message ?? "格式刷应用失败");
+    if (!localResult.ok) {
+      setMessage(localResult.errors[0]?.message ?? "格式刷应用失败");
       return;
     }
 
-    setCurrentMap(result.map);
+    setCurrentMap(localResult.map);
     setSelectedCellId(createCellId(selectedCell.row, selectedCell.col));
     syncDraftFromCell(
-      result.map.activeCells.find((cell) => cell.row === selectedCell.row && cell.col === selectedCell.col) ?? null
+      localResult.map.activeCells.find((cell) => cell.row === selectedCell.row && cell.col === selectedCell.col) ?? null
     );
+
+    // Persist via server
+    const response = await api.executeCommand(currentMap.document.meta.id, {
+      action: "set_cell",
+      source: "webui",
+      target: { row: targetCell.row, col: targetCell.col },
+      changes: {
+        terrain: nextTerrain,
+        biome: nextBiome || null,
+        tags: targetCell.tags,
+        note: targetCell.note
+      }
+    });
+    if (response.ok && response.result) {
+      setPersistedRevision(response.result.state.document.meta.revision);
+    }
     setMessage(
-      result.warnings[0]?.message ??
-        `已将 ${selectedCell.display_coord} 的${getFormatBrushLabel()}刷到 ${targetCell.display_coord}，等待保存到文件`
+      (localResult.warnings[0]?.message ??
+        `已将 ${selectedCell.display_coord} 的 {getFormatBrushLabel()}刷到 ${targetCell.display_coord}`) +
+      (response.ok ? "" : "，但保存到服务器失败")
     );
   }
 
@@ -624,8 +693,7 @@ export default function App() {
             保存
           </button>
           <button onClick={() => void handleSaveAs()} disabled={!currentMap}>
-            另存为
-          </button>
+            另存为          </button>
           {isRenaming ? (
             <div className="rename-editor">
               <input
@@ -648,8 +716,7 @@ export default function App() {
                 disabled={!currentMap || !renameDraft.trim()}
                 type="button"
               >
-                确认重命名
-              </button>
+                确认重命名              </button>
               <button
                 onClick={() => {
                   setIsRenaming(false);
@@ -657,8 +724,7 @@ export default function App() {
                 }}
                 type="button"
               >
-                取消重命名
-              </button>
+                取消重命名              </button>
             </div>
           ) : (
             <button
@@ -671,8 +737,7 @@ export default function App() {
               }}
               disabled={!currentMap}
             >
-              重命名
-            </button>
+              重命名            </button>
           )}
           <button onClick={() => fileInputRef.current?.click()}>导入 JSON</button>
           <button
@@ -724,14 +789,20 @@ export default function App() {
             删除地图
           </button>
           <button
-            onClick={() => {
+            onClick={async () => {
               if (!currentMap) {
                 return;
               }
-              setCurrentMap(undo(currentMap));
-              setMessage("已撤销");
+              const response = await api.undoMap(currentMap.document.meta.id);
+              if (response.ok && response.result) {
+                // Re-open map to get fresh state from server
+                await openMap(currentMap.document.meta.id);
+                setMessage(`已撤销：${response.result.label}`);
+              } else {
+                setMessage("撤销失败");
+              }
             }}
-            disabled={!currentMap || currentMap.history.past.length === 0}
+            disabled={!currentMap}
           >
             撤销
           </button>
@@ -746,6 +817,12 @@ export default function App() {
             disabled={!currentMap || currentMap.history.future.length === 0}
           >
             重做
+          </button>
+          <button
+            onClick={() => setDarkMode((prev) => !prev)}
+            title={darkMode ? "切换为浅色模式" : "切换为深色模式"}
+          >
+            {darkMode ? "浅色" : "深色"}
           </button>
         </div>
         <input
@@ -769,7 +846,7 @@ export default function App() {
           <section className="panel status-panel" aria-label="当前状态">
             <h2>当前状态</h2>
             <div className="status-message-banner" aria-live="polite">
-              {loading ? "加载中..." : message}
+              {loading ? "加载中.." : message}
             </div>
             {currentMap ? (
               <div className="meta-list">
@@ -792,6 +869,34 @@ export default function App() {
             <label className="checkbox-row"><input type="checkbox" checked={showShorthand} onChange={(event) => setShowShorthand(event.target.checked)} />显示简写</label>
             <label className="checkbox-row"><input type="checkbox" checked={showGrid} onChange={(event) => setShowGrid(event.target.checked)} />显示网格线</label>
             <label className="checkbox-row"><input type="checkbox" checked={showUndesigned} onChange={(event) => setShowUndesigned(event.target.checked)} />显示 undesigned</label>
+          </section>
+          <section className="panel">
+            <h2>Tag 筛选</h2>
+            <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", margin: "0 0 8px" }}>
+              点击 Tag 筛选显示对应单元格（多选）
+            </p>
+            <div className="tag-filter-bar">
+              {Object.entries(TAG_ENTRIES).map(([key, entry]) => (
+                <button
+                  key={key}
+                  className={`tag-chip${activeTagFilters.includes(key) ? " active" : ""}`}
+                  onClick={() => {
+                    setActiveTagFilters((prev) =>
+                      prev.includes(key) ? prev.filter((t) => t !== key) : [...prev, key]
+                    );
+                  }}
+                >
+                  {entry.label}
+                </button>
+              ))}
+            </div>
+            {activeTagFilters.length > 0 ? (
+              <button
+                onClick={() => setActiveTagFilters([])}
+                style={{ fontSize: "0.85rem", padding: "4px 10px" }}
+              >
+                清除筛选              </button>
+            ) : null}
           </section>
           <section className="panel collapsible-panel">
             <div className="panel-header">
@@ -867,8 +972,7 @@ export default function App() {
                   </select>
                 </label>
                 <label>
-                  背景色
-                  <input
+                  背景色                  <input
                     type="color"
                     value={pngOptions.background}
                     onChange={(event) =>
@@ -882,6 +986,18 @@ export default function App() {
                 <label className="checkbox-row">
                   <input
                     type="checkbox"
+                    checked={pngOptions.transparent ?? false}
+                    onChange={(event) =>
+                      setPngOptions((current) => ({
+                        ...current,
+                        transparent: event.target.checked
+                      }))
+                    }
+                  />
+                  透明背景（PNG 无背景色）                </label>
+                <label className="checkbox-row">
+                  <input
+                    type="checkbox"
                     checked={pngOptions.includeGrid}
                     onChange={(event) =>
                       setPngOptions((current) => ({
@@ -890,8 +1006,7 @@ export default function App() {
                       }))
                     }
                   />
-                  导出网格线
-                </label>
+                  导出网格线                </label>
                 <label className="checkbox-row">
                   <input
                     type="checkbox"
@@ -929,15 +1044,93 @@ export default function App() {
                       }))
                     }
                   />
-                  导出简写
+                  导出简写                </label>
+              </div>
+            ) : null}
+          </section>
+          <section className="panel collapsible-panel">
+            <div className="panel-header">
+              <h2>地图合并</h2>
+              <button
+                type="button"                className="panel-toggle"                onClick={() => setMergePanelOpen((c) => !c)}
+                aria-expanded={mergePanelOpen}
+              >
+                {mergePanelOpen ? "收起" : "展开"}
+              </button>
+            </div>
+            {mergePanelOpen ? (
+              <div>
+                <p style={{ fontSize: "0.85em", margin: "0 0 8px" }}>
+                  将另一张地图的单元格合并到当前地图中。                </p>
+                <label>
+                  来源地图
+                  <select
+                    value={mergeSourceId}
+                    onChange={(e) => setMergeSourceId(e.target.value)}
+                    disabled={!currentMap}
+                  >
+                    <option value="">选择来源地图</option>
+                    {displayMaps
+                      .filter((m) => currentMap && m.id !== currentMap.document.meta.id)
+                      .map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.name} ({m.designedCellCount} cells)
+                        </option>
+                      ))}
+                  </select>
                 </label>
+                <div className="action-row">
+                  <label>
+                    行偏移                    <input
+                      type="number"                      value={mergeRowOffset}
+                      onChange={(e) => setMergeRowOffset(Number(e.target.value))}
+                      disabled={!currentMap}
+                      style={{ width: 70 }}
+                    />
+                  </label>
+                  <label>
+                    列偏移                    <input
+                      type="number"                      value={mergeColOffset}
+                      onChange={(e) => setMergeColOffset(Number(e.target.value))}
+                      disabled={!currentMap}
+                      style={{ width: 70 }}
+                    />
+                  </label>
+                </div>
+                <button
+                  onClick={async () => {
+                    if (!currentMap || !mergeSourceId) return;
+                    const ok = window.confirm(
+                      `确认将来源地图合并到当前地图？\n\n来源地图的所有单元格将以偏移 (行: ${mergeRowOffset}, 列: ${mergeColOffset})) 合并到当前地图中。重叠位置来源覆盖。`
+                    );
+                    if (!ok) return;
+                    const response = await api.mergeMap(
+                      currentMap.document.meta.id,
+                      mergeSourceId,
+                      mergeRowOffset,
+                      mergeColOffset
+                    );
+                    if (!response.ok) {
+                      setMessage(formatStatusMessage(response.errors[0]?.message, "合并失败"));
+                      return;
+                    }
+                    // Refresh map state
+                    await openMap(currentMap.document.meta.id);
+                    setMessage(
+                      `合并完成：新增 ${response.result!.cellsAdded} 个单元格，覆盖 ${response.result!.cellsOverwritten} 个单元格`
+                    );
+                  }}
+                  disabled={!currentMap || !mergeSourceId}
+                >
+                  执行合并
+                </button>
               </div>
             ) : null}
           </section>
           <section className="panel">
             <h2>说明</h2>
             <p>滚轮缩放，拖拽平移。默认展示扩展坐标，内部编号用于程序定位。</p>
-            <p>编辑单元格后只会先更新当前地图内存，点击顶部“保存”才会写回 `storage/maps`。</p>
+            <p>编辑单元格后点击"保存"或直接编辑（远程命令自动保存），修改会写入数据库。</p>
           </section>
         </aside>
 
@@ -950,7 +1143,7 @@ export default function App() {
               onHoverCellChange={setHoveredCell}
               onSelectCell={(cell) => {
                 if (formatBrushEnabled) {
-                  applyFormatBrush(cell);
+                  void handleApplyFormatBrush(cell);
                   return;
                 }
                 if (!ensureCanLeaveSelection()) {
@@ -959,6 +1152,7 @@ export default function App() {
                 setSelectedCellId(cell.id);
                 syncDraftFromCell(cell);
               }}
+              tagFilters={activeTagFilters.length > 0 ? activeTagFilters : undefined}
               showCoordinates={showCoordinates}
               showShorthand={showShorthand}
               showGrid={showGrid}
@@ -967,7 +1161,7 @@ export default function App() {
           ) : (
             <div className="empty-state">
               <h2>还没有打开地图</h2>
-              <p>从顶部新建地图，或导入已有 JSON 文件开始。</p>
+              <p>从顶部新建地图，或导入已有的 JSON 文件开始。</p>
             </div>
           )}
         </section>
@@ -976,13 +1170,13 @@ export default function App() {
           <section className="panel">
             <div className="panel-header">
               <div className="action-row action-row-inline">
-                <button onClick={applyDraft} disabled={!selectedCell}>
+                <button onClick={() => void handleApplyDraft()} disabled={!selectedCell}>
                   保存
                 </button>
                 <button onClick={() => syncDraftFromCell(selectedCell)} disabled={!selectedCell || !cellDirty}>
                   撤销
                 </button>
-                <button onClick={clearSelected} disabled={!selectedCell}>
+                <button onClick={() => void handleClearSelected()} disabled={!selectedCell}>
                   清空
                 </button>
                 <button
@@ -992,8 +1186,7 @@ export default function App() {
                   onClick={toggleFormatBrush}
                   disabled={!canUseFormatBrush}
                 >
-                  格式刷
-                </button>
+                  格式刷                </button>
               </div>
             </div>
             <div className="format-brush-panel">
@@ -1005,8 +1198,7 @@ export default function App() {
                     onChange={(event) => setFormatBrushScopeField("terrain", event.target.checked)}
                     disabled={!selectedCell}
                   />
-                  刷地形
-                </label>
+                  刷地形                </label>
                 <label className="checkbox-row">
                   <input
                     type="checkbox"
@@ -1014,8 +1206,7 @@ export default function App() {
                     onChange={(event) => setFormatBrushScopeField("biome", event.target.checked)}
                     disabled={!selectedCell}
                   />
-                  刷生态
-                </label>
+                  刷生态                </label>
               </div>
               {formatBrushEnabled && selectedCell ? (
                 <p className="format-brush-summary">
@@ -1023,8 +1214,7 @@ export default function App() {
                 </p>
               ) : (
                 <p className="format-brush-summary">
-                  选中已设计单元格后可进入格式刷模式；再次点击按钮即可退出。
-                </p>
+                  选中已设计单元格后可进入格式刷模式；再次点击按钮即可退出。</p>
               )}
             </div>
             <label>
@@ -1108,8 +1298,7 @@ export default function App() {
             {currentMap ? (
               <>
                 <p>
-                  已记录 {currentMap.history.past.length} 步 | 可重做 {currentMap.history.future.length} 步
-                </p>
+                  已记录 ${currentMap.history.past.length} 个 | 可重做 ${currentMap.history.future.length} 个                </p>
                 {currentMap.history.past.length > 0 ? (
                   <div className="history-list">
                     {currentMap.history.past

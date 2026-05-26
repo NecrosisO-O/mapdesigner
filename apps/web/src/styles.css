@@ -1,8 +1,73 @@
 :root {
   font-family: "Noto Sans SC", "Segoe UI", sans-serif;
-  color: #1f1c17;
-  background: #e8e0d1;
   line-height: 1.5;
+  user-select: none;
+  -webkit-user-select: none;
+
+  /* Light theme */
+  --bg-page: #e8e0d1;
+  --bg-page-radial: rgba(255, 251, 240, 0.95);
+  --bg-page-radial-end: rgba(232, 224, 209, 0.9);
+  --bg-page-gradient: linear-gradient(135deg, #e8e0d1, #d6cab4);
+  --bg-topbar: rgba(249, 243, 231, 0.9);
+  --bg-panel: rgba(249, 243, 231, 0.86);
+  --bg-panel-strong: #fbf6ea;
+  --bg-canvas: #f4f0e6;
+  --bg-input: #fffdf7;
+  --bg-brush: rgba(255, 252, 245, 0.72);
+  --bg-empty: rgba(249, 243, 231, 0.7);
+  --bg-banner: linear-gradient(135deg, #fff3d2, #f7d88d);
+  --bg-history: rgba(255, 252, 245, 0.75);
+  --text-primary: #1f1c17;
+  --text-secondary: #6b5b49;
+  --text-muted: #685d50;
+  --text-banner: #5a3b0b;
+  --text-on-button: #231e18;
+  --text-on-accent: #fff9f1;
+  --border-light: rgba(93, 76, 55, 0.16);
+  --border-medium: rgba(88, 72, 52, 0.24);
+  --border-banner: rgba(170, 118, 27, 0.28);
+  --shadow-panel: 0 10px 35px rgba(73, 62, 48, 0.07);
+  --shadow-inset: inset 0 0 0 1px rgba(255, 255, 255, 0.32);
+  --shadow-banner: inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  --accent: #d9743a;
+  --accent-hover: #c9652f;
+  --accent-border: #c3622d;
+  --focus: #d84f2a;
+  --btn-hover: #f2ead7;
+}
+
+:root.dark {
+  --bg-page: #1a1713;
+  --bg-page-radial: rgba(30, 27, 23, 0.95);
+  --bg-page-radial-end: rgba(22, 20, 17, 0.9);
+  --bg-page-gradient: linear-gradient(135deg, #1a1713, #12100d);
+  --bg-topbar: rgba(30, 27, 23, 0.92);
+  --bg-panel: rgba(34, 31, 27, 0.88);
+  --bg-panel-strong: #2a2620;
+  --bg-canvas: #1f1c17;
+  --bg-input: #2a2620;
+  --bg-brush: rgba(42, 38, 32, 0.72);
+  --bg-empty: rgba(34, 31, 27, 0.7);
+  --bg-banner: linear-gradient(135deg, #3a2e1a, #4a3820);
+  --bg-history: rgba(42, 38, 32, 0.75);
+  --text-primary: #e0d8c8;
+  --text-secondary: #a89880;
+  --text-muted: #a09078;
+  --text-banner: #e8d090;
+  --text-on-button: #e0d8c8;
+  --text-on-accent: #fff9f1;
+  --border-light: rgba(160, 140, 120, 0.16);
+  --border-medium: rgba(160, 140, 120, 0.24);
+  --border-banner: rgba(200, 160, 80, 0.28);
+  --shadow-panel: 0 10px 35px rgba(0, 0, 0, 0.25);
+  --shadow-inset: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --shadow-banner: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  --accent: #c96a30;
+  --accent-hover: #d97a40;
+  --accent-border: #b05a20;
+  --focus: #e06028;
+  --btn-hover: #3a342c;
 }
 
 html,
@@ -18,8 +83,9 @@ body,
 body {
   margin: 0;
   background:
-    radial-gradient(circle at top, rgba(255, 251, 240, 0.95), rgba(232, 224, 209, 0.9)),
-    linear-gradient(135deg, #e8e0d1, #d6cab4);
+    radial-gradient(circle at top, var(--bg-page-radial), var(--bg-page-radial-end)),
+    var(--bg-page-gradient);
+  color: var(--text-primary);
 }
 
 button,
@@ -27,6 +93,7 @@ select,
 textarea,
 input {
   font: inherit;
+  color: inherit;
 }
 
 .app-shell {
@@ -42,8 +109,8 @@ input {
   gap: 16px;
   align-items: center;
   padding: 14px 18px;
-  border-bottom: 1px solid rgba(73, 62, 48, 0.18);
-  background: rgba(249, 243, 231, 0.9);
+  border-bottom: 1px solid var(--border-light);
+  background: var(--bg-topbar);
   backdrop-filter: blur(8px);
 }
 
@@ -58,7 +125,7 @@ input {
 }
 
 .brand span {
-  color: #6b5b49;
+  color: var(--text-secondary);
   font-size: 0.88rem;
 }
 
@@ -74,38 +141,38 @@ input {
 .toolbar select,
 .rename-editor input,
 .action-row button {
-  border: 1px solid rgba(88, 72, 52, 0.24);
-  background: #fbf6ea;
-  color: #231e18;
+  border: 1px solid var(--border-medium);
+  background: var(--bg-panel-strong);
+  color: var(--text-on-button);
   border-radius: 999px;
   padding: 8px 14px;
 }
 
 .toolbar button:hover,
 .action-row button:hover {
-  background: #f2ead7;
+  background: var(--btn-hover);
 }
 
 .toggle-button-active {
-  background: #d9743a !important;
-  border-color: #c3622d !important;
-  color: #fff9f1 !important;
+  background: var(--accent) !important;
+  border-color: var(--accent-border) !important;
+  color: var(--text-on-accent) !important;
 }
 
 .toggle-button-active:hover {
-  background: #c9652f !important;
+  background: var(--accent-hover) !important;
 }
 
 .panel-toggle {
-  border: 1px solid rgba(88, 72, 52, 0.24);
-  background: #fbf6ea;
-  color: #231e18;
+  border: 1px solid var(--border-medium);
+  background: var(--bg-panel-strong);
+  color: var(--text-on-button);
   border-radius: 999px;
   padding: 6px 12px;
 }
 
 .panel-toggle:hover {
-  background: #f2ead7;
+  background: var(--btn-hover);
 }
 
 .layout {
@@ -130,11 +197,11 @@ input {
 }
 
 .panel {
-  background: rgba(249, 243, 231, 0.86);
-  border: 1px solid rgba(93, 76, 55, 0.16);
+  background: var(--bg-panel);
+  border: 1px solid var(--border-light);
   border-radius: 18px;
   padding: 16px;
-  box-shadow: 0 10px 35px rgba(73, 62, 48, 0.07);
+  box-shadow: var(--shadow-panel);
 }
 
 .panel h2 {
@@ -189,9 +256,9 @@ input {
   border-radius: 24px;
   overflow: hidden;
   overscroll-behavior: contain;
-  border: 1px solid rgba(93, 76, 55, 0.16);
-  background: #f4f0e6;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.32);
+  border: 1px solid var(--border-light);
+  background: var(--bg-canvas);
+  box-shadow: var(--shadow-inset);
 }
 
 .canvas-selection-overlay {
@@ -235,7 +302,7 @@ input {
 }
 
 .hex-cell:focus-visible polygon {
-  stroke: #d84f2a;
+  stroke: var(--focus);
   stroke-width: 2;
 }
 
@@ -258,8 +325,8 @@ input {
 textarea,
 select {
   border-radius: 12px;
-  border: 1px solid rgba(88, 72, 52, 0.24);
-  background: #fffdf7;
+  border: 1px solid var(--border-medium);
+  background: var(--bg-input);
   padding: 10px 12px;
 }
 
@@ -283,8 +350,8 @@ select {
   margin-bottom: 12px;
   padding: 12px 14px;
   border-radius: 14px;
-  background: rgba(255, 252, 245, 0.72);
-  border: 1px solid rgba(88, 72, 52, 0.12);
+  background: var(--bg-brush);
+  border: 1px solid var(--border-medium);
 }
 
 .format-brush-options {
@@ -300,7 +367,7 @@ select {
 
 .format-brush-summary {
   margin: 0;
-  color: #685d50;
+  color: var(--text-muted);
   font-size: 0.92rem;
 }
 
@@ -311,15 +378,15 @@ select {
 }
 
 .export-action-row button {
-  border: 1px solid rgba(88, 72, 52, 0.24);
-  background: #fbf6ea;
-  color: #231e18;
+  border: 1px solid var(--border-medium);
+  background: var(--bg-panel-strong);
+  color: var(--text-on-button);
   border-radius: 999px;
   padding: 8px 14px;
 }
 
 .export-action-row button:hover {
-  background: #f2ead7;
+  background: var(--btn-hover);
 }
 
 .empty-state {
@@ -330,9 +397,9 @@ select {
   justify-content: center;
   align-items: center;
   text-align: center;
-  background: rgba(249, 243, 231, 0.7);
+  background: var(--bg-empty);
   border-radius: 24px;
-  border: 1px solid rgba(93, 76, 55, 0.16);
+  border: 1px solid var(--border-light);
 }
 
 .meta-list p,
@@ -344,11 +411,11 @@ select {
   margin-bottom: 14px;
   padding: 10px 12px;
   border-radius: 12px;
-  background: linear-gradient(135deg, #fff3d2, #f7d88d);
-  border: 1px solid rgba(170, 118, 27, 0.28);
-  color: #5a3b0b;
+  background: var(--bg-banner);
+  border: 1px solid var(--border-banner);
+  color: var(--text-banner);
   font-weight: 700;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  box-shadow: var(--shadow-banner);
 }
 
 .history-list {
@@ -363,13 +430,42 @@ select {
   gap: 2px;
   padding: 10px 12px;
   border-radius: 12px;
-  background: rgba(255, 252, 245, 0.75);
-  border: 1px solid rgba(88, 72, 52, 0.12);
+  background: var(--bg-history);
+  border: 1px solid var(--border-medium);
 }
 
 .history-entry span {
-  color: #685d50;
+  color: var(--text-muted);
   font-size: 0.85rem;
+}
+
+/* Tag filter chips */
+.tag-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.tag-chip {
+  border: 1px solid var(--border-medium);
+  background: var(--bg-panel-strong);
+  color: var(--text-on-button);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.tag-chip:hover {
+  background: var(--btn-hover);
+}
+
+.tag-chip.active {
+  background: var(--accent);
+  border-color: var(--accent-border);
+  color: var(--text-on-accent);
 }
 
 @media (max-width: 1200px) {

@@ -1,4 +1,4 @@
-export type LayoutType = "flat-top-even-q";
+export type LayoutType = "flat-top-even-q" | "square";
 export type CellStatus = "designed" | "undesigned";
 export type IssueSeverity = "warning" | "invalid";
 export type HistorySource = "webui" | "cli" | "system";
@@ -279,6 +279,8 @@ export interface ExportRenderOptions {
   includeGrid: boolean;
   includeUndesigned: boolean;
   background: string;
+  /** Set true to omit the background rect (transparent PNG export) */
+  transparent?: boolean;
   padding: number;
   scale: number;
 }

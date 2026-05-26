@@ -12,3 +12,9 @@ storage/exports/*.tmp
 storage/exports/*.json
 storage/exports/*.png
 *.tsbuildinfo
+desktop.ini
+storage/mapdesigner.db
+storage/mapdesigner.db-shm
+storage/mapdesigner.db-wal
+storage/maps/*.json
+storage/exports/*.png

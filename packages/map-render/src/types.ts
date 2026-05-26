@@ -30,6 +30,8 @@ export interface MapScene {
   minX: number;
   minY: number;
   background: string;
+  /** Omit background rect in rendered SVG when true */
+  transparent?: boolean;
   layout: HexCellLayout[];
   defs: string[];
   options: Required<MapRenderOptions>;

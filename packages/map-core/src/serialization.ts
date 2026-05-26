@@ -1,6 +1,7 @@
 import { buildActiveCells } from "./activity.js";
 import type {
   DesignedCellRecord,
+  LayoutType,
   MapDocument,
   MapMeta,
   MapRuntimeState
@@ -36,7 +37,7 @@ export function normalizeDocument(document: MapDocument): MapDocument {
     schema_version: 1,
     meta: normalizeMeta(document.meta),
     grid: {
-      layout: "flat-top-even-q",
+      layout: document.grid?.layout === "square" ? "square" as const : "flat-top-even-q" as const,
       origin: { row: 0, col: 0 }
     },
     cells: sortCells(document.cells.map(normalizeCell))
@@ -60,6 +61,7 @@ export function createEmptyDocument(input: {
   name: string;
   description?: string;
   now?: string;
+  layout?: LayoutType;
 }): MapDocument {
   const now = input.now ?? new Date().toISOString();
   return normalizeDocument({
@@ -74,7 +76,7 @@ export function createEmptyDocument(input: {
       revision: 1
     },
     grid: {
-      layout: "flat-top-even-q",
+      layout: input.layout ?? "flat-top-even-q",
       origin: { row: 0, col: 0 }
     },
     cells: []

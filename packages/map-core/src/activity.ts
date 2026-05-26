@@ -1,9 +1,10 @@
 import { createCellId, createDisplayCoord } from "./coords.js";
-import { getNeighborCoords } from "./neighbors.js";
+import { getNeighborCoordsForLayout } from "./neighbors.js";
 import type {
   ActiveCell,
   DesignedCellRecord,
   GridCoordinate,
+  LayoutType,
   MapDocument
 } from "./types.js";
 
@@ -14,12 +15,13 @@ function sortCoords(a: GridCoordinate, b: GridCoordinate): number {
   return a.col - b.col;
 }
 
-export function getSeedCoordinates(): GridCoordinate[] {
+export function getSeedCoordinates(layout: LayoutType = "flat-top-even-q"): GridCoordinate[] {
   const origin = { row: 0, col: 0 };
-  return [origin, ...getNeighborCoords(origin)].sort(sortCoords);
+  return [origin, ...getNeighborCoordsForLayout(origin, layout)].sort(sortCoords);
 }
 
-export function buildActiveCells(document: MapDocument): ActiveCell[] {
+export function buildActiveCells(document: MapDocument, layout?: LayoutType): ActiveCell[] {
+  const effectiveLayout = layout ?? document.grid.layout;
   const designedById = new Map<string, DesignedCellRecord>();
   for (const cell of document.cells) {
     designedById.set(createCellId(cell.row, cell.col), cell);
@@ -27,13 +29,13 @@ export function buildActiveCells(document: MapDocument): ActiveCell[] {
 
   const coords = new Map<string, GridCoordinate>();
   if (document.cells.length === 0) {
-    for (const seed of getSeedCoordinates()) {
+    for (const seed of getSeedCoordinates(effectiveLayout)) {
       coords.set(createCellId(seed.row, seed.col), seed);
     }
   } else {
     for (const cell of document.cells) {
       coords.set(createCellId(cell.row, cell.col), { row: cell.row, col: cell.col });
-      for (const neighbor of getNeighborCoords(cell)) {
+      for (const neighbor of getNeighborCoordsForLayout(cell, effectiveLayout)) {
         coords.set(createCellId(neighbor.row, neighbor.col), neighbor);
       }
     }
