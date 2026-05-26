@@ -1,9 +1,12 @@
 import { buildActiveCells } from "./activity.js";
 import type {
   DesignedCellRecord,
+  MapFeatures,
   MapDocument,
   MapMeta,
-  MapRuntimeState
+  MapRuntimeState,
+  RiverFeature,
+  RiverPoint
 } from "./types.js";
 import { validateMapDocument } from "./validation.js";
 
@@ -40,6 +43,34 @@ function normalizeCell(cell: DesignedCellRecord): DesignedCellRecord {
   };
 }
 
+function sortRivers(rivers: RiverFeature[]): RiverFeature[] {
+  return [...rivers].sort((left, right) => left.id.localeCompare(right.id));
+}
+
+function normalizeRiverPoint(point: RiverPoint): RiverPoint {
+  return {
+    row: point.row,
+    col: point.col,
+    ...(typeof point.width === "number" ? { width: point.width } : {})
+  };
+}
+
+function normalizeRiver(river: RiverFeature): RiverFeature {
+  return {
+    id: river.id,
+    name: river.name,
+    points: river.points.map(normalizeRiverPoint),
+    ...(river.color ? { color: river.color } : {}),
+    ...(typeof river.opacity === "number" ? { opacity: river.opacity } : {})
+  };
+}
+
+function normalizeFeatures(features: Partial<MapFeatures> | undefined): MapFeatures {
+  return {
+    rivers: sortRivers((features?.rivers ?? []).map(normalizeRiver))
+  };
+}
+
 export function cloneDocument(document: MapDocument): MapDocument {
   return structuredClone(document);
 }
@@ -52,7 +83,8 @@ export function normalizeDocument(document: MapDocument): MapDocument {
       layout: "flat-top-even-q",
       origin: { row: 0, col: 0 }
     },
-    cells: sortCells(document.cells.map(normalizeCell))
+    cells: sortCells(document.cells.map(normalizeCell)),
+    features: normalizeFeatures(document.features)
   };
 }
 
@@ -90,7 +122,10 @@ export function createEmptyDocument(input: {
       layout: "flat-top-even-q",
       origin: { row: 0, col: 0 }
     },
-    cells: []
+    cells: [],
+    features: {
+      rivers: []
+    }
   });
 }
 

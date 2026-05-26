@@ -494,6 +494,47 @@ echo '{
 
 `--dry-run` 会返回完整执行结果，但不会写回地图文件。
 
+### 15.5 河流覆盖层
+
+河流覆盖层用于表示小河、支流、溪流等线性水系。它不会替代单元格自身的 `terrain`，而是叠加在已有地貌之上。
+
+在 WebUI 中，可以点击顶部 `河流` 模式，随后在地图上依次点击路径点；右侧河流面板会同步显示当前点数和路径文本。点数达到两个后点击 `完成` 会创建河流，点击 `取消` 会放弃当前草稿。创建后仍可在右侧面板直接编辑名称、路径和宽度锚点。
+
+通过 CLI 创建河流：
+
+```bash
+pnpm exec tsx apps/server/src/cli.ts maps rivers create \
+  --map-id demo-map \
+  --id main-river \
+  --name "Main River" \
+  --points R0C0,R0C2,R2C3 \
+  --widths R0C0:2,R0C1:4,R2C3:8
+```
+
+也可以通过结构化命令创建：
+
+```json
+{
+  "commands": [
+    {
+      "action": "create_river",
+      "source": "cli",
+      "river": {
+        "id": "main-river",
+        "name": "Main River",
+        "points": [
+          { "row": 0, "col": 0, "width": 2 },
+          { "row": 0, "col": 2 },
+          { "row": 2, "col": 3, "width": 8 }
+        ]
+      }
+    }
+  ]
+}
+```
+
+`points` 是河流控制点。系统会在相邻控制点之间自动补齐连续六角格路径。`width` 是可选宽度锚点，相邻宽度锚点之间会渐变；锚点可以落在自动补齐路径的中间格上。河流起点或终点接入湖泊、海洋、河口、潮滩等水域地貌时，渲染结果会显示端点衔接提示。
+
 ## 16. AI agent 使用建议
 
 如果你计划让 AI agent 调用本项目，推荐使用固定顺序：

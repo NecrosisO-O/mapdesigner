@@ -1,6 +1,7 @@
 import {
   type ActiveCell,
   type MapRuntimeState,
+  type RiverFeature,
   type TagKey
 } from "@mapdesigner/map-core";
 import {
@@ -36,6 +37,12 @@ interface MapCanvasProps {
   selectedCell: ActiveCell | null;
   selectedCellId: string | null;
   onSelectCell: (cell: ActiveCell) => void;
+  interactionMode?: "select" | "river-draw";
+  riverPreview?: RiverFeature | null;
+  riverDrawingPointCount?: number;
+  onRiverPointAdd?: (cell: ActiveCell) => void;
+  onFinishRiverDrawing?: () => void;
+  onCancelRiverDrawing?: () => void;
   onHoverCellChange?: (cell: ActiveCell | null) => void;
   showCoordinates: boolean;
   showShorthand: boolean;
@@ -228,9 +235,10 @@ export function MapCanvas(props: MapCanvasProps) {
         includeCoordinates: props.showCoordinates,
         includeShorthand: props.showShorthand,
         includeGrid: props.showGrid,
-        includeUndesigned: props.showUndesigned
+        includeUndesigned: props.showUndesigned,
+        previewRivers: props.riverPreview ? [props.riverPreview] : []
       }),
-    [props.map, props.showCoordinates, props.showGrid, props.showShorthand, props.showUndesigned]
+    [props.map, props.riverPreview, props.showCoordinates, props.showGrid, props.showShorthand, props.showUndesigned]
   );
   const sceneCellsById = useMemo(
     () => new Map(scene.layout.map((entry) => [entry.cell.id, entry.cell])),
@@ -270,6 +278,8 @@ export function MapCanvas(props: MapCanvasProps) {
         : effectiveScale >= PATTERN_VISIBILITY_SCALE
           ? "far"
           : "extreme-far";
+  const isRiverDrawing = props.interactionMode === "river-draw";
+  const riverDrawingPointCount = props.riverDrawingPointCount ?? 0;
 
   const setCamera = useCallback((nextCamera: CanvasCamera) => {
     const normalizedCamera = {
@@ -379,6 +389,14 @@ export function MapCanvas(props: MapCanvasProps) {
     props.onHoverCellChange?.(null);
   };
 
+  const handleCellAction = (cell: ActiveCell) => {
+    if (props.interactionMode === "river-draw") {
+      props.onRiverPointAdd?.(cell);
+      return;
+    }
+    props.onSelectCell(cell);
+  };
+
   const finishDrag = (pointerId: number, target: HTMLDivElement, allowClickSelection = true) => {
     const currentDrag = dragState.current;
     const isCurrentPointer = currentDrag?.pointerId === pointerId;
@@ -395,7 +413,7 @@ export function MapCanvas(props: MapCanvasProps) {
       suppressNextCellClickRef.current = false;
     }, 0);
     if (clickedCell) {
-      props.onSelectCell(clickedCell);
+      handleCellAction(clickedCell);
     }
   };
 
@@ -413,7 +431,11 @@ export function MapCanvas(props: MapCanvasProps) {
   return (
     <div
       ref={containerRef}
-      className={isDragging ? "map-canvas map-canvas-dragging" : "map-canvas"}
+      className={[
+        "map-canvas",
+        isDragging ? "map-canvas-dragging" : "",
+        isRiverDrawing ? "map-canvas-river-draw" : ""
+      ].filter(Boolean).join(" ")}
       onPointerDown={(event) => {
         if (event.button !== 0) {
           return;
@@ -468,8 +490,31 @@ export function MapCanvas(props: MapCanvasProps) {
           <span>{props.selectedCell.display_coord} | {props.selectedCell.status}</span>
         </div>
       ) : null}
+      {isRiverDrawing ? (
+        <div
+          className="canvas-river-toolbar"
+          aria-label="河流绘制工具"
+          onPointerDown={(event) => event.stopPropagation()}
+          onPointerUp={(event) => event.stopPropagation()}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <span>河流绘制</span>
+          <strong>路径点 {riverDrawingPointCount}</strong>
+          <button
+            type="button"
+            className="primary-button"
+            onClick={props.onFinishRiverDrawing}
+            disabled={riverDrawingPointCount < 2}
+          >
+            完成
+          </button>
+          <button type="button" onClick={props.onCancelRiverDrawing}>
+            取消
+          </button>
+        </div>
+      ) : null}
       <div className="canvas-help-overlay" aria-hidden="true">
-        滚轮缩放 · 拖拽平移
+        {isRiverDrawing ? "河流绘制 · 点击单元格添加路径点" : "滚轮缩放 · 拖拽平移"}
       </div>
       <svg
         width="100%"
@@ -514,11 +559,88 @@ export function MapCanvas(props: MapCanvasProps) {
                     suppressNextCellClickRef.current = false;
                     return;
                   }
-                  props.onSelectCell(entry.cell);
+                  handleCellAction(entry.cell);
                 }}
               />
             </g>
           ))}
+          {scene.riverSegments.length > 0 ? (
+            <g className="river-layer" pointerEvents="none" aria-hidden="true">
+              {scene.riverSegments.map((segment) => (
+                <g
+                  key={segment.id}
+                  data-river-id={segment.riverId}
+                  data-river-preview={segment.preview ? "true" : undefined}
+                >
+                  <line
+                    x1={segment.x1}
+                    y1={segment.y1}
+                    x2={segment.x2}
+                    y2={segment.y2}
+                    stroke="#EAF8FC"
+                    strokeWidth={segment.width + 2.2}
+                    strokeLinecap="round"
+                    opacity={Math.min(0.9, segment.opacity)}
+                    strokeDasharray={segment.preview ? "7 5" : undefined}
+                  />
+                  <line
+                    x1={segment.x1}
+                    y1={segment.y1}
+                    x2={segment.x2}
+                    y2={segment.y2}
+                    stroke={segment.color}
+                    strokeWidth={segment.width}
+                    strokeLinecap="round"
+                    opacity={segment.opacity}
+                    strokeDasharray={segment.preview ? "7 5" : undefined}
+                  />
+                </g>
+              ))}
+              {scene.riverEndpoints.map((endpoint) => (
+                <circle
+                  key={endpoint.id}
+                  data-river-endpoint={endpoint.kind}
+                  data-river-id={endpoint.riverId}
+                  data-river-preview={endpoint.preview ? "true" : undefined}
+                  cx={endpoint.x}
+                  cy={endpoint.y}
+                  r={endpoint.radius}
+                  fill={endpoint.color}
+                  stroke="#EAF8FC"
+                  strokeWidth="2"
+                  opacity={Math.min(1, endpoint.opacity + 0.08)}
+                />
+              ))}
+              {scene.riverControlPoints.map((point) => (
+                <g
+                  key={point.id}
+                  data-river-control-point={point.position}
+                  data-river-id={point.riverId}
+                  data-river-preview={point.preview ? "true" : undefined}
+                >
+                  <circle
+                    cx={point.x}
+                    cy={point.y}
+                    r={point.radius}
+                    fill="#F7FBFC"
+                    stroke={point.color}
+                    strokeWidth="1.8"
+                    opacity={Math.min(1, point.opacity + 0.08)}
+                  />
+                  <text
+                    x={point.x}
+                    y={point.y + 2.5}
+                    textAnchor="middle"
+                    fontSize="7"
+                    fontWeight="800"
+                    fill={point.color}
+                  >
+                    {point.label}
+                  </text>
+                </g>
+              ))}
+            </g>
+          ) : null}
         </g>
       </svg>
     </div>

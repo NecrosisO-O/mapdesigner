@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { applyCommand, createEmptyDocument, createRuntimeState } from "@mapdesigner/map-core";
 import { buildHexLayout } from "./layout.js";
+import { buildMapScene, renderSvgString } from "./scene.js";
 import type { ActiveCell } from "@mapdesigner/map-core";
 
 function makeCell(row: number, col: number): ActiveCell {
@@ -34,5 +36,66 @@ describe("buildHexLayout", () => {
     expect(upperRight!.centerY).toBeLessThan(origin!.centerY);
     expect(lowerRight!.centerX).toBeGreaterThan(origin!.centerX);
     expect(lowerRight!.centerY).toBeGreaterThan(origin!.centerY);
+  });
+});
+
+describe("river rendering", () => {
+  it("renders river overlay segments and includes river coordinates in scene bounds", () => {
+    const runtime = createRuntimeState(createEmptyDocument({ id: "river-render", name: "River Render" }));
+    const result = applyCommand(runtime, {
+      action: "create_river",
+      source: "cli",
+      river: {
+        id: "main-river",
+        name: "Main River",
+        points: [
+          { row: 0, col: 0, width: 2 },
+          { row: 0, col: 3, width: 8 }
+        ]
+      }
+    });
+
+    expect(result.ok).toBe(true);
+    const scene = buildMapScene(result.map);
+    expect(scene.riverSegments).toHaveLength(3);
+    expect(scene.riverSegments[0]?.width).toBeGreaterThan(2);
+    const svg = renderSvgString(scene);
+    expect(svg).toContain('data-river-id="main-river"');
+    expect(svg).toContain('stroke="#2F83B7"');
+  });
+
+  it("renders water endpoint markers and preview river segments", () => {
+    const runtime = createRuntimeState(createEmptyDocument({ id: "river-preview", name: "River Preview" }));
+    const withLake = applyCommand(runtime, {
+      action: "set_cell",
+      source: "cli",
+      target: { row: 0, col: 2 },
+      changes: { terrain: "lake" }
+    });
+    expect(withLake.ok).toBe(true);
+
+    const scene = buildMapScene(withLake.map, {
+      previewRivers: [
+        {
+          id: "__river-preview",
+          name: "Preview",
+          points: [
+            { row: 0, col: 0, width: 2 },
+            { row: 0, col: 2, width: 6 }
+          ],
+          color: "#3A8EC1",
+          opacity: 0.82
+        }
+      ]
+    });
+    const svg = renderSvgString(scene);
+
+    expect(scene.riverSegments).toHaveLength(2);
+    expect(scene.riverSegments.every((segment) => segment.preview)).toBe(true);
+    expect(scene.riverEndpoints).toHaveLength(1);
+    expect(scene.riverControlPoints.map((point) => point.position)).toEqual(["start", "end"]);
+    expect(svg).toContain('data-river-preview="true"');
+    expect(svg).toContain('data-river-endpoint="water"');
+    expect(svg).toContain('data-river-control-point="start"');
   });
 });

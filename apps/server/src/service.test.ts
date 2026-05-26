@@ -75,6 +75,23 @@ describe("server service", () => {
     expect(applied.stats.terrain_summary.after.plain).toBe(1);
     expect(applied.stats.biome_summary.after.grassland).toBe(1);
 
+    const riverApplied = await service.applyCommands(created.document.meta.id, [
+      {
+        action: "create_river",
+        source: "cli",
+        river: {
+          id: "main-river",
+          name: "Main River",
+          points: [
+            { row: 0, col: 0, width: 2 },
+            { row: 0, col: 2, width: 8 }
+          ]
+        }
+      }
+    ]);
+    expect(riverApplied.map.document.features.rivers).toHaveLength(1);
+    expect(riverApplied.command_results[0]?.action).toBe("create_river");
+
     const jsonExport = await service.exportJson(created.document.meta.id);
     expect(await fs.stat(jsonExport.path)).toBeTruthy();
 
@@ -127,11 +144,32 @@ describe("server service", () => {
         }
       }
     ]);
+    await service.applyCommands(created.document.meta.id, [
+      {
+        action: "create_river",
+        source: "cli",
+        river: {
+          id: "inspect-river",
+          name: "Inspect River",
+          points: [
+            { row: 0, col: 0, width: 2 },
+            { row: 0, col: 2, width: 6 }
+          ]
+        }
+      }
+    ]);
 
     const cell = await service.inspectCell(created.document.meta.id, { row: 0, col: 0 });
     expect(cell.cell.display_coord).toBe("R0C0");
     expect(cell.cell.status).toBe("designed");
     expect(cell.neighbors).toHaveLength(6);
+    expect(cell.rivers).toEqual([
+      expect.objectContaining({
+        river_id: "inspect-river",
+        river_name: "Inspect River",
+        width: 2
+      })
+    ]);
 
     const area = await service.inspectArea(created.document.meta.id, { row: 0, col: 0 }, 1);
     expect(area.radius).toBe(1);

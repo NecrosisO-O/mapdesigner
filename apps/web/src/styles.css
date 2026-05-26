@@ -386,20 +386,33 @@ textarea {
   cursor: grabbing;
 }
 
+.map-canvas-river-draw {
+  cursor: crosshair;
+}
+
+.map-canvas-river-draw.map-canvas-dragging {
+  cursor: grabbing;
+}
+
 .map-canvas svg {
   display: block;
 }
 
 .canvas-selection-overlay,
-.canvas-help-overlay {
+.canvas-help-overlay,
+.canvas-river-toolbar {
   position: absolute;
   z-index: 2;
-  pointer-events: none;
   border: 1px solid rgba(35, 43, 40, 0.18);
   border-radius: 5px;
   background: rgba(247, 249, 247, 0.92);
   color: #24302c;
   box-shadow: 0 4px 14px rgba(24, 31, 29, 0.08);
+}
+
+.canvas-selection-overlay,
+.canvas-help-overlay {
+  pointer-events: none;
 }
 
 .canvas-selection-overlay {
@@ -422,6 +435,40 @@ textarea {
   color: #5a6662;
   font-size: 0.78rem;
   font-weight: 650;
+}
+
+.canvas-river-toolbar {
+  left: 50%;
+  top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100% - 24px);
+  padding: 7px 8px;
+  transform: translateX(-50%);
+}
+
+.canvas-river-toolbar span {
+  color: #44504d;
+  font-size: 0.82rem;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.canvas-river-toolbar strong {
+  padding: 4px 7px;
+  border: 1px solid #c9d6d2;
+  border-radius: 5px;
+  background: #eef6f8;
+  color: #2f6378;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.canvas-river-toolbar button {
+  min-height: 28px;
+  padding: 4px 8px;
+  white-space: nowrap;
 }
 
 .hex-cell {
@@ -498,6 +545,27 @@ textarea {
   margin: 0;
   color: #64706d;
   font-size: 0.84rem;
+}
+
+.river-editor-panel {
+  flex: 0 0 auto;
+}
+
+.river-draw-actions {
+  margin-top: 6px;
+}
+
+.river-draw-summary {
+  margin: 7px 0 0;
+  color: #56625f;
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.compact-field-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(82px, 0.7fr);
+  gap: 10px;
 }
 
 .editor-section {

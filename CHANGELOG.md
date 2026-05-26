@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+### Added
+
+- Added river overlay features with structured commands, CLI helpers, canvas drawing, SVG/WebUI rendering, width anchors, water endpoint hints, and legacy map compatibility.
+- Added water and wetland tone refinements so brackish estuaries, tidal flats, wetlands, and deltas read less like ordinary land.
+
 ## [0.2.0] - 2026-05-25
 
 ### Added
