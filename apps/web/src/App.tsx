@@ -7,6 +7,7 @@ import { TopToolbar } from "./TopToolbar.js";
 import { useCellEditor } from "./useCellEditor.js";
 import { useExportPanel } from "./useExportPanel.js";
 import { useMapWorkspace } from "./useMapWorkspace.js";
+import { useRiverEditor } from "./useRiverEditor.js";
 
 export default function App() {
   const [message, setMessage] = useState<string>("准备就绪");
@@ -14,8 +15,10 @@ export default function App() {
   const [showShorthand, setShowShorthand] = useState(false);
   const [showGrid, setShowGrid] = useState(true);
   const [showUndesigned, setShowUndesigned] = useState(true);
+  const [interactionMode, setInteractionMode] = useState<"select" | "river-draw">("select");
   const workspace = useMapWorkspace(setMessage);
   const editor = useCellEditor(workspace.currentMap, workspace.setCurrentMap, setMessage);
+  const riverEditor = useRiverEditor(workspace.currentMap, workspace.setCurrentMap, setMessage);
   const exportPanel = useExportPanel(setMessage);
 
   async function handleCreateMap(): Promise<void> {
@@ -94,6 +97,19 @@ export default function App() {
         onImportFile={(file) => void handleImportFile(file)}
         onDuplicateMap={() => void handleDuplicateMap()}
         onDeleteMap={() => void handleDeleteMap()}
+        interactionMode={interactionMode}
+        onInteractionModeChange={(mode) => {
+          if (mode === interactionMode) {
+            return;
+          }
+          setInteractionMode(mode);
+          if (mode === "river-draw") {
+            editor.disableFormatBrush();
+            riverEditor.startRiverDrawing();
+          } else if (riverEditor.riverDrawingStatus === "drawing") {
+            riverEditor.cancelRiverDrawing();
+          }
+        }}
         onUndo={() => {
           if (!workspace.currentMap) {
             return;
@@ -187,6 +203,19 @@ export default function App() {
               selectedCell={editor.selectedCell}
               selectedCellId={editor.selectedCellId}
               onSelectCell={editor.handleCanvasCellSelect}
+              interactionMode={interactionMode}
+              riverPreview={riverEditor.riverPreview}
+              riverDrawingPointCount={riverEditor.riverDrawingPoints.length}
+              onRiverPointAdd={riverEditor.appendRiverPoint}
+              onFinishRiverDrawing={() => {
+                if (riverEditor.finishRiverDrawing()) {
+                  setInteractionMode("select");
+                }
+              }}
+              onCancelRiverDrawing={() => {
+                riverEditor.cancelRiverDrawing();
+                setInteractionMode("select");
+              }}
               showCoordinates={showCoordinates}
               showShorthand={showShorthand}
               showGrid={showGrid}
@@ -210,6 +239,12 @@ export default function App() {
           biomeOptions={editor.biomeOptions}
           formatBrushEnabled={editor.formatBrushEnabled}
           formatBrushScope={editor.formatBrushScope}
+          rivers={workspace.currentMap?.document.features?.rivers ?? []}
+          selectedRiverId={riverEditor.selectedRiverId}
+          riverDraft={riverEditor.riverDraft}
+          riverDirty={riverEditor.riverDirty}
+          riverDrawingStatus={riverEditor.riverDrawingStatus}
+          riverDrawingPointCount={riverEditor.riverDrawingPoints.length}
           canUseFormatBrush={editor.canUseFormatBrush}
           cellDirty={editor.cellDirty}
           onApplyDraft={editor.applyDraft}
@@ -234,6 +269,43 @@ export default function App() {
               note: value
             }))
           }
+          onSelectRiver={(id) => {
+            riverEditor.selectRiver(id);
+            setInteractionMode("select");
+          }}
+          onStartNewRiver={() => {
+            riverEditor.startNewRiver();
+            setInteractionMode("select");
+          }}
+          onRiverDraftChange={(patch) =>
+            riverEditor.setRiverDraft((current) => ({
+              ...current,
+              ...patch
+            }))
+          }
+          onApplyRiverDraft={() => {
+            if (riverEditor.applyRiverDraft()) {
+              setInteractionMode("select");
+            }
+          }}
+          onDeleteSelectedRiver={() => {
+            riverEditor.deleteSelectedRiver();
+            setInteractionMode("select");
+          }}
+          onStartRiverDrawing={() => {
+            setInteractionMode("river-draw");
+            editor.disableFormatBrush();
+            riverEditor.startRiverDrawing();
+          }}
+          onFinishRiverDrawing={() => {
+            if (riverEditor.finishRiverDrawing()) {
+              setInteractionMode("select");
+            }
+          }}
+          onCancelRiverDrawing={() => {
+            riverEditor.cancelRiverDrawing();
+            setInteractionMode("select");
+          }}
           getFormatBrushLabel={editor.getFormatBrushLabel}
         />
       </main>

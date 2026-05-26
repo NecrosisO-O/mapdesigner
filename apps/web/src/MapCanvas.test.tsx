@@ -21,6 +21,9 @@ const sampleMap: MapRuntimeState = {
       layout: "flat-top-even-q",
       origin: { row: 0, col: 0 }
     },
+    features: {
+      rivers: []
+    },
     cells: [
       {
         row: 0,
@@ -180,6 +183,54 @@ describe("MapCanvas", () => {
     fireEvent.pointerUp(container, { pointerId: 2, clientX: 430, clientY: 300 });
 
     expect(onSelectCell).toHaveBeenCalledTimes(1);
+  });
+
+  it("adds river points in draw mode without changing cell selection", async () => {
+    const onSelectCell = vi.fn();
+    const onRiverPointAdd = vi.fn();
+    render(
+      <MapCanvas
+        map={sampleMap}
+        selectedCell={null}
+        selectedCellId={null}
+        onSelectCell={onSelectCell}
+        interactionMode="river-draw"
+        onRiverPointAdd={onRiverPointAdd}
+        riverPreview={{
+          id: "__river-preview",
+          name: "Preview",
+          points: [
+            { row: 0, col: 0, width: 4 },
+            { row: 0, col: 1 }
+          ],
+          color: "#2F83B7",
+          opacity: 0.88
+        }}
+        riverDrawingPointCount={2}
+        onFinishRiverDrawing={() => {}}
+        onCancelRiverDrawing={() => {}}
+        showCoordinates
+        showShorthand
+        showGrid
+        showUndesigned
+      />
+    );
+
+    const container = screen.getByLabelText("Map canvas").parentElement as HTMLDivElement;
+    const designedCell = screen.getByRole("button", { name: "R0C0 designed" });
+    mockCanvasRect(container);
+    fireEvent(window, new Event("resize"));
+
+    fireEvent.pointerDown(designedCell, { button: 0, pointerId: 1, clientX: 400, clientY: 300 });
+    fireEvent.pointerUp(container, { pointerId: 1, clientX: 400, clientY: 300 });
+
+    expect(onRiverPointAdd).toHaveBeenCalledTimes(1);
+    expect(onRiverPointAdd).toHaveBeenLastCalledWith(expect.objectContaining({ id: "cell@0,0" }));
+    expect(onSelectCell).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("河流绘制工具").textContent).toContain("路径点 2");
+    expect(screen.getByLabelText("Map canvas").querySelector('[data-river-preview="true"]')).toBeTruthy();
+    expect(screen.getByLabelText("Map canvas").querySelector('[data-river-control-point="start"]')).toBeTruthy();
+    expect(screen.getByLabelText("Map canvas").querySelector('[data-river-control-point="end"]')).toBeTruthy();
   });
 
   it("limits coordinate labels by viewport and density instead of rendering every cell at once", async () => {

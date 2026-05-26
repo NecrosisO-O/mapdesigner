@@ -21,6 +21,8 @@ interface TopToolbarProps {
   onImportFile: (file: File) => void;
   onDuplicateMap: () => void;
   onDeleteMap: () => void;
+  interactionMode: "select" | "river-draw";
+  onInteractionModeChange: (mode: "select" | "river-draw") => void;
   onUndo: () => void;
   onRedo: () => void;
 }
@@ -72,6 +74,27 @@ export function TopToolbar(props: TopToolbarProps) {
           </button>
           <button onClick={props.onRedo} disabled={!canRedo}>
             重做
+          </button>
+        </div>
+
+        <div className="toolbar-group toolbar-mode-actions" role="group" aria-label="编辑模式">
+          <button
+            type="button"
+            className={props.interactionMode === "select" ? "toggle-button-active" : undefined}
+            aria-pressed={props.interactionMode === "select"}
+            onClick={() => props.onInteractionModeChange("select")}
+            disabled={!props.currentMap}
+          >
+            选择
+          </button>
+          <button
+            type="button"
+            className={props.interactionMode === "river-draw" ? "toggle-button-active" : undefined}
+            aria-pressed={props.interactionMode === "river-draw"}
+            onClick={() => props.onInteractionModeChange("river-draw")}
+            disabled={!props.currentMap}
+          >
+            河流
           </button>
         </div>
 

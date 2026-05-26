@@ -7,6 +7,7 @@ import {
   createDisplayCoord,
   createEmptyDocument,
   createRuntimeState,
+  findRiversAtCell,
   getNeighborCoords,
   parseDocument,
   type AreaInspectionResult,
@@ -515,7 +516,13 @@ export async function inspectCell(id: string, target: GridCoordinate): Promise<C
     cell: getCellFromRuntime(runtime, target),
     neighbors: getNeighborCoords(target)
       .map((coord) => getCellFromRuntime(runtime, coord))
-      .sort((left, right) => compareCoords(left, right))
+      .sort((left, right) => compareCoords(left, right)),
+    rivers: findRiversAtCell(runtime.document.features.rivers, target).map((sample) => ({
+      river_id: sample.river_id,
+      river_name: sample.river_name,
+      width: sample.width,
+      path_index: sample.index
+    }))
   };
 }
 

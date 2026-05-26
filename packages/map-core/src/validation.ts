@@ -1,9 +1,12 @@
 import { BIOME_KEYS, TAG_KEYS, TERRAIN_KEYS } from "./dictionaries.js";
+import { MAX_RIVER_WIDTH, MIN_RIVER_WIDTH } from "./rivers.js";
 import type {
   BiomeKey,
   DesignedCellRecord,
   GridCoordinate,
   MapDocument,
+  RiverFeature,
+  RiverPoint,
   TagKey,
   TerrainKey,
   ValidationIssue
@@ -30,6 +33,14 @@ export function isTagKey(value: unknown): value is TagKey {
   return typeof value === "string" && TAG_KEYS.includes(value as TagKey);
 }
 
+export function isRiverId(value: unknown): value is string {
+  return typeof value === "string" && /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(value);
+}
+
+function isHexColor(value: unknown): value is string {
+  return typeof value === "string" && /^#[0-9A-Fa-f]{6}$/.test(value);
+}
+
 export function validateCoordinate(coord: GridCoordinate, target: string): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
   if (!Number.isInteger(coord.row)) {
@@ -37,6 +48,75 @@ export function validateCoordinate(coord: GridCoordinate, target: string): Valid
   }
   if (!Number.isInteger(coord.col)) {
     issues.push(issue("invalid_col", "col must be an integer", "invalid", `${target}.col`));
+  }
+  return issues;
+}
+
+export function validateRiverPoint(point: RiverPoint, target: string): ValidationIssue[] {
+  const issues = validateCoordinate(point, target);
+  if (
+    point.width !== undefined &&
+    point.width !== null &&
+    (typeof point.width !== "number" || !Number.isFinite(point.width) || point.width < MIN_RIVER_WIDTH || point.width > MAX_RIVER_WIDTH)
+  ) {
+    issues.push(
+      issue(
+        "invalid_river_width",
+        `river width must be a number between ${MIN_RIVER_WIDTH} and ${MAX_RIVER_WIDTH}`,
+        "invalid",
+        `${target}.width`
+      )
+    );
+  }
+  return issues;
+}
+
+export function validateRiverFeature(river: RiverFeature, index = 0): ValidationIssue[] {
+  const target = `features.rivers[${index}]`;
+  const issues: ValidationIssue[] = [];
+  if (!isRiverId(river.id)) {
+    issues.push(
+      issue(
+        "invalid_river_id",
+        "river id may only contain letters, numbers, underscores, and dashes, and must be 1-64 characters",
+        "invalid",
+        `${target}.id`
+      )
+    );
+  }
+  if (typeof river.name !== "string" || !river.name.trim()) {
+    issues.push(issue("invalid_river_name", "river name must be a non-empty string", "invalid", `${target}.name`));
+  }
+  if (!Array.isArray(river.points)) {
+    issues.push(issue("invalid_river_points", "river points must be an array", "invalid", `${target}.points`));
+  } else {
+    if (river.points.length < 2) {
+      issues.push(issue("invalid_river_points", "river requires at least two points", "invalid", `${target}.points`));
+    }
+    river.points.forEach((point, pointIndex) => {
+      issues.push(...validateRiverPoint(point, `${target}.points[${pointIndex}]`));
+      const previous = river.points[pointIndex - 1];
+      if (previous && previous.row === point.row && previous.col === point.col) {
+        issues.push(
+          issue(
+            "duplicate_river_point",
+            "consecutive river points cannot use the same coordinate",
+            "invalid",
+            `${target}.points[${pointIndex}]`
+          )
+        );
+      }
+    });
+  }
+  if (river.color !== undefined && river.color !== null && !isHexColor(river.color)) {
+    issues.push(issue("invalid_river_color", "river color must be a #RRGGBB color", "invalid", `${target}.color`));
+  }
+  if (
+    river.opacity !== undefined &&
+    river.opacity !== null &&
+    (typeof river.opacity !== "number" || !Number.isFinite(river.opacity) || river.opacity < 0.1 || river.opacity > 1)
+  ) {
+    issues.push(issue("invalid_river_opacity", "river opacity must be between 0.1 and 1", "invalid", `${target}.opacity`));
   }
   return issues;
 }
@@ -200,6 +280,25 @@ export function validateMapDocument(document: unknown): ValidationIssue[] {
       }
       seen.add(key);
     });
+  }
+
+  if (value.features !== undefined) {
+    if (!value.features || typeof value.features !== "object") {
+      issues.push(issue("invalid_features", "features must be an object", "invalid", "features"));
+    } else if (value.features.rivers !== undefined) {
+      if (!Array.isArray(value.features.rivers)) {
+        issues.push(issue("invalid_rivers", "features.rivers must be an array", "invalid", "features.rivers"));
+      } else {
+        const seenRiverIds = new Set<string>();
+        value.features.rivers.forEach((river, index) => {
+          issues.push(...validateRiverFeature(river, index));
+          if (seenRiverIds.has(river.id)) {
+            issues.push(issue("duplicate_river", "duplicate river ids are not allowed", "invalid", `features.rivers[${index}]`));
+          }
+          seenRiverIds.add(river.id);
+        });
+      }
+    }
   }
 
   return issues;

@@ -15,6 +15,7 @@ It combines a visual WebUI with a structured CLI, so the same map can evolve alo
 
 - Edit hex-based maps in a visual WebUI
 - Layer terrain and biome data on each cell
+- Draw river overlays across cells from the WebUI or CLI, with width anchors and water endpoint hints
 - Save maps as structured JSON and reopen them later
 - Export rendered maps as PNG references
 - Inspect and modify maps through a structured CLI for scripts and AI agents
@@ -69,7 +70,7 @@ More examples and command conventions are documented in [Agent CLI Guide](./docs
 
 ## Current Status
 
-`v0.2.0` focuses on a more practical editor surface, smoother deep zoom behavior, safer local storage handling, and richer structured CLI/export workflows.
+`v0.2.0` focuses on a more practical editor surface, smoother deep zoom behavior, safer local storage handling, richer structured CLI/export workflows, and early overlay features such as rivers.
 
 ## Development Note
 

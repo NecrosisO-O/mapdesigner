@@ -20,6 +20,9 @@ const sampleMap = {
       layout: "flat-top-even-q",
       origin: { row: 0, col: 0 }
     },
+    features: {
+      rivers: []
+    },
     cells: [
       {
         row: 0,
@@ -284,6 +287,58 @@ describe("App", () => {
     expect(within(cellPanel as HTMLElement).getByRole("button", { name: "应用" })).toBeTruthy();
     expect(within(cellPanel as HTMLElement).getByRole("button", { name: "还原" })).toBeTruthy();
     expect(within(cellPanel as HTMLElement).getByRole("button", { name: "清空" })).toBeTruthy();
+  });
+
+  it("creates a river overlay from the detail panel", async () => {
+    render(<App />);
+    await screen.findByText("已打开 Sample Map");
+
+    const riverPanel = screen.getByRole("heading", { name: "河流覆盖层" }).closest("section");
+    expect(riverPanel).toBeTruthy();
+    fireEvent.change(within(riverPanel as HTMLElement).getByLabelText("Name"), { target: { value: "Main River" } });
+    fireEvent.change(within(riverPanel as HTMLElement).getByLabelText("Points"), { target: { value: "R0C0, R0C2" } });
+    fireEvent.change(within(riverPanel as HTMLElement).getByLabelText("Width anchors"), {
+      target: { value: "R0C0:2, R0C1:5, R0C2:8" }
+    });
+    fireEvent.click(within(riverPanel as HTMLElement).getByRole("button", { name: "应用河流" }));
+
+    expect(await screen.findByText("河流修改已应用，等待保存到文件")).toBeTruthy();
+    expect(within(riverPanel as HTMLElement).getByRole("option", { name: "Main River (main-river)" })).toBeTruthy();
+    const svg = screen.getByLabelText("Map canvas");
+    expect(svg.querySelector('[data-river-id="main-river"]')).toBeTruthy();
+  });
+
+  it("draws a river from canvas clicks and returns to cell selection", async () => {
+    render(<App />);
+    await screen.findByText("已打开 Sample Map");
+
+    const riverPanel = screen.getByRole("heading", { name: "河流覆盖层" }).closest("section");
+    expect(riverPanel).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "河流" }));
+    expect(screen.getByRole("button", { name: "河流" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByLabelText("河流绘制工具")).toBeTruthy();
+
+    fireEvent.click(getCellButton("R0C0", "designed"));
+    expect(await screen.findByText("路径点：1")).toBeTruthy();
+    expect(screen.getByLabelText("河流绘制工具").textContent).toContain("路径点 1");
+    expect(screen.queryByLabelText("当前选中信息")).toBeNull();
+
+    fireEvent.click(getCellButton("R0C1", "undesigned"));
+    expect(await screen.findByText("路径点：2")).toBeTruthy();
+    expect(screen.getByLabelText("河流绘制工具").textContent).toContain("路径点 2");
+    expect(screen.getByLabelText("Map canvas").querySelector('[data-river-preview="true"]')).toBeTruthy();
+    expect(screen.getByLabelText("Map canvas").querySelector('[data-river-control-point="start"]')).toBeTruthy();
+    expect(screen.getByLabelText("Map canvas").querySelector('[data-river-control-point="end"]')).toBeTruthy();
+
+    fireEvent.click(within(screen.getByLabelText("河流绘制工具")).getByRole("button", { name: "完成" }));
+
+    expect(await screen.findByText("河流修改已应用，等待保存到文件")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "选择" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByLabelText("Map canvas").querySelector('[data-river-id="river-1"]')).toBeTruthy();
+
+    fireEvent.click(getCellButton("R0C1", "undesigned"));
+    expect(await screen.findByLabelText("当前选中信息")).toBeTruthy();
+    expect(screen.getByLabelText("当前选中信息").textContent).toContain("R0C1 | undesigned");
   });
 
   it("enables format brush from a designed cell and disables it on an undesigned cell", async () => {

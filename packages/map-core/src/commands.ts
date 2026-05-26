@@ -1,5 +1,6 @@
 import { createCellId, createDisplayCoord, sameCoord } from "./coords.js";
 import { pushHistory } from "./history.js";
+import { buildHexLine } from "./rivers.js";
 import { cloneDocument, normalizeDocument } from "./serialization.js";
 import type {
   ActiveCell,
@@ -9,13 +10,18 @@ import type {
   GridCoordinate,
   MapCommand,
   MapRuntimeState,
+  RiverFeature,
+  RiverPoint,
   ValidationIssue
 } from "./types.js";
 import {
+  isRiverId,
   isBiomeKey,
   isTagKey,
   isTerrainKey,
   validateCoordinate,
+  validateRiverFeature,
+  validateRiverPoint,
   validateTerrainBiomePair
 } from "./validation.js";
 
@@ -39,6 +45,62 @@ function removeCell(cells: DesignedCellRecord[], target: GridCoordinate): boolea
   }
   cells.splice(index, 1);
   return true;
+}
+
+function createRiverId(name: string, existing: RiverFeature[]): string {
+  const slug = name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 48) || "river";
+  const existingIds = new Set(existing.map((river) => river.id));
+  if (!existingIds.has(slug)) {
+    return slug;
+  }
+  let suffix = 2;
+  while (existingIds.has(`${slug}-${suffix}`)) {
+    suffix += 1;
+  }
+  return `${slug}-${suffix}`;
+}
+
+function normalizeRiverPoint(point: RiverPoint): RiverPoint {
+  return {
+    row: point.row,
+    col: point.col,
+    ...(typeof point.width === "number" ? { width: point.width } : {})
+  };
+}
+
+function normalizeRiverFeature(river: RiverFeature): RiverFeature {
+  return {
+    id: river.id,
+    name: river.name.trim(),
+    points: river.points.map(normalizeRiverPoint),
+    ...(river.color ? { color: river.color } : {}),
+    ...(typeof river.opacity === "number" ? { opacity: river.opacity } : {})
+  };
+}
+
+function findRiverIndex(rivers: RiverFeature[], id: string): number {
+  return rivers.findIndex((river) => river.id === id);
+}
+
+function insertRiverWidthAnchor(river: RiverFeature, target: GridCoordinate, width: number): boolean {
+  for (let index = 0; index < river.points.length - 1; index += 1) {
+    const line = buildHexLine(river.points[index]!, river.points[index + 1]!);
+    const lineIndex = line.findIndex((coord) => sameCoord(coord, target));
+    if (lineIndex > 0 && lineIndex < line.length - 1) {
+      river.points.splice(index + 1, 0, {
+        row: target.row,
+        col: target.col,
+        width
+      });
+      return true;
+    }
+  }
+  return false;
 }
 
 function validateTags(tags: unknown, target: string): ValidationIssue[] {
@@ -419,6 +481,201 @@ export function applyCommand(state: MapRuntimeState, command: MapCommand): Comma
       working.meta.revision += 1;
       changed.push(command.target);
       return finalize(state, working, changed, warnings, [], "annotate_cell", source);
+    }
+
+    case "create_river": {
+      const river: RiverFeature = normalizeRiverFeature({
+        id: command.river.id ?? createRiverId(command.river.name, working.features.rivers),
+        name: command.river.name,
+        points: command.river.points,
+        color: command.river.color,
+        opacity: command.river.opacity
+      });
+      if (working.features.rivers.some((entry) => entry.id === river.id)) {
+        errors.push({
+          code: "duplicate_river",
+          message: `river ${river.id} already exists`,
+          severity: "invalid",
+          target: "river.id"
+        });
+      }
+      errors.push(...validateRiverFeature(river));
+      if (errors.length > 0) {
+        return finalize(state, working, [], warnings, errors, "create_river", source);
+      }
+      working.features.rivers.push(river);
+      working.meta.updated_at = new Date().toISOString();
+      working.meta.revision += 1;
+      return finalize(state, working, [], warnings, [], "create_river", source);
+    }
+
+    case "update_river": {
+      if (!isRiverId(command.river_id)) {
+        errors.push({
+          code: "invalid_river_id",
+          message: "river_id must be a valid river id",
+          severity: "invalid",
+          target: "river_id"
+        });
+      }
+      const riverIndex = findRiverIndex(working.features.rivers, command.river_id);
+      if (riverIndex === -1) {
+        errors.push({
+          code: "missing_river",
+          message: `river ${command.river_id} was not found`,
+          severity: "invalid",
+          target: "river_id"
+        });
+      }
+      if (errors.length > 0) {
+        return finalize(state, working, [], warnings, errors, "update_river", source);
+      }
+      const existing = working.features.rivers[riverIndex]!;
+      const next = normalizeRiverFeature({
+        ...existing,
+        name: command.changes.name ?? existing.name,
+        points: command.changes.points ?? existing.points,
+        color: command.changes.color === undefined ? existing.color : command.changes.color,
+        opacity: command.changes.opacity === undefined ? existing.opacity : command.changes.opacity
+      });
+      errors.push(...validateRiverFeature(next));
+      if (errors.length > 0) {
+        return finalize(state, working, [], warnings, errors, "update_river", source);
+      }
+      working.features.rivers[riverIndex] = next;
+      working.meta.updated_at = new Date().toISOString();
+      working.meta.revision += 1;
+      return finalize(state, working, [], warnings, [], "update_river", source);
+    }
+
+    case "delete_river": {
+      if (!isRiverId(command.river_id)) {
+        errors.push({
+          code: "invalid_river_id",
+          message: "river_id must be a valid river id",
+          severity: "invalid",
+          target: "river_id"
+        });
+      }
+      const riverIndex = findRiverIndex(working.features.rivers, command.river_id);
+      if (riverIndex === -1) {
+        errors.push({
+          code: "missing_river",
+          message: `river ${command.river_id} was not found`,
+          severity: "invalid",
+          target: "river_id"
+        });
+      }
+      if (errors.length > 0) {
+        return finalize(state, working, [], warnings, errors, "delete_river", source);
+      }
+      working.features.rivers.splice(riverIndex, 1);
+      working.meta.updated_at = new Date().toISOString();
+      working.meta.revision += 1;
+      return finalize(state, working, [], warnings, [], "delete_river", source);
+    }
+
+    case "set_river_path": {
+      if (!isRiverId(command.river_id)) {
+        errors.push({
+          code: "invalid_river_id",
+          message: "river_id must be a valid river id",
+          severity: "invalid",
+          target: "river_id"
+        });
+      }
+      const riverIndex = findRiverIndex(working.features.rivers, command.river_id);
+      if (riverIndex === -1) {
+        errors.push({
+          code: "missing_river",
+          message: `river ${command.river_id} was not found`,
+          severity: "invalid",
+          target: "river_id"
+        });
+      }
+      command.points.forEach((point, index) => {
+        errors.push(...validateRiverPoint(point, `points[${index}]`));
+      });
+      if (command.points.length < 2) {
+        errors.push({
+          code: "invalid_river_points",
+          message: "river requires at least two points",
+          severity: "invalid",
+          target: "points"
+        });
+      }
+      if (errors.length > 0) {
+        return finalize(state, working, [], warnings, errors, "set_river_path", source);
+      }
+      const existing = working.features.rivers[riverIndex]!;
+      const next = normalizeRiverFeature({
+        ...existing,
+        points: command.points
+      });
+      errors.push(...validateRiverFeature(next));
+      if (errors.length > 0) {
+        return finalize(state, working, [], warnings, errors, "set_river_path", source);
+      }
+      working.features.rivers[riverIndex] = next;
+      working.meta.updated_at = new Date().toISOString();
+      working.meta.revision += 1;
+      return finalize(state, working, [], warnings, [], "set_river_path", source);
+    }
+
+    case "set_river_width": {
+      if (!isRiverId(command.river_id)) {
+        errors.push({
+          code: "invalid_river_id",
+          message: "river_id must be a valid river id",
+          severity: "invalid",
+          target: "river_id"
+        });
+      }
+      errors.push(...validateCoordinate(command.target, "target"));
+      errors.push(...validateRiverPoint({ ...command.target, width: command.width }, "target"));
+      const riverIndex = findRiverIndex(working.features.rivers, command.river_id);
+      if (riverIndex === -1) {
+        errors.push({
+          code: "missing_river",
+          message: `river ${command.river_id} was not found`,
+          severity: "invalid",
+          target: "river_id"
+        });
+      }
+      if (errors.length > 0) {
+        return finalize(state, working, [], warnings, errors, "set_river_width", source);
+      }
+      const river = working.features.rivers[riverIndex]!;
+      const pointIndex = river.points.findIndex((point) => point.row === command.target.row && point.col === command.target.col);
+      if (pointIndex === -1) {
+        if (!insertRiverWidthAnchor(river, command.target, command.width)) {
+          return finalize(
+            state,
+            working,
+            [],
+            warnings,
+            [
+              {
+                code: "missing_river_point",
+                message: "set_river_width target must be on the river path",
+                severity: "invalid",
+                target: "target"
+              }
+            ],
+            "set_river_width",
+            source
+          );
+        }
+      } else {
+        river.points[pointIndex] = {
+          ...river.points[pointIndex]!,
+          width: command.width
+        };
+      }
+      working.features.rivers[riverIndex] = normalizeRiverFeature(river);
+      working.meta.updated_at = new Date().toISOString();
+      working.meta.revision += 1;
+      return finalize(state, working, [], warnings, [], "set_river_width", source);
     }
 
     default:

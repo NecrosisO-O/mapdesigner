@@ -11,6 +11,8 @@ import {
   getAllowedTerrainCategoriesForBiome,
   getAllowedTerrainsForBiome,
   getFilteredTerrainEntries,
+  expandRiverPath,
+  getRiverEndpointConnections,
   getTerrainCategoryKey,
   getTerrainEntriesByCategory,
   redo,
@@ -302,6 +304,109 @@ describe("commands", () => {
     expect(result.errors.some((entry) => entry.severity === "invalid")).toBe(true);
     expect(result.details).toHaveLength(0);
   });
+
+  it("creates, updates, and deletes river overlay features", () => {
+    const empty = createRuntimeState(
+      createEmptyDocument({
+        id: "river-command-test",
+        name: "River Command Test"
+      })
+    );
+
+    const created = applyCommand(empty, {
+      action: "create_river",
+      source: "cli",
+      river: {
+        id: "north-fork",
+        name: "North Fork",
+        points: [
+          { row: 0, col: 0, width: 2 },
+          { row: 0, col: 2, width: 8 }
+        ]
+      }
+    });
+    expect(created.ok).toBe(true);
+    expect(created.map.document.features.rivers).toHaveLength(1);
+    expect(created.map.document.features.rivers[0]?.id).toBe("north-fork");
+    expect(created.details).toHaveLength(0);
+
+    const samples = expandRiverPath(created.map.document.features.rivers[0]!);
+    expect(samples.map((sample) => [sample.row, sample.col])).toEqual([
+      [0, 0],
+      [0, 1],
+      [0, 2]
+    ]);
+    expect(samples[0]?.width).toBe(2);
+    expect(samples[2]?.width).toBe(8);
+
+    const widened = applyCommand(created.map, {
+      action: "set_river_width",
+      source: "cli",
+      river_id: "north-fork",
+      target: { row: 0, col: 0 },
+      width: 4
+    });
+    expect(widened.ok).toBe(true);
+    expect(widened.map.document.features.rivers[0]?.points[0]?.width).toBe(4);
+
+    const anchored = applyCommand(widened.map, {
+      action: "set_river_width",
+      source: "cli",
+      river_id: "north-fork",
+      target: { row: 0, col: 1 },
+      width: 6
+    });
+    expect(anchored.ok).toBe(true);
+    expect(anchored.map.document.features.rivers[0]?.points).toEqual([
+      { row: 0, col: 0, width: 4 },
+      { row: 0, col: 1, width: 6 },
+      { row: 0, col: 2, width: 8 }
+    ]);
+
+    const deleted = applyCommand(anchored.map, {
+      action: "delete_river",
+      source: "cli",
+      river_id: "north-fork"
+    });
+    expect(deleted.ok).toBe(true);
+    expect(deleted.map.document.features.rivers).toHaveLength(0);
+  });
+
+  it("detects river endpoints that connect to water terrain cells", () => {
+    const runtime = createRuntimeState(
+      createEmptyDocument({
+        id: "river-endpoint-test",
+        name: "River Endpoint Test"
+      })
+    );
+    const withStart = applyCommand(runtime, {
+      action: "set_cell",
+      source: "cli",
+      target: { row: 0, col: 0 },
+      changes: { terrain: "plain" }
+    });
+    expect(withStart.ok).toBe(true);
+    const withEnd = applyCommand(withStart.map, {
+      action: "set_cell",
+      source: "cli",
+      target: { row: 0, col: 2 },
+      changes: { terrain: "lake" }
+    });
+    expect(withEnd.ok).toBe(true);
+    const river = {
+      id: "lake-run",
+      name: "Lake Run",
+      points: [
+        { row: 0, col: 0 },
+        { row: 0, col: 2 }
+      ]
+    };
+
+    expect(getRiverEndpointConnections(river, withEnd.map.activeCells)).toEqual({
+      startConnected: false,
+      endConnected: true
+    });
+  });
 });
 
 describe("history", () => {
@@ -364,6 +469,22 @@ describe("serialization", () => {
     const json = stringifyDocument(document);
     const parsed = parseDocument(json);
     expect(parsed.document?.meta.id).toBe("roundtrip-test");
+    expect(parsed.errors).toHaveLength(0);
+  });
+
+  it("normalizes legacy JSON documents without feature layers", () => {
+    const legacy = createEmptyDocument({
+      id: "legacy-test",
+      name: "Legacy Test"
+    });
+    const raw = JSON.stringify({
+      schema_version: legacy.schema_version,
+      meta: legacy.meta,
+      grid: legacy.grid,
+      cells: legacy.cells
+    });
+    const parsed = parseDocument(raw);
+    expect(parsed.document?.features.rivers).toEqual([]);
     expect(parsed.errors).toHaveLength(0);
   });
 

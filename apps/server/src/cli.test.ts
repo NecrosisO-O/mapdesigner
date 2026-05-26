@@ -281,6 +281,56 @@ describe("server cli", () => {
     expect(appliedBody.result.terrain_summary.after.plain).toBe(1);
   });
 
+  it("supports river overlay commands for agent workflows", async () => {
+    const created = await runCli(["maps", "create", "--name", "River CLI"], { tempRoot });
+    expect(created.code).toBe(0);
+    const mapId = JSON.parse(created.stdout).result.document.meta.id as string;
+
+    const createdRiver = await runCli(
+      [
+        "maps",
+        "rivers",
+        "create",
+        "--map-id",
+        mapId,
+        "--id",
+        "main-river",
+        "--name",
+        "Main River",
+        "--points",
+        "R0C0,R0C2",
+        "--widths",
+        "R0C0:2,R0C1:5,R0C2:8",
+        "--summary"
+      ],
+      { tempRoot }
+    );
+    expect(createdRiver.code).toBe(0);
+    const createdRiverBody = JSON.parse(createdRiver.stdout);
+    expect(createdRiverBody.result.river_count).toBe(1);
+
+    const listed = await runCli(["maps", "rivers", "list", "--map-id", mapId], { tempRoot });
+    expect(listed.code).toBe(0);
+    const listedBody = JSON.parse(listed.stdout);
+    expect(listedBody.result[0].id).toBe("main-river");
+    expect(listedBody.result[0].points[0].width).toBe(2);
+    expect(listedBody.result[0].points[1]).toEqual({ row: 0, col: 1, width: 5 });
+
+    const inspected = await runCli(
+      ["maps", "rivers", "inspect", "--map-id", mapId, "--river-id", "main-river"],
+      { tempRoot }
+    );
+    expect(inspected.code).toBe(0);
+    expect(JSON.parse(inspected.stdout).result.name).toBe("Main River");
+
+    const deleted = await runCli(
+      ["maps", "rivers", "delete", "--map-id", mapId, "--river-id", "main-river", "--summary"],
+      { tempRoot }
+    );
+    expect(deleted.code).toBe(0);
+    expect(JSON.parse(deleted.stdout).result.river_count).toBe(0);
+  });
+
   it("reports missing flag values and unknown flags as structured errors", async () => {
     const missingValue = await runCli(["maps", "create", "--name"], { tempRoot });
     expect(missingValue.code).toBe(1);

@@ -30,11 +30,28 @@ export interface DesignedCellRecord extends GridCoordinate {
   note: string;
 }
 
+export interface RiverPoint extends GridCoordinate {
+  width?: number | null;
+}
+
+export interface RiverFeature {
+  id: string;
+  name: string;
+  points: RiverPoint[];
+  color?: string | null;
+  opacity?: number | null;
+}
+
+export interface MapFeatures {
+  rivers: RiverFeature[];
+}
+
 export interface MapDocument {
   schema_version: 1;
   meta: MapMeta;
   grid: GridConfig;
   cells: DesignedCellRecord[];
+  features: MapFeatures;
 }
 
 export interface ActiveCell extends GridCoordinate {
@@ -63,9 +80,24 @@ export interface CellChangeDetail {
   after: ActiveCell | null;
 }
 
+export interface RiverPathSample extends GridCoordinate {
+  river_id: string;
+  river_name: string;
+  width: number;
+  index: number;
+}
+
+export interface RiverCellInspection {
+  river_id: string;
+  river_name: string;
+  width: number;
+  path_index: number;
+}
+
 export interface CellInspectionResult {
   cell: ActiveCell;
   neighbors: ActiveCell[];
+  rivers: RiverCellInspection[];
 }
 
 export interface AreaInspectionResult {
@@ -160,13 +192,58 @@ export interface AnnotateCellCommand extends MapCommandBase {
   };
 }
 
+export interface CreateRiverCommand extends MapCommandBase {
+  action: "create_river";
+  river: {
+    id?: string;
+    name: string;
+    points: RiverPoint[];
+    color?: string | null;
+    opacity?: number | null;
+  };
+}
+
+export interface UpdateRiverCommand extends MapCommandBase {
+  action: "update_river";
+  river_id: string;
+  changes: {
+    name?: string;
+    points?: RiverPoint[];
+    color?: string | null;
+    opacity?: number | null;
+  };
+}
+
+export interface DeleteRiverCommand extends MapCommandBase {
+  action: "delete_river";
+  river_id: string;
+}
+
+export interface SetRiverPathCommand extends MapCommandBase {
+  action: "set_river_path";
+  river_id: string;
+  points: RiverPoint[];
+}
+
+export interface SetRiverWidthCommand extends MapCommandBase {
+  action: "set_river_width";
+  river_id: string;
+  target: GridCoordinate;
+  width: number;
+}
+
 export type MapCommand =
   | SetCellCommand
   | SetCellsCommand
   | ClearCellCommand
   | ReplaceTerrainCommand
   | ReplaceBiomeCommand
-  | AnnotateCellCommand;
+  | AnnotateCellCommand
+  | CreateRiverCommand
+  | UpdateRiverCommand
+  | DeleteRiverCommand
+  | SetRiverPathCommand
+  | SetRiverWidthCommand;
 
 export interface CommandResult {
   ok: boolean;

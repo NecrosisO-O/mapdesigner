@@ -37,6 +37,7 @@ pnpm exec tsx apps/server/src/cli.ts maps inspect-cell --map-id demo-map --row 0
 
 - `cell`
 - `neighbors`
+- `rivers`
 
 ### 3. 查看一片区域
 
@@ -134,6 +135,41 @@ pnpm exec tsx apps/server/src/cli.ts maps export-png \
 - `--include-shorthand`
 - `--include-undesigned`
 
+### 7. 管理河流覆盖层
+
+河流覆盖层是叠加在单元格地貌之上的线性要素，适合小河、支流、溪流和穿过其他地形的河道。
+
+查看河流：
+
+```bash
+pnpm exec tsx apps/server/src/cli.ts maps rivers list --map-id demo-map
+```
+
+创建河流：
+
+```bash
+pnpm exec tsx apps/server/src/cli.ts maps rivers create \
+  --map-id demo-map \
+  --id main-river \
+  --name "Main River" \
+  --points R0C0,R0C2,R2C3 \
+  --widths R0C0:2,R0C1:4,R2C3:8
+```
+
+查看单条河流：
+
+```bash
+pnpm exec tsx apps/server/src/cli.ts maps rivers inspect --map-id demo-map --river-id main-river
+```
+
+删除河流：
+
+```bash
+pnpm exec tsx apps/server/src/cli.ts maps rivers delete --map-id demo-map --river-id main-river
+```
+
+`--points` 使用 `R<row>C<col>` 列表。`--widths` 是可选宽度锚点；相邻锚点之间会按路径渐变。宽度锚点可以落在两个显式控制点之间的自动补齐路径上，CLI 会把它插入为路径锚点，方便 agent 精细控制河宽。
+
 ## 输入格式
 
 `maps apply` 正式输入格式为：
@@ -159,6 +195,28 @@ pnpm exec tsx apps/server/src/cli.ts maps export-png \
 - 单条 `MapCommand`
 - `MapCommand[]`
 
+河流也可以通过 `maps apply` 直接写入结构化命令：
+
+```json
+{
+  "commands": [
+    {
+      "action": "create_river",
+      "source": "cli",
+      "river": {
+        "id": "main-river",
+        "name": "Main River",
+        "points": [
+          { "row": 0, "col": 0, "width": 2 },
+          { "row": 0, "col": 2 },
+          { "row": 2, "col": 3, "width": 8 }
+        ]
+      }
+    }
+  ]
+}
+```
+
 ## 使用建议
 
 - 人工阅读时优先看 `display_coord`，例如 `R3C-2`
@@ -176,4 +234,9 @@ pnpm exec tsx apps/server/src/cli.ts maps export-png \
 - `maps inspect-area`
 - `maps neighbors`
 - `maps apply`
+- `maps rivers list`
+- `maps rivers inspect`
+- `maps rivers create`
+- `maps rivers update`
+- `maps rivers delete`
 - `maps export-png`
