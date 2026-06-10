@@ -37,6 +37,7 @@ import {
 import { createMapId, slugify } from "./utils.js";
 
 const PNG_EXPORT_TIMEOUT_SECONDS = 20;
+const MAX_LIST_MAP_FILE_BYTES = 32 * 1024 * 1024;
 
 export interface MapListItem {
   id: string;
@@ -289,14 +290,16 @@ export async function listMaps(): Promise<MapListItem[]> {
   }
   const items = await Promise.all(
     files.map(async (fileName) => {
+      const filePath = path.join(MAP_STORAGE_DIR, fileName);
       let raw: string;
       try {
-        raw = await fs.readFile(path.join(MAP_STORAGE_DIR, fileName), "utf8");
-      } catch (error) {
-        if (isMissingFileError(error)) {
+        const stat = await fs.stat(filePath);
+        if (!stat.isFile() || stat.size > MAX_LIST_MAP_FILE_BYTES) {
           return null;
         }
-        throw storageError(`failed to read map file ${fileName}`, error);
+        raw = await fs.readFile(filePath, "utf8");
+      } catch {
+        return null;
       }
       const parsed = parseDocument(raw);
       if (!parsed.document) {

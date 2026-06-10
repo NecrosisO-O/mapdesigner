@@ -137,7 +137,7 @@ describe("server api", () => {
     }
   });
 
-  it("exports a png and serves it through the download route", async () => {
+  it("exports png/json files and serves them through the download route", async () => {
     const { createServer } = await loadApi(tempRoot);
     const app = await createServer();
     try {
@@ -168,6 +168,27 @@ describe("server api", () => {
       expect(downloaded.headers["content-type"]).toContain("image/png");
       expect(downloaded.headers["content-disposition"]).toContain(exportedBody.result.fileName);
       expect(downloaded.body.length).toBeGreaterThan(0);
+
+      const exportedJson = await app.inject({
+        method: "POST",
+        url: `/api/maps/${mapId}/export-json`
+      });
+      expect(exportedJson.statusCode).toBe(200);
+      const exportedJsonBody = exportedJson.json();
+      expect(exportedJsonBody.ok).toBe(true);
+      expect(exportedJsonBody.result.fileName).toMatch(/download-test\.json$/);
+      expect(exportedJsonBody.result.downloadUrl).toBe(
+        `/api/exports/${encodeURIComponent(exportedJsonBody.result.fileName)}`
+      );
+
+      const downloadedJson = await app.inject({
+        method: "GET",
+        url: exportedJsonBody.result.downloadUrl
+      });
+      expect(downloadedJson.statusCode).toBe(200);
+      expect(downloadedJson.headers["content-type"]).toContain("application/json");
+      expect(downloadedJson.headers["content-disposition"]).toContain(exportedJsonBody.result.fileName);
+      expect(JSON.parse(downloadedJson.body).meta.id).toBe(mapId);
     } finally {
       await app.close();
     }

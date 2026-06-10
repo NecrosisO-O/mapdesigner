@@ -7,6 +7,7 @@ import { badRequest, storageError, validationFailed } from "./errors.js";
 
 const MAP_ID_PATTERN = /^[a-zA-Z0-9\u4e00-\u9fa5][a-zA-Z0-9_\-\u4e00-\u9fa5]{0,79}$/;
 const HEX_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;
+const TRANSPARENT_BACKGROUND = "transparent";
 const EXPORT_PRESETS: ExportRenderOptions["preset"][] = ["clean", "reference"];
 const MAX_EXPORT_PADDING = 256;
 const MAX_EXPORT_SCALE = 4;
@@ -49,9 +50,14 @@ export function exportFilePath(rootDir: string, fileName: string): string {
   return resolveStorageFile(rootDir, normalized);
 }
 
-export function assertPngExportFileName(fileName: string): string {
+export function assertExportDownloadFileName(fileName: string): string {
   const normalized = fileName.trim();
-  if (!normalized || normalized !== path.basename(normalized) || hasPathSeparator(normalized) || !normalized.endsWith(".png")) {
+  if (
+    !normalized ||
+    normalized !== path.basename(normalized) ||
+    hasPathSeparator(normalized) ||
+    (!normalized.endsWith(".png") && !normalized.endsWith(".json"))
+  ) {
     throw badRequest("invalid export file name");
   }
   return normalized;
@@ -135,10 +141,14 @@ export function normalizeExportOptions(
   }
 
   if (input.background !== undefined) {
-    if (typeof input.background !== "string" || !HEX_COLOR_PATTERN.test(input.background)) {
-      throw badRequest("background must be a #RRGGBB color");
+    if (typeof input.background !== "string") {
+      throw badRequest("background must be a #RRGGBB color or transparent");
     }
-    normalized.background = input.background;
+    const background = input.background.trim();
+    if (!HEX_COLOR_PATTERN.test(background) && background.toLowerCase() !== TRANSPARENT_BACKGROUND) {
+      throw badRequest("background must be a #RRGGBB color or transparent");
+    }
+    normalized.background = background.toLowerCase() === TRANSPARENT_BACKGROUND ? TRANSPARENT_BACKGROUND : background;
   }
 
   const includeCoordinates = readBooleanOption(input, "includeCoordinates");

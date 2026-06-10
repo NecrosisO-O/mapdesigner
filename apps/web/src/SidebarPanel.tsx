@@ -1,4 +1,4 @@
-import type { ExportRenderOptions, MapRuntimeState } from "@mapdesigner/map-core";
+import { TAG_ENTRIES, type ExportRenderOptions, type MapRuntimeState, type TagKey } from "@mapdesigner/map-core";
 import { formatDateTime } from "./useMapWorkspace.js";
 
 interface SidebarPanelProps {
@@ -15,7 +15,10 @@ interface SidebarPanelProps {
   onShowGridChange: (checked: boolean) => void;
   onShowUndesignedChange: (checked: boolean) => void;
   exportPanelOpen: boolean;
+  isExportingPng: boolean;
   pngOptions: ExportRenderOptions;
+  lastOpaqueBackground: string;
+  tagFilter: TagKey[];
   onToggleExportPanel: () => void;
   onExportPng: () => void;
   onPresetChange: (preset: ExportRenderOptions["preset"]) => void;
@@ -26,9 +29,14 @@ interface SidebarPanelProps {
   onIncludeUndesignedChange: (checked: boolean) => void;
   onIncludeCoordinatesChange: (checked: boolean) => void;
   onIncludeShorthandChange: (checked: boolean) => void;
+  onTagFilterChange: (tag: TagKey, checked: boolean) => void;
+  onClearTagFilter: () => void;
 }
 
 export function SidebarPanel(props: SidebarPanelProps) {
+  const backgroundColorValue =
+    props.pngOptions.background === "transparent" ? props.lastOpaqueBackground : props.pngOptions.background;
+
   return (
     <aside className="sidebar">
       <section className="panel status-panel" aria-label="当前状态">
@@ -104,6 +112,29 @@ export function SidebarPanel(props: SidebarPanelProps) {
           />
           显示 undesigned
         </label>
+        <div className="tag-filter-block" aria-label="标签筛选">
+          <div className="panel-subtitle-row">
+            <h3>标签筛选</h3>
+            <button type="button" onClick={props.onClearTagFilter} disabled={props.tagFilter.length === 0}>
+              清除
+            </button>
+          </div>
+          <div className="tag-filter-grid">
+            {Object.entries(TAG_ENTRIES).map(([key, entry]) => {
+              const tag = key as TagKey;
+              return (
+                <label key={key}>
+                  <input
+                    type="checkbox"
+                    checked={props.tagFilter.includes(tag)}
+                    onChange={(event) => props.onTagFilterChange(tag, event.target.checked)}
+                  />
+                  {entry.label}
+                </label>
+              );
+            })}
+          </div>
+        </div>
       </section>
 
       <section className="panel collapsible-panel tool-panel">
@@ -125,9 +156,9 @@ export function SidebarPanel(props: SidebarPanelProps) {
               <button
                 className="primary-button"
                 onClick={props.onExportPng}
-                disabled={!props.currentMap || props.currentMap.document.cells.length === 0}
+                disabled={!props.currentMap || props.currentMap.document.cells.length === 0 || props.isExportingPng}
               >
-                导出图片
+                {props.isExportingPng ? "导出中..." : "导出图片"}
               </button>
             </div>
             <label>
@@ -167,9 +198,20 @@ export function SidebarPanel(props: SidebarPanelProps) {
               背景色
               <input
                 type="color"
-                value={props.pngOptions.background}
+                value={backgroundColorValue}
                 onChange={(event) => props.onBackgroundChange(event.target.value)}
+                disabled={props.pngOptions.background === "transparent"}
               />
+            </label>
+            <label className="checkbox-row">
+              <input
+                type="checkbox"
+                checked={props.pngOptions.background === "transparent"}
+                onChange={(event) =>
+                  props.onBackgroundChange(event.target.checked ? "transparent" : props.lastOpaqueBackground)
+                }
+              />
+              透明背景
             </label>
             <label className="checkbox-row">
               <input

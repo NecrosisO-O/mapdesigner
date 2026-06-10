@@ -1,4 +1,4 @@
-import { redo, undo } from "@mapdesigner/map-core";
+import { redo, undo, type TagKey } from "@mapdesigner/map-core";
 import { useState } from "react";
 import { DetailPanel } from "./DetailPanel.js";
 import { MapCanvas } from "./MapCanvas.js";
@@ -15,6 +15,8 @@ export default function App() {
   const [showShorthand, setShowShorthand] = useState(false);
   const [showGrid, setShowGrid] = useState(true);
   const [showUndesigned, setShowUndesigned] = useState(true);
+  const [tagFilter, setTagFilter] = useState<TagKey[]>([]);
+  const [lastOpaqueExportBackground, setLastOpaqueExportBackground] = useState("#F4F0E6");
   const [interactionMode, setInteractionMode] = useState<"select" | "river-draw">("select");
   const workspace = useMapWorkspace(setMessage);
   const editor = useCellEditor(workspace.currentMap, workspace.setCurrentMap, setMessage);
@@ -141,7 +143,10 @@ export default function App() {
           onShowGridChange={setShowGrid}
           onShowUndesignedChange={setShowUndesigned}
           exportPanelOpen={exportPanel.exportPanelOpen}
+          isExportingPng={exportPanel.isExportingPng}
           pngOptions={exportPanel.pngOptions}
+          lastOpaqueBackground={lastOpaqueExportBackground}
+          tagFilter={tagFilter}
           onToggleExportPanel={() => exportPanel.setExportPanelOpen((current) => !current)}
           onExportPng={() => void exportPanel.handleExportPng(workspace.currentMap)}
           onPresetChange={(preset) =>
@@ -164,12 +169,15 @@ export default function App() {
               padding
             }))
           }
-          onBackgroundChange={(background) =>
+          onBackgroundChange={(background) => {
+            if (background !== "transparent") {
+              setLastOpaqueExportBackground(background);
+            }
             exportPanel.setPngOptions((current) => ({
               ...current,
               background
-            }))
-          }
+            }));
+          }}
           onIncludeGridChange={(includeGrid) =>
             exportPanel.setPngOptions((current) => ({
               ...current,
@@ -194,6 +202,12 @@ export default function App() {
               includeShorthand
             }))
           }
+          onTagFilterChange={(tag, checked) =>
+            setTagFilter((current) =>
+              checked ? (current.includes(tag) ? current : [...current, tag]) : current.filter((entry) => entry !== tag)
+            )
+          }
+          onClearTagFilter={() => setTagFilter([])}
         />
 
         <section className="canvas-panel">
@@ -220,6 +234,7 @@ export default function App() {
               showShorthand={showShorthand}
               showGrid={showGrid}
               showUndesigned={showUndesigned}
+              tagFilter={tagFilter}
             />
           ) : (
             <div className="empty-state">

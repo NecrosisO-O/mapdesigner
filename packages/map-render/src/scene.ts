@@ -228,6 +228,10 @@ function renderCell(scene: MapScene, entry: MapScene["layout"][number]): string 
 export function renderSvgString(scene: MapScene): string {
   const defs = `<defs>${scene.defs.join("")}</defs>`;
   const cells = scene.layout.map((entry) => renderCell(scene, entry)).join("");
+  const background =
+    scene.background === "transparent"
+      ? ""
+      : `<rect width="100%" height="100%" fill="${escapeXml(scene.background)}" />`;
   const riverSegments = scene.riverSegments
     .map(
       (segment) =>
@@ -255,7 +259,7 @@ export function renderSvgString(scene: MapScene): string {
   return [
     `<svg xmlns="http://www.w3.org/2000/svg" width="${scene.width}" height="${scene.height}" viewBox="0 0 ${scene.width} ${scene.height}" role="img" aria-label="MapDesigner export">`,
     defs,
-    `<rect width="100%" height="100%" fill="${scene.background}" />`,
+    background,
     cells,
     riverSegments,
     riverEndpoints,
