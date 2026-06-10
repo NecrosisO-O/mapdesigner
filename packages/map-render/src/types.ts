@@ -59,6 +59,7 @@ export interface MapRenderOptions {
   size?: number;
   padding?: number;
   background?: string;
+  usePatternOverlays?: boolean;
   includeCoordinates?: boolean;
   includeShorthand?: boolean;
   includeGrid?: boolean;

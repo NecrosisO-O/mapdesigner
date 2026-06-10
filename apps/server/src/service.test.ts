@@ -91,6 +91,12 @@ describe("server service", () => {
     ]);
     expect(riverApplied.map.document.features.rivers).toHaveLength(1);
     expect(riverApplied.command_results[0]?.action).toBe("create_river");
+    expect(riverApplied.stats.created_count).toBe(0);
+    expect(riverApplied.stats.feature_stats).toEqual({
+      river_created_count: 1,
+      river_updated_count: 0,
+      river_deleted_count: 0
+    });
 
     const jsonExport = await service.exportJson(created.document.meta.id);
     expect(await fs.stat(jsonExport.path)).toBeTruthy();

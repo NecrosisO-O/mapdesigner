@@ -36,6 +36,8 @@ import {
 } from "./storage.js";
 import { createMapId, slugify } from "./utils.js";
 
+const PNG_EXPORT_TIMEOUT_SECONDS = 20;
+
 export interface MapListItem {
   id: string;
   name: string;
@@ -71,6 +73,11 @@ export interface ApplyChangeStats {
   created_count: number;
   updated_count: number;
   cleared_count: number;
+  feature_stats: {
+    river_created_count: number;
+    river_updated_count: number;
+    river_deleted_count: number;
+  };
   terrain_summary: ApplyValueSummary;
   biome_summary: ApplyValueSummary;
 }
@@ -216,6 +223,9 @@ function buildApplyChangeStats(
   let createdCount = 0;
   let updatedCount = 0;
   let clearedCount = 0;
+  let riverCreatedCount = 0;
+  let riverUpdatedCount = 0;
+  let riverDeletedCount = 0;
 
   for (const change of changes) {
     const beforeDesigned = change.before?.status === "designed";
@@ -235,12 +245,35 @@ function buildApplyChangeStats(
     incrementCount(biomeSummary.after, afterDesigned ? change.after?.biome : null);
   }
 
+  for (const command of commands) {
+    switch (command.action) {
+      case "create_river":
+        riverCreatedCount += 1;
+        break;
+      case "update_river":
+      case "set_river_path":
+      case "set_river_width":
+        riverUpdatedCount += 1;
+        break;
+      case "delete_river":
+        riverDeletedCount += 1;
+        break;
+      default:
+        break;
+    }
+  }
+
   return {
     command_count: commands.length,
     changed_count: changes.length,
     created_count: createdCount,
     updated_count: updatedCount,
     cleared_count: clearedCount,
+    feature_stats: {
+      river_created_count: riverCreatedCount,
+      river_updated_count: riverUpdatedCount,
+      river_deleted_count: riverDeletedCount
+    },
     terrain_summary: terrainSummary,
     biome_summary: biomeSummary
   };
@@ -450,7 +483,10 @@ export async function exportPng(
   const svg = renderSvgString(scene);
   const fileName = `${slugify(runtime.document.meta.name) || assertSafeMapId(runtime.document.meta.id)}-${resolved.preset}.png`;
   const filePath = exportPath(fileName);
-  const png = await sharp(Buffer.from(svg)).png().toBuffer();
+  const png = await sharp(Buffer.from(svg))
+    .timeout({ seconds: PNG_EXPORT_TIMEOUT_SECONDS })
+    .png()
+    .toBuffer();
   await writeFileAtomic(filePath, png);
   return { fileName, path: filePath };
 }

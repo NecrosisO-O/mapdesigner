@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { applyCommand, createEmptyDocument, createRuntimeState } from "@mapdesigner/map-core";
 import { buildHexLayout } from "./layout.js";
-import { buildMapScene, renderSvgString } from "./scene.js";
+import { buildExportScene, buildMapScene, renderSvgString } from "./scene.js";
 import type { ActiveCell } from "@mapdesigner/map-core";
 
 function makeCell(row: number, col: number): ActiveCell {
@@ -97,5 +97,57 @@ describe("river rendering", () => {
     expect(svg).toContain('data-river-preview="true"');
     expect(svg).toContain('data-river-endpoint="water"');
     expect(svg).toContain('data-river-control-point="start"');
+  });
+});
+
+describe("export rendering", () => {
+  it("uses lightweight fills for png export while preserving river overlays", () => {
+    let runtime = createRuntimeState(createEmptyDocument({ id: "export-render", name: "Export Render" }));
+    const cellResult = applyCommand(runtime, {
+      action: "set_cell",
+      source: "cli",
+      target: { row: 0, col: 0 },
+      changes: {
+        terrain: "plain",
+        biome: "grassland"
+      }
+    });
+    expect(cellResult.ok).toBe(true);
+    runtime = cellResult.map;
+
+    const riverResult = applyCommand(runtime, {
+      action: "create_river",
+      source: "cli",
+      river: {
+        id: "export-river",
+        name: "Export River",
+        points: [
+          { row: 0, col: 0, width: 2 },
+          { row: 0, col: 1, width: 4 }
+        ]
+      }
+    });
+    expect(riverResult.ok).toBe(true);
+
+    const interactiveSvg = renderSvgString(buildMapScene(riverResult.map));
+    expect(interactiveSvg).toContain("url(#pattern-grass)");
+
+    const exportSvg = renderSvgString(
+      buildExportScene({
+        map: riverResult.map,
+        options: {
+          preset: "reference",
+          includeCoordinates: true,
+          includeShorthand: true,
+          includeGrid: true,
+          includeUndesigned: false,
+          background: "#FFFFFF",
+          padding: 24,
+          scale: 1
+        }
+      })
+    );
+    expect(exportSvg).not.toContain("url(#pattern-grass)");
+    expect(exportSvg).toContain('data-river-id="export-river"');
   });
 });
