@@ -50,6 +50,38 @@ const sampleMap = {
   }
 };
 
+const taggedMap = {
+  ...sampleMap,
+  document: {
+    ...sampleMap.document,
+    cells: [
+      {
+        row: 0,
+        col: 0,
+        terrain: "plain",
+        biome: "grassland",
+        tags: ["peak"],
+        note: ""
+      },
+      {
+        row: 0,
+        col: 1,
+        terrain: "hill",
+        biome: "grassland",
+        tags: [],
+        note: ""
+      }
+    ]
+  },
+  activeCells: sampleMap.activeCells.map((cell) =>
+    cell.id === "cell@0,0"
+      ? { ...cell, tags: ["peak"] }
+      : cell.id === "cell@0,1"
+        ? { ...cell, status: "designed", terrain: "hill", biome: "grassland", tags: [] }
+        : cell
+  )
+};
+
 const apiMock = vi.hoisted(() => ({
   listMaps: vi.fn(),
   getMap: vi.fn(),
@@ -612,6 +644,57 @@ describe("App", () => {
     expect(screen.getAllByText("Renamed Map").length).toBeGreaterThanOrEqual(2);
   });
 
+  it("deletes the current map without immediately auto-opening another map", async () => {
+    apiMock.listMaps
+      .mockResolvedValueOnce({
+        ok: true,
+        result: [
+          {
+            id: "sample-map",
+            name: "Sample Map",
+            fileName: "sample-map.json",
+            updatedAt: "2026-01-01T00:00:00.000Z",
+            revision: 1,
+            designedCellCount: 1
+          },
+          {
+            id: "other-map",
+            name: "Other Map",
+            fileName: "other-map.json",
+            updatedAt: "2026-01-01T00:00:00.000Z",
+            revision: 1,
+            designedCellCount: 0
+          }
+        ],
+        warnings: [],
+        errors: []
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        result: [
+          {
+            id: "other-map",
+            name: "Other Map",
+            fileName: "other-map.json",
+            updatedAt: "2026-01-01T00:00:00.000Z",
+            revision: 1,
+            designedCellCount: 0
+          }
+        ],
+        warnings: [],
+        errors: []
+      });
+    render(<App />);
+    await screen.findByText("已打开 Sample Map");
+
+    fireEvent.click(screen.getByRole("button", { name: "删除地图" }));
+
+    await waitFor(() => expect(apiMock.deleteMap).toHaveBeenCalledWith("sample-map"));
+    expect(await screen.findByText("地图已删除")).toBeTruthy();
+    expect(screen.getByText("当前没有打开地图。")).toBeTruthy();
+    expect(apiMock.getMap).not.toHaveBeenCalledWith("other-map");
+  });
+
   it("exports png with configured options", async () => {
     const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
     render(<App />);
@@ -642,6 +725,82 @@ describe("App", () => {
     );
     expect(clickSpy).toHaveBeenCalledTimes(1);
     expect(await screen.findByText("PNG 已导出并开始下载：sample-map-reference.png")).toBeTruthy();
+  });
+
+  it("shows png export progress and prevents duplicate export clicks", async () => {
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    let resolveExport: ((value: Awaited<ReturnType<typeof apiMock.exportPng>>) => void) | undefined;
+    apiMock.exportPng.mockReturnValue(
+      new Promise((resolve) => {
+        resolveExport = resolve;
+      })
+    );
+    render(<App />);
+    await screen.findByText("已打开 Sample Map");
+
+    fireEvent.click(screen.getByRole("button", { name: "展开" }));
+    fireEvent.click(screen.getByRole("button", { name: "导出图片" }));
+
+    expect(await screen.findByText("正在导出 PNG...")).toBeTruthy();
+    const exportingButton = screen.getByRole("button", { name: "导出中..." }) as HTMLButtonElement;
+    expect(exportingButton.disabled).toBe(true);
+    fireEvent.click(exportingButton);
+    expect(apiMock.exportPng).toHaveBeenCalledTimes(1);
+
+    resolveExport?.({
+      ok: true,
+      result: {
+        fileName: "sample-map-clean.png",
+        path: "/tmp/sample-map-clean.png",
+        downloadUrl: "/api/exports/sample-map-clean.png"
+      },
+      warnings: [],
+      errors: []
+    });
+
+    expect(await screen.findByText("PNG 已导出并开始下载：sample-map-clean.png")).toBeTruthy();
+    expect(clickSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("exports png with a transparent background option", async () => {
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    render(<App />);
+    await screen.findByText("已打开 Sample Map");
+
+    fireEvent.click(screen.getByRole("button", { name: "展开" }));
+    fireEvent.click(screen.getByLabelText("透明背景"));
+    fireEvent.click(screen.getByText("导出图片"));
+
+    await waitFor(() =>
+      expect(apiMock.exportPng).toHaveBeenCalledWith(
+        "sample-map",
+        expect.objectContaining({
+          background: "transparent"
+        })
+      )
+    );
+  });
+
+  it("dims cells that do not match the selected tag filter", async () => {
+    apiMock.getMap.mockResolvedValueOnce({
+      ok: true,
+      result: taggedMap,
+      warnings: [],
+      errors: []
+    });
+    render(<App />);
+    await screen.findByText("已打开 Sample Map");
+
+    const tagFilterPanel = screen.getByLabelText("标签筛选");
+    fireEvent.click(within(tagFilterPanel).getByLabelText("山峰"));
+
+    const svg = screen.getByLabelText("Map canvas");
+    expect(svg.querySelector('[data-cell-id="cell@0,0"]')?.getAttribute("data-filter-match")).toBe("true");
+    expect(svg.querySelector('[data-cell-id="cell@0,1"]')?.getAttribute("data-filter-match")).toBe("false");
+
+    fireEvent.click(within(tagFilterPanel).getByRole("button", { name: "清除" }));
+
+    expect(svg.querySelector('[data-cell-id="cell@0,1"]')?.getAttribute("data-filter-match")).toBe("true");
   });
 
   it("can collapse the export panel after opening it", async () => {

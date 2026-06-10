@@ -129,7 +129,7 @@ pnpm exec tsx apps/server/src/cli.ts maps export-png \
 - `--preset clean|reference`
 - `--scale 1..4`
 - `--padding 0..256`
-- `--background #RRGGBB`
+- `--background #RRGGBB|transparent`
 - `--include-grid`
 - `--include-coordinates`
 - `--include-shorthand`
@@ -168,7 +168,7 @@ pnpm exec tsx apps/server/src/cli.ts maps rivers inspect --map-id demo-map --riv
 pnpm exec tsx apps/server/src/cli.ts maps rivers delete --map-id demo-map --river-id main-river
 ```
 
-`--points` 使用 `R<row>C<col>` 列表。`--widths` 是可选宽度锚点；相邻锚点之间会按路径渐变。宽度锚点可以落在两个显式控制点之间的自动补齐路径上，CLI 会把它插入为路径锚点，方便 agent 精细控制河宽。
+`--points` 使用 `R<row>C<col>` 列表。第一个点可视为源头或入图点，最后一个点可视为终点或出图点；如果端点落在湖泊、海洋、河口、潮滩等水域单元格上，渲染会用水域端点标记提示衔接。`--widths` 是可选宽度锚点；相邻锚点之间会按路径渐变。宽度锚点可以落在两个显式控制点之间的自动补齐路径上，CLI 会把它插入为路径锚点，方便 agent 精细控制河宽。
 
 ## 输入格式
 

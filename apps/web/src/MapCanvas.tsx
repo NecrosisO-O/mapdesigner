@@ -48,6 +48,7 @@ interface MapCanvasProps {
   showShorthand: boolean;
   showGrid: boolean;
   showUndesigned: boolean;
+  tagFilter?: TagKey[];
 }
 
 interface CanvasCamera {
@@ -155,6 +156,7 @@ function CellGroup(props: {
   showPattern: boolean;
   showPrimaryTag: boolean;
   showGrid: boolean;
+  dimmed: boolean;
   onSelect: () => void;
 }) {
   const { cell } = props;
@@ -170,6 +172,7 @@ function CellGroup(props: {
     <g
       className="hex-cell"
       data-cell-id={cell.id}
+      data-filter-match={props.dimmed ? "false" : "true"}
       aria-label={`${cell.display_coord} ${cell.status}`}
       onClick={props.onSelect}
       role="button"
@@ -186,21 +189,51 @@ function CellGroup(props: {
         fill={getTerrainColor(cell.terrain)}
         stroke={stroke}
         strokeWidth={props.showGrid ? 1.2 : 0.6}
-        opacity={opacity}
+        opacity={props.dimmed ? opacity * 0.32 : opacity}
       />
-      {patternFill ? <polygon points={props.points} fill={patternFill} opacity={cell.status === "designed" ? 0.9 : 0.5} /> : null}
+      {patternFill ? (
+        <polygon
+          points={props.points}
+          fill={patternFill}
+          opacity={props.dimmed ? 0.2 : cell.status === "designed" ? 0.9 : 0.5}
+        />
+      ) : null}
       {primaryTagText ? (
-        <text x={props.centerX} y={props.centerY - 16} textAnchor="middle" fontSize="9" fontWeight="700" fill="#6B2F18">
+        <text
+          x={props.centerX}
+          y={props.centerY - 16}
+          textAnchor="middle"
+          fontSize="9"
+          fontWeight="700"
+          fill="#6B2F18"
+          opacity={props.dimmed ? 0.35 : 1}
+        >
           {primaryTagText}
         </text>
       ) : null}
       {props.showCoordinates ? (
-        <text x={props.centerX} y={props.centerY - 3} textAnchor="middle" fontSize="9" fontWeight="600" fill={textFill}>
+        <text
+          x={props.centerX}
+          y={props.centerY - 3}
+          textAnchor="middle"
+          fontSize="9"
+          fontWeight="600"
+          fill={textFill}
+          opacity={props.dimmed ? 0.35 : 1}
+        >
           {cell.display_coord}
         </text>
       ) : null}
       {shorthand && cell.status === "designed" ? (
-        <text x={props.centerX} y={props.centerY + 11} textAnchor="middle" fontSize="8.5" fontWeight="500" fill={textFill}>
+        <text
+          x={props.centerX}
+          y={props.centerY + 11}
+          textAnchor="middle"
+          fontSize="8.5"
+          fontWeight="500"
+          fill={textFill}
+          opacity={props.dimmed ? 0.35 : 1}
+        >
           {shorthand}
         </text>
       ) : null}
@@ -280,6 +313,7 @@ export function MapCanvas(props: MapCanvasProps) {
           : "extreme-far";
   const isRiverDrawing = props.interactionMode === "river-draw";
   const riverDrawingPointCount = props.riverDrawingPointCount ?? 0;
+  const tagFilter = props.tagFilter ?? [];
 
   const setCamera = useCallback((nextCamera: CanvasCamera) => {
     const normalizedCamera = {
@@ -427,6 +461,8 @@ export function MapCanvas(props: MapCanvasProps) {
     const focused = entry.cell.id === props.selectedCellId || entry.cell.id === hoveredCellId;
     return focused || isCellInCoordinateDensity(entry.cell, coordinateLabelStep);
   };
+  const doesCellMatchTagFilter = (cell: ActiveCell) =>
+    tagFilter.length === 0 || tagFilter.some((tag) => cell.tags.includes(tag));
 
   return (
     <div
@@ -554,6 +590,7 @@ export function MapCanvas(props: MapCanvasProps) {
                 showPattern={effectiveShowPattern}
                 showPrimaryTag={effectiveShowPrimaryTag && isEntryInLabelViewport(entry)}
                 showGrid={props.showGrid}
+                dimmed={!doesCellMatchTagFilter(entry.cell)}
                 onSelect={() => {
                   if (suppressNextCellClickRef.current) {
                     suppressNextCellClickRef.current = false;

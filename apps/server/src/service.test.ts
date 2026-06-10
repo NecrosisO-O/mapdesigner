@@ -222,6 +222,25 @@ describe("server service", () => {
     expect(listed.map((item) => item.name)).toEqual(["Save As Copy", "Save As Source"]);
   });
 
+  it("skips unreadable, malformed, and oversized files while listing maps", async () => {
+    const service = await loadService(tempRoot);
+    const created = await service.createMap({ name: "Good Map" });
+    const mapsDir = path.join(tempRoot, "storage/maps");
+    await fs.writeFile(path.join(mapsDir, "bad-json.json"), "{not-json", "utf8");
+    const oversizedPath = path.join(mapsDir, "oversized.json");
+    await fs.writeFile(oversizedPath, "{}", "utf8");
+    await fs.truncate(oversizedPath, 33 * 1024 * 1024);
+
+    const listed = await service.listMaps();
+
+    expect(listed).toEqual([
+      expect.objectContaining({
+        id: created.document.meta.id,
+        name: "Good Map"
+      })
+    ]);
+  });
+
   it("rejects empty map ids with a clear error", async () => {
     const service = await loadService(tempRoot);
     await expect(service.getMap("")).rejects.toThrow(/map id is required/);
@@ -329,7 +348,16 @@ describe("server service", () => {
       /padding must be an integer between 0 and 256/
     );
     await expect(service.exportPng(created.document.meta.id, { background: "white" })).rejects.toThrow(
-      /background must be a #RRGGBB color/
+      /background must be a #RRGGBB color or transparent/
     );
+  });
+
+  it("exports png with a transparent background", async () => {
+    const service = await loadService(tempRoot);
+    const created = await service.createMap({ name: "Transparent Export Test" });
+
+    const pngExport = await service.exportPng(created.document.meta.id, { background: "transparent" });
+
+    await expect(fs.stat(pngExport.path)).resolves.toBeTruthy();
   });
 });

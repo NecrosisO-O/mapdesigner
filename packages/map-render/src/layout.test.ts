@@ -150,4 +150,25 @@ describe("export rendering", () => {
     expect(exportSvg).not.toContain("url(#pattern-grass)");
     expect(exportSvg).toContain('data-river-id="export-river"');
   });
+
+  it("omits the background rectangle for transparent export", () => {
+    const runtime = createRuntimeState(createEmptyDocument({ id: "transparent-export", name: "Transparent Export" }));
+    const svg = renderSvgString(
+      buildExportScene({
+        map: runtime,
+        options: {
+          preset: "clean",
+          includeCoordinates: false,
+          includeShorthand: false,
+          includeGrid: true,
+          includeUndesigned: false,
+          background: "transparent",
+          padding: 24,
+          scale: 1
+        }
+      })
+    );
+
+    expect(svg).not.toContain('width="100%" height="100%" fill="transparent"');
+  });
 });

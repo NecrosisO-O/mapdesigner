@@ -19,7 +19,7 @@ import {
   saveMapAs,
   saveMap
 } from "./service.js";
-import { assertPngExportFileName, exportFilePath, normalizeExportOptions } from "./storage.js";
+import { assertExportDownloadFileName, exportFilePath, normalizeExportOptions } from "./storage.js";
 import { createEnvelope } from "./utils.js";
 
 async function fileExists(filePath: string): Promise<boolean> {
@@ -202,7 +202,13 @@ export async function createServer(): Promise<FastifyInstance> {
 
   app.post<{ Params: { id: string } }>("/api/maps/:id/export-json", async (request, reply) => {
     try {
-      return createEnvelope({ result: await exportJson(request.params.id) });
+      const result = await exportJson(request.params.id);
+      return createEnvelope({
+        result: {
+          ...result,
+          downloadUrl: `/api/exports/${encodeURIComponent(result.fileName)}`
+        }
+      });
     } catch (error) {
       return sendError(reply, "export_json_failed", error);
     }
@@ -210,10 +216,10 @@ export async function createServer(): Promise<FastifyInstance> {
 
   app.get<{ Params: { fileName: string } }>("/api/exports/:fileName", async (request, reply) => {
     try {
-      const fileName = assertPngExportFileName(request.params.fileName);
+      const fileName = assertExportDownloadFileName(request.params.fileName);
       const content = await fs.readFile(exportFilePath(EXPORT_STORAGE_DIR, fileName));
       reply.header("Content-Disposition", `attachment; filename="${fileName}"`);
-      reply.type("image/png");
+      reply.type(fileName.endsWith(".png") ? "image/png" : "application/json; charset=utf-8");
       return reply.send(content);
     } catch (error) {
       return sendError(reply, "export_not_found", error, 404);

@@ -32,6 +32,7 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
   const [persistedRevision, setPersistedRevision] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const suppressAutoOpenRef = useRef(false);
 
   const mapDirty =
     currentMap !== null &&
@@ -65,6 +66,7 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
   }
 
   function loadMapIntoWorkspace(map: MapRuntimeState): void {
+    suppressAutoOpenRef.current = false;
     setCurrentMap(map);
     setCurrentMapId(map.document.meta.id);
     setPersistedRevision(map.document.meta.revision);
@@ -240,6 +242,7 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
     setPersistedRevision(null);
     setIsRenaming(false);
     setRenameDraft("");
+    suppressAutoOpenRef.current = true;
     await refreshMaps();
     setMessage("地图已删除");
     return true;
@@ -251,6 +254,9 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
 
   useEffect(() => {
     if (maps.length === 0 || currentMapId) {
+      return;
+    }
+    if (suppressAutoOpenRef.current) {
       return;
     }
     void openMap(maps[0]!.id);

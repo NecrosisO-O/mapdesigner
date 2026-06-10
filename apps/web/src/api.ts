@@ -17,12 +17,16 @@ export interface MapListItem {
 }
 
 async function request<T>(input: RequestInfo, init?: RequestInit): Promise<ApiEnvelope<T>> {
+  const headers =
+    init?.body === undefined
+      ? init?.headers
+      : {
+          "Content-Type": "application/json",
+          ...(init?.headers ?? {})
+        };
   const response = await fetch(input, {
     ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers ?? {})
-    }
+    headers
   });
   return response.json() as Promise<ApiEnvelope<T>>;
 }
@@ -59,7 +63,7 @@ export const api = {
       body: JSON.stringify({ content, generateNewId })
     }),
   exportJson: (id: string) =>
-    request<{ fileName: string; path: string }>(`/api/maps/${id}/export-json`, {
+    request<{ fileName: string; path: string; downloadUrl: string }>(`/api/maps/${id}/export-json`, {
       method: "POST"
     }),
   exportPng: (id: string, options: Partial<ExportRenderOptions>) =>
