@@ -22,6 +22,7 @@ const DEFAULT_OPTIONS: Required<Omit<MapRenderOptions, "previewRivers">> & { pre
   size: 36,
   padding: 48,
   background: "#F4F0E6",
+  usePatternOverlays: true,
   includeCoordinates: true,
   includeShorthand: false,
   includeGrid: true,
@@ -192,7 +193,7 @@ function renderCell(scene: MapScene, entry: MapScene["layout"][number]): string 
   const isSelected = scene.options.selectedCellId === cell.id;
   const isHovered = scene.options.hoveredCellId === cell.id;
   const fill = getTerrainColor(cell.terrain);
-  const overlay = buildPatternOverlay(cell.biome);
+  const overlay = scene.options.usePatternOverlays ? buildPatternOverlay(cell.biome) : null;
   const stroke = buildCellStroke(cell, isSelected, isHovered);
   const opacity = buildCellOpacity(cell);
   const shorthand = scene.options.includeShorthand ? getCellShorthand(cell) : null;
@@ -268,6 +269,7 @@ export function buildExportScene(input: ExportSceneInput): MapScene {
     size: 36 * input.options.scale,
     padding: input.options.padding,
     background: input.options.background,
+    usePatternOverlays: false,
     includeCoordinates: input.options.includeCoordinates,
     includeShorthand: input.options.includeShorthand,
     includeGrid: input.options.includeGrid,

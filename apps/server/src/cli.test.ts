@@ -161,6 +161,53 @@ describe("server cli", () => {
     expect(appliedBody.result.map.document.cells[0].terrain).toBe("plain");
   });
 
+  it("reports river feature stats for agent-created rivers", async () => {
+    const created = await runCli(["maps", "create", "--name", "River Agent CLI"], { tempRoot });
+    expect(created.code).toBe(0);
+    const createdBody = JSON.parse(created.stdout);
+    const mapId = createdBody.result.document.meta.id as string;
+
+    const applied = await runCli(
+      ["maps", "apply", "--map-id", mapId, "--stdin"],
+      {
+        tempRoot,
+        input: JSON.stringify({
+          commands: [
+            {
+              action: "create_river",
+              source: "cli",
+              river: {
+                id: "north-fork",
+                name: "North Fork",
+                points: [
+                  { row: 0, col: 0, width: 2 },
+                  { row: 0, col: 2, width: 6 }
+                ]
+              }
+            }
+          ]
+        })
+      }
+    );
+
+    expect(applied.code).toBe(0);
+    const appliedBody = JSON.parse(applied.stdout);
+    expect(appliedBody.result.map.document.features.rivers).toHaveLength(1);
+    expect(appliedBody.result.stats.created_count).toBe(0);
+    expect(appliedBody.result.stats.feature_stats).toEqual({
+      river_created_count: 1,
+      river_updated_count: 0,
+      river_deleted_count: 0
+    });
+
+    const inspected = await runCli(["maps", "rivers", "inspect", "--map-id", mapId, "--river-id", "north-fork"], {
+      tempRoot
+    });
+    expect(inspected.code).toBe(0);
+    const inspectedBody = JSON.parse(inspected.stdout);
+    expect(inspectedBody.result.points).toHaveLength(2);
+  });
+
   it("supports dry-run and query-style commands for agent workflows", async () => {
     const created = await runCli(["maps", "create", "--name", "Agent CLI"], { tempRoot });
     expect(created.code).toBe(0);
