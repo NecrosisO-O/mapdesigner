@@ -5,9 +5,16 @@ import {
   type ActiveCell,
   type BiomeKey,
   type MapRuntimeState,
-  type RiverFeature
+  type RiverFeature,
+  type TagKey
 } from "@mapdesigner/map-core";
 import type { TerrainCategoryKey } from "@mapdesigner/map-core";
+import { AdvancedEditPanel } from "./AdvancedEditPanel.js";
+import type {
+  BatchEditDraft,
+  ReplaceBiomeDraft,
+  ReplaceTerrainDraft
+} from "./useAdvancedEditor.js";
 import type { CellDraft, FormatBrushScope } from "./useCellEditor.js";
 import type { RiverDraft } from "./useRiverEditor.js";
 import { formatDateTime } from "./useMapWorkspace.js";
@@ -42,6 +49,16 @@ interface DetailPanelProps {
   riverDirty: boolean;
   riverDrawingStatus: "idle" | "drawing";
   riverDrawingPointCount: number;
+  batchModeActive: boolean;
+  batchSelectedCount: number;
+  batchDraft: BatchEditDraft;
+  replaceTerrainDraft: ReplaceTerrainDraft;
+  replaceBiomeDraft: ReplaceBiomeDraft;
+  batchFilteredTerrainCategories: TerrainCategoryKey[];
+  batchTerrainOptions: Array<{ key: string; label: string; short: string }>;
+  batchBiomeOptions: BiomeKey[];
+  replaceTerrainOptions: Array<{ key: string; label: string; short: string }>;
+  noneBiomeValue: string;
   canUseFormatBrush: boolean;
   cellDirty: boolean;
   onApplyDraft: () => void;
@@ -62,6 +79,21 @@ interface DetailPanelProps {
   onStartRiverDrawing: () => void;
   onFinishRiverDrawing: () => void;
   onCancelRiverDrawing: () => void;
+  onToggleBatchMode: () => void;
+  onClearBatchSelection: () => void;
+  onApplyBatchEdit: () => void;
+  onBatchTerrainCategoryChange: (value: string) => void;
+  onBatchTerrainChange: (value: string) => void;
+  onBatchBiomeChange: (value: string) => void;
+  onBatchTagChange: (tag: TagKey, checked: boolean) => void;
+  onBatchNoteChange: (value: string) => void;
+  onReplaceTerrainMatchChange: (value: string) => void;
+  onReplacementTerrainCategoryChange: (value: string) => void;
+  onReplacementTerrainChange: (value: string) => void;
+  onApplyTerrainReplacement: () => void;
+  onReplaceBiomeMatchChange: (value: string) => void;
+  onReplacementBiomeChange: (value: string) => void;
+  onApplyBiomeReplacement: () => void;
   getFormatBrushLabel: () => string;
 }
 
@@ -123,6 +155,24 @@ export function DetailPanel(props: DetailPanelProps) {
                 disabled={!props.selectedCell}
               />
               刷生态
+            </label>
+            <label className="checkbox-row switch-row">
+              <input
+                type="checkbox"
+                checked={props.formatBrushScope.tags}
+                onChange={(event) => props.onFormatBrushScopeChange("tags", event.target.checked)}
+                disabled={!props.selectedCell}
+              />
+              刷标签
+            </label>
+            <label className="checkbox-row switch-row">
+              <input
+                type="checkbox"
+                checked={props.formatBrushScope.note}
+                onChange={(event) => props.onFormatBrushScopeChange("note", event.target.checked)}
+                disabled={!props.selectedCell}
+              />
+              刷备注
             </label>
           </div>
           {props.formatBrushEnabled && props.selectedCell ? (
@@ -219,6 +269,35 @@ export function DetailPanel(props: DetailPanelProps) {
           </label>
         </div>
       </section>
+
+      <AdvancedEditPanel
+        currentMap={props.currentMap}
+        batchModeActive={props.batchModeActive}
+        selectedCount={props.batchSelectedCount}
+        batchDraft={props.batchDraft}
+        replaceTerrainDraft={props.replaceTerrainDraft}
+        replaceBiomeDraft={props.replaceBiomeDraft}
+        batchFilteredTerrainCategories={props.batchFilteredTerrainCategories}
+        batchTerrainOptions={props.batchTerrainOptions}
+        batchBiomeOptions={props.batchBiomeOptions}
+        replaceTerrainOptions={props.replaceTerrainOptions}
+        noneBiomeValue={props.noneBiomeValue}
+        onToggleBatchMode={props.onToggleBatchMode}
+        onClearBatchSelection={props.onClearBatchSelection}
+        onApplyBatchEdit={props.onApplyBatchEdit}
+        onBatchTerrainCategoryChange={props.onBatchTerrainCategoryChange}
+        onBatchTerrainChange={props.onBatchTerrainChange}
+        onBatchBiomeChange={props.onBatchBiomeChange}
+        onBatchTagChange={props.onBatchTagChange}
+        onBatchNoteChange={props.onBatchNoteChange}
+        onReplaceTerrainMatchChange={props.onReplaceTerrainMatchChange}
+        onReplacementTerrainCategoryChange={props.onReplacementTerrainCategoryChange}
+        onReplacementTerrainChange={props.onReplacementTerrainChange}
+        onApplyTerrainReplacement={props.onApplyTerrainReplacement}
+        onReplaceBiomeMatchChange={props.onReplaceBiomeMatchChange}
+        onReplacementBiomeChange={props.onReplacementBiomeChange}
+        onApplyBiomeReplacement={props.onApplyBiomeReplacement}
+      />
 
       <section className="panel river-editor-panel">
         <div className="cell-editor-heading">

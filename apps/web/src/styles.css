@@ -435,7 +435,15 @@ textarea {
   cursor: crosshair;
 }
 
+.map-canvas-batch-select {
+  cursor: cell;
+}
+
 .map-canvas-river-draw.map-canvas-dragging {
+  cursor: grabbing;
+}
+
+.map-canvas-batch-select.map-canvas-dragging {
   cursor: grabbing;
 }
 
@@ -543,6 +551,10 @@ textarea {
   outline: none;
 }
 
+.hex-cell[data-batch-selected="true"] polygon:first-of-type {
+  filter: saturate(1.08);
+}
+
 .cell-editor-panel {
   padding-bottom: 10px;
 }
@@ -603,6 +615,18 @@ textarea {
   margin: 0;
   color: #64706d;
   font-size: 0.84rem;
+}
+
+.advanced-editor-panel {
+  flex: 0 0 auto;
+}
+
+.compact-tag-grid {
+  margin-bottom: 10px;
+}
+
+.full-width-button {
+  width: 100%;
 }
 
 .river-editor-panel {

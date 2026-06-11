@@ -37,7 +37,9 @@ interface MapCanvasProps {
   selectedCell: ActiveCell | null;
   selectedCellId: string | null;
   onSelectCell: (cell: ActiveCell) => void;
-  interactionMode?: "select" | "river-draw";
+  interactionMode?: "select" | "river-draw" | "batch-select";
+  batchSelectedCellIds?: Set<string>;
+  onBatchCellToggle?: (cell: ActiveCell) => void;
   riverPreview?: RiverFeature | null;
   riverDrawingPointCount?: number;
   onRiverPointAdd?: (cell: ActiveCell) => void;
@@ -150,6 +152,7 @@ function CellGroup(props: {
   centerX: number;
   centerY: number;
   selected: boolean;
+  batchSelected: boolean;
   hovered: boolean;
   showCoordinates: boolean;
   showShorthand: boolean;
@@ -164,7 +167,7 @@ function CellGroup(props: {
   const shorthand = props.showShorthand ? getCellShorthand(cell) : null;
   const primaryTag = getPrimaryTag(cell);
   const primaryTagText = props.showPrimaryTag ? getPrimaryTagSymbol(primaryTag as TagKey | null) : null;
-  const stroke = buildCellStroke(cell, props.selected, props.hovered);
+  const stroke = props.batchSelected ? "#B66219" : buildCellStroke(cell, props.selected, props.hovered);
   const opacity = buildCellOpacity(cell);
   const textFill = cell.status === "designed" ? "#1D1B18" : "#6F675D";
 
@@ -172,6 +175,7 @@ function CellGroup(props: {
     <g
       className="hex-cell"
       data-cell-id={cell.id}
+      data-batch-selected={props.batchSelected ? "true" : undefined}
       data-filter-match={props.dimmed ? "false" : "true"}
       aria-label={`${cell.display_coord} ${cell.status}`}
       onClick={props.onSelect}
@@ -188,9 +192,18 @@ function CellGroup(props: {
         points={props.points}
         fill={getTerrainColor(cell.terrain)}
         stroke={stroke}
-        strokeWidth={props.showGrid ? 1.2 : 0.6}
+        strokeWidth={props.batchSelected ? 2.6 : props.showGrid ? 1.2 : 0.6}
         opacity={props.dimmed ? opacity * 0.32 : opacity}
       />
+      {props.batchSelected ? (
+        <polygon
+          points={props.points}
+          fill="none"
+          stroke="#FFF4CC"
+          strokeWidth="0.9"
+          opacity={props.dimmed ? 0.45 : 0.95}
+        />
+      ) : null}
       {patternFill ? (
         <polygon
           points={props.points}
@@ -312,8 +325,10 @@ export function MapCanvas(props: MapCanvasProps) {
           ? "far"
           : "extreme-far";
   const isRiverDrawing = props.interactionMode === "river-draw";
+  const isBatchSelecting = props.interactionMode === "batch-select";
   const riverDrawingPointCount = props.riverDrawingPointCount ?? 0;
   const tagFilter = props.tagFilter ?? [];
+  const batchSelectedCellIds = props.batchSelectedCellIds ?? new Set<string>();
 
   const setCamera = useCallback((nextCamera: CanvasCamera) => {
     const normalizedCamera = {
@@ -428,6 +443,10 @@ export function MapCanvas(props: MapCanvasProps) {
       props.onRiverPointAdd?.(cell);
       return;
     }
+    if (props.interactionMode === "batch-select") {
+      props.onBatchCellToggle?.(cell);
+      return;
+    }
     props.onSelectCell(cell);
   };
 
@@ -470,7 +489,8 @@ export function MapCanvas(props: MapCanvasProps) {
       className={[
         "map-canvas",
         isDragging ? "map-canvas-dragging" : "",
-        isRiverDrawing ? "map-canvas-river-draw" : ""
+        isRiverDrawing ? "map-canvas-river-draw" : "",
+        isBatchSelecting ? "map-canvas-batch-select" : ""
       ].filter(Boolean).join(" ")}
       onPointerDown={(event) => {
         if (event.button !== 0) {
@@ -550,7 +570,11 @@ export function MapCanvas(props: MapCanvasProps) {
         </div>
       ) : null}
       <div className="canvas-help-overlay" aria-hidden="true">
-        {isRiverDrawing ? "河流绘制 · 点击单元格添加路径点" : "滚轮缩放 · 拖拽平移"}
+        {isRiverDrawing
+          ? "河流绘制 · 点击单元格添加路径点"
+          : isBatchSelecting
+            ? "批量选择 · 点击单元格加入或移除"
+            : "滚轮缩放 · 拖拽平移"}
       </div>
       <svg
         width="100%"
@@ -584,6 +608,7 @@ export function MapCanvas(props: MapCanvasProps) {
                 centerX={entry.centerX}
                 centerY={entry.centerY}
                 selected={props.selectedCellId === entry.cell.id}
+                batchSelected={batchSelectedCellIds.has(entry.cell.id)}
                 hovered={hoveredCellId === entry.cell.id}
                 showCoordinates={shouldShowCoordinatesForEntry(entry)}
                 showShorthand={effectiveShowShorthand && isEntryInLabelViewport(entry)}

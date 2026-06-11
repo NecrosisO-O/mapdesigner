@@ -328,6 +328,76 @@ describe("server cli", () => {
     expect(appliedBody.result.terrain_summary.after.plain).toBe(1);
   });
 
+  it("supports advanced edit commands through maps apply", async () => {
+    const created = await runCli(["maps", "create", "--name", "Advanced CLI"], { tempRoot });
+    expect(created.code).toBe(0);
+    const mapId = JSON.parse(created.stdout).result.document.meta.id as string;
+
+    const commands = {
+      commands: [
+        {
+          action: "set_cells",
+          source: "cli",
+          targets: [
+            { row: 0, col: 0 },
+            { row: 0, col: 1 }
+          ],
+          changes: {
+            terrain: "plain",
+            biome: "grassland",
+            tags: ["peak"],
+            note: "batch"
+          }
+        },
+        {
+          action: "replace_terrain",
+          source: "cli",
+          match: { terrain: "plain" },
+          changes: { terrain: "hill" }
+        },
+        {
+          action: "replace_biome",
+          source: "cli",
+          match: { biome: "grassland" },
+          changes: { biome: "shrubland" }
+        }
+      ]
+    };
+
+    const preview = await runCli(["maps", "apply", "--map-id", mapId, "--stdin", "--dry-run", "--summary"], {
+      tempRoot,
+      input: JSON.stringify(commands)
+    });
+    expect(preview.code).toBe(0);
+    const previewBody = JSON.parse(preview.stdout);
+    expect(previewBody.result.dry_run).toBe(true);
+    expect(previewBody.result.changed_count).toBe(6);
+    expect(previewBody.result.designed_cell_count).toBe(2);
+
+    const inspectedAfterPreview = await runCli(["maps", "inspect", "--map-id", mapId], { tempRoot });
+    expect(JSON.parse(inspectedAfterPreview.stdout).result.document.cells).toHaveLength(0);
+
+    const applied = await runCli(["maps", "apply", "--map-id", mapId, "--stdin", "--summary"], {
+      tempRoot,
+      input: JSON.stringify(commands)
+    });
+    expect(applied.code).toBe(0);
+    const appliedBody = JSON.parse(applied.stdout);
+    expect(appliedBody.result.command_count).toBe(3);
+    expect(appliedBody.result.changed_count).toBe(6);
+    expect(appliedBody.result.designed_cell_count).toBe(2);
+    expect(appliedBody.result.terrain_summary.after.hill).toBe(4);
+    expect(appliedBody.result.biome_summary.after.shrubland).toBe(2);
+
+    const inspected = await runCli(["maps", "inspect", "--map-id", mapId], { tempRoot });
+    const cells = JSON.parse(inspected.stdout).result.document.cells;
+    expect(cells).toHaveLength(2);
+    expect(cells[0].terrain).toBe("hill");
+    expect(cells[0].biome).toBe("shrubland");
+    expect(cells[0].tags).toEqual(["peak"]);
+    expect(cells[0].note).toBe("batch");
+  });
+
   it("supports river overlay commands for agent workflows", async () => {
     const created = await runCli(["maps", "create", "--name", "River CLI"], { tempRoot });
     expect(created.code).toBe(0);
