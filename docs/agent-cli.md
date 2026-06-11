@@ -135,7 +135,70 @@ pnpm exec tsx apps/server/src/cli.ts maps export-png \
 - `--include-shorthand`
 - `--include-undesigned`
 
-### 7. 管理河流覆盖层
+### 7. 高级编辑命令
+
+批量设置多个单元格可使用 `set_cells`：
+
+```bash
+echo '{
+  "commands": [
+    {
+      "action": "set_cells",
+      "source": "cli",
+      "targets": [
+        { "row": 0, "col": 0 },
+        { "row": 0, "col": 1 },
+        { "row": 1, "col": 0 }
+      ],
+      "changes": {
+        "terrain": "plain",
+        "biome": "grassland",
+        "tags": ["peak"],
+        "note": "批量设置示例"
+      }
+    }
+  ]
+}' | pnpm exec tsx apps/server/src/cli.ts maps apply --map-id demo-map --stdin --dry-run
+```
+
+全图替换地形可使用 `replace_terrain`：
+
+```json
+{
+  "action": "replace_terrain",
+  "source": "cli",
+  "match": { "terrain": "plain" },
+  "changes": { "terrain": "hill" }
+}
+```
+
+全图替换生态可使用 `replace_biome`：
+
+```json
+{
+  "action": "replace_biome",
+  "source": "cli",
+  "match": { "biome": "grassland" },
+  "changes": { "biome": "shrubland" }
+}
+```
+
+批量标注若需要保留各格原有地形，可提交多条 `annotate_cell` 命令，而不是用 `set_cells` 覆盖整格：
+
+```json
+{
+  "commands": [
+    {
+      "action": "annotate_cell",
+      "source": "cli",
+      "target": { "row": 2, "col": 1 },
+      "changes": { "tags": ["cave_entrance"], "note": "洞穴入口" }
+    }
+  ]
+}
+```
+
+### 8. 管理河流覆盖层
 
 河流覆盖层是叠加在单元格地貌之上的线性要素，适合小河、支流、溪流和穿过其他地形的河道。
 

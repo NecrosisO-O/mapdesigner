@@ -2,6 +2,8 @@ import type { MapRuntimeState } from "@mapdesigner/map-core";
 import type { ChangeEvent, RefObject } from "react";
 import type { MapListItem } from "./api.js";
 
+export type InteractionMode = "select" | "river-draw" | "batch-select";
+
 interface TopToolbarProps {
   currentMap: MapRuntimeState | null;
   currentMapId: string;
@@ -21,8 +23,8 @@ interface TopToolbarProps {
   onImportFile: (file: File) => void;
   onDuplicateMap: () => void;
   onDeleteMap: () => void;
-  interactionMode: "select" | "river-draw";
-  onInteractionModeChange: (mode: "select" | "river-draw") => void;
+  interactionMode: InteractionMode;
+  onInteractionModeChange: (mode: InteractionMode) => void;
   onUndo: () => void;
   onRedo: () => void;
 }
@@ -95,6 +97,15 @@ export function TopToolbar(props: TopToolbarProps) {
             disabled={!props.currentMap}
           >
             河流
+          </button>
+          <button
+            type="button"
+            className={props.interactionMode === "batch-select" ? "toggle-button-active" : undefined}
+            aria-pressed={props.interactionMode === "batch-select"}
+            onClick={() => props.onInteractionModeChange("batch-select")}
+            disabled={!props.currentMap}
+          >
+            批量
           </button>
         </div>
 

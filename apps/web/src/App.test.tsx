@@ -445,6 +445,114 @@ describe("App", () => {
     expect((screen.getByLabelText("Biome") as HTMLSelectElement).value).toBe("grassland");
   });
 
+  it("brushes tags and notes when those format brush scopes are enabled", async () => {
+    render(<App />);
+    await screen.findByText("已打开 Sample Map");
+
+    fireEvent.click(getCellButton("R0C0", "designed"));
+    const terrainField = screen.getByLabelText("Terrain");
+    const cellPanel = terrainField.closest("section");
+    expect(cellPanel).toBeTruthy();
+
+    fireEvent.click(within(cellPanel as HTMLElement).getByLabelText("山峰"));
+    fireEvent.change(within(cellPanel as HTMLElement).getByLabelText("Note"), {
+      target: { value: "source note" }
+    });
+    fireEvent.click(within(cellPanel as HTMLElement).getByRole("button", { name: "应用" }));
+
+    fireEvent.click(within(cellPanel as HTMLElement).getByLabelText("刷标签"));
+    fireEvent.click(within(cellPanel as HTMLElement).getByLabelText("刷备注"));
+    fireEvent.click(within(cellPanel as HTMLElement).getByRole("button", { name: "格式刷" }));
+    fireEvent.click(getCellButton("R0C1", "undesigned"));
+
+    expect(await screen.findByText("已将 R0C0 的地形 + 生态 + 标签 + 备注刷到 R0C1，等待保存到文件")).toBeTruthy();
+
+    fireEvent.click(within(cellPanel as HTMLElement).getByRole("button", { name: "格式刷" }));
+    fireEvent.click(getCellButton("R0C1", "designed"));
+
+    expect((within(cellPanel as HTMLElement).getByLabelText("山峰") as HTMLInputElement).checked).toBe(true);
+    expect((within(cellPanel as HTMLElement).getByLabelText("Note") as HTMLTextAreaElement).value).toBe("source note");
+  });
+
+  it("batch-selects cells and applies set_cells through the advanced editor", async () => {
+    render(<App />);
+    await screen.findByText("已打开 Sample Map");
+
+    const advancedPanel = screen.getByRole("heading", { name: "高级编辑" }).closest("section");
+    expect(advancedPanel).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "批量" }));
+    expect(screen.getByRole("button", { name: "批量" }).getAttribute("aria-pressed")).toBe("true");
+
+    fireEvent.click(getCellButton("R0C1", "undesigned"));
+    fireEvent.click(getCellButton("R1C0", "undesigned"));
+
+    expect(within(advancedPanel as HTMLElement).getByText("已选 2 格")).toBeTruthy();
+
+    fireEvent.change(within(advancedPanel as HTMLElement).getByLabelText("批量 Terrain 分类"), {
+      target: { value: "upland" }
+    });
+    fireEvent.change(within(advancedPanel as HTMLElement).getByLabelText("批量 Terrain"), {
+      target: { value: "hill" }
+    });
+    fireEvent.change(within(advancedPanel as HTMLElement).getByLabelText("批量 Biome"), {
+      target: { value: "grassland" }
+    });
+    fireEvent.click(within(advancedPanel as HTMLElement).getByLabelText("山峰"));
+    fireEvent.change(within(advancedPanel as HTMLElement).getByLabelText("批量 Note"), {
+      target: { value: "batch note" }
+    });
+    fireEvent.click(within(advancedPanel as HTMLElement).getByRole("button", { name: "应用到选中格" }));
+
+    expect(await screen.findByText("已批量设置 2 个单元格，等待保存到文件")).toBeTruthy();
+    expect(within(advancedPanel as HTMLElement).getByText("已选 2 格")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "选择" }));
+    fireEvent.click(getCellButton("R0C1", "designed"));
+    const cellPanel = screen.getByLabelText("Terrain").closest("section");
+    expect(cellPanel).toBeTruthy();
+    expect((screen.getByLabelText("Terrain") as HTMLSelectElement).value).toBe("hill");
+    expect((screen.getByLabelText("Biome") as HTMLSelectElement).value).toBe("grassland");
+    expect((within(cellPanel as HTMLElement).getByLabelText("山峰") as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByLabelText("Note") as HTMLTextAreaElement).value).toBe("batch note");
+  });
+
+  it("replaces terrain and biome from the advanced editor", async () => {
+    render(<App />);
+    await screen.findByText("已打开 Sample Map");
+
+    const advancedPanel = screen.getByRole("heading", { name: "高级编辑" }).closest("section");
+    expect(advancedPanel).toBeTruthy();
+
+    fireEvent.change(within(advancedPanel as HTMLElement).getByLabelText("匹配 Terrain"), {
+      target: { value: "plain" }
+    });
+    fireEvent.change(within(advancedPanel as HTMLElement).getByLabelText("目标 Terrain 分类"), {
+      target: { value: "upland" }
+    });
+    fireEvent.change(within(advancedPanel as HTMLElement).getByLabelText("目标 Terrain"), {
+      target: { value: "hill" }
+    });
+    fireEvent.click(within(advancedPanel as HTMLElement).getByRole("button", { name: "替换地形" }));
+
+    expect(await screen.findByText("已替换 1 个地形，等待保存到文件")).toBeTruthy();
+
+    fireEvent.change(within(advancedPanel as HTMLElement).getByLabelText("匹配 Biome"), {
+      target: { value: "grassland" }
+    });
+    fireEvent.change(within(advancedPanel as HTMLElement).getByLabelText("目标 Biome"), {
+      target: { value: "shrubland" }
+    });
+    fireEvent.click(within(advancedPanel as HTMLElement).getByRole("button", { name: "替换生态" }));
+
+    expect(await screen.findByText("已替换 1 个生态，等待保存到文件")).toBeTruthy();
+
+    fireEvent.click(getCellButton("R0C0", "designed"));
+    expect((screen.getByLabelText("Terrain") as HTMLSelectElement).value).toBe("hill");
+    expect((screen.getByLabelText("Biome") as HTMLSelectElement).value).toBe("shrubland");
+    expect(await screen.findByText("已记录 2 步 | 可重做 0 步")).toBeTruthy();
+  });
+
   it("returns to normal selection after leaving format brush mode", async () => {
     render(<App />);
     await screen.findByText("已打开 Sample Map");

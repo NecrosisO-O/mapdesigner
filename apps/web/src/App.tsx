@@ -3,7 +3,9 @@ import { useState } from "react";
 import { DetailPanel } from "./DetailPanel.js";
 import { MapCanvas } from "./MapCanvas.js";
 import { SidebarPanel } from "./SidebarPanel.js";
+import { useAdvancedEditor } from "./useAdvancedEditor.js";
 import { TopToolbar } from "./TopToolbar.js";
+import type { InteractionMode } from "./TopToolbar.js";
 import { useCellEditor } from "./useCellEditor.js";
 import { useExportPanel } from "./useExportPanel.js";
 import { useMapWorkspace } from "./useMapWorkspace.js";
@@ -17,11 +19,21 @@ export default function App() {
   const [showUndesigned, setShowUndesigned] = useState(true);
   const [tagFilter, setTagFilter] = useState<TagKey[]>([]);
   const [lastOpaqueExportBackground, setLastOpaqueExportBackground] = useState("#F4F0E6");
-  const [interactionMode, setInteractionMode] = useState<"select" | "river-draw">("select");
+  const [interactionMode, setInteractionMode] = useState<InteractionMode>("select");
   const workspace = useMapWorkspace(setMessage);
   const editor = useCellEditor(workspace.currentMap, workspace.setCurrentMap, setMessage);
+  const advancedEditor = useAdvancedEditor(workspace.currentMap, workspace.setCurrentMap, setMessage);
   const riverEditor = useRiverEditor(workspace.currentMap, workspace.setCurrentMap, setMessage);
   const exportPanel = useExportPanel(setMessage);
+
+  function updateEditorDraftFromMap(nextMap: NonNullable<typeof workspace.currentMap>): void {
+    if (!editor.selectedCell) {
+      return;
+    }
+    editor.syncDraftFromCell(
+      nextMap.activeCells.find((cell) => cell.id === editor.selectedCell?.id) ?? null
+    );
+  }
 
   async function handleCreateMap(): Promise<void> {
     const result = await workspace.createMap();
@@ -110,6 +122,9 @@ export default function App() {
             riverEditor.startRiverDrawing();
           } else if (riverEditor.riverDrawingStatus === "drawing") {
             riverEditor.cancelRiverDrawing();
+          }
+          if (mode === "batch-select") {
+            editor.disableFormatBrush();
           }
         }}
         onUndo={() => {
@@ -218,6 +233,8 @@ export default function App() {
               selectedCellId={editor.selectedCellId}
               onSelectCell={editor.handleCanvasCellSelect}
               interactionMode={interactionMode}
+              batchSelectedCellIds={advancedEditor.batchSelectedCellIds}
+              onBatchCellToggle={advancedEditor.toggleBatchCell}
               riverPreview={riverEditor.riverPreview}
               riverDrawingPointCount={riverEditor.riverDrawingPoints.length}
               onRiverPointAdd={riverEditor.appendRiverPoint}
@@ -260,6 +277,16 @@ export default function App() {
           riverDirty={riverEditor.riverDirty}
           riverDrawingStatus={riverEditor.riverDrawingStatus}
           riverDrawingPointCount={riverEditor.riverDrawingPoints.length}
+          batchModeActive={interactionMode === "batch-select"}
+          batchSelectedCount={advancedEditor.batchSelectedCells.length}
+          batchDraft={advancedEditor.batchDraft}
+          replaceTerrainDraft={advancedEditor.replaceTerrainDraft}
+          replaceBiomeDraft={advancedEditor.replaceBiomeDraft}
+          batchFilteredTerrainCategories={advancedEditor.batchFilteredTerrainCategories}
+          batchTerrainOptions={advancedEditor.batchTerrainOptions}
+          batchBiomeOptions={advancedEditor.batchBiomeOptions}
+          replaceTerrainOptions={advancedEditor.replaceTerrainOptions}
+          noneBiomeValue={advancedEditor.noneBiomeValue}
           canUseFormatBrush={editor.canUseFormatBrush}
           cellDirty={editor.cellDirty}
           onApplyDraft={editor.applyDraft}
@@ -320,6 +347,66 @@ export default function App() {
           onCancelRiverDrawing={() => {
             riverEditor.cancelRiverDrawing();
             setInteractionMode("select");
+          }}
+          onToggleBatchMode={() => {
+            if (interactionMode === "batch-select") {
+              setInteractionMode("select");
+              return;
+            }
+            editor.disableFormatBrush();
+            if (riverEditor.riverDrawingStatus === "drawing") {
+              riverEditor.cancelRiverDrawing();
+            }
+            setInteractionMode("batch-select");
+          }}
+          onClearBatchSelection={advancedEditor.clearBatchSelection}
+          onApplyBatchEdit={() => {
+            const result = advancedEditor.applyBatchEdit();
+            if (result) {
+              updateEditorDraftFromMap(result);
+            }
+          }}
+          onBatchTerrainCategoryChange={advancedEditor.setBatchTerrainCategory}
+          onBatchTerrainChange={advancedEditor.setBatchTerrain}
+          onBatchBiomeChange={advancedEditor.setBatchBiome}
+          onBatchTagChange={advancedEditor.setBatchTag}
+          onBatchNoteChange={(value) =>
+            advancedEditor.setBatchDraft((current) => ({
+              ...current,
+              note: value
+            }))
+          }
+          onReplaceTerrainMatchChange={(value) =>
+            advancedEditor.setReplaceTerrainDraft((current) => ({
+              ...current,
+              matchTerrain: value
+            }))
+          }
+          onReplacementTerrainCategoryChange={advancedEditor.setReplacementTerrainCategory}
+          onReplacementTerrainChange={advancedEditor.setReplacementTerrain}
+          onApplyTerrainReplacement={() => {
+            const result = advancedEditor.applyTerrainReplacement();
+            if (result) {
+              updateEditorDraftFromMap(result);
+            }
+          }}
+          onReplaceBiomeMatchChange={(value) =>
+            advancedEditor.setReplaceBiomeDraft((current) => ({
+              ...current,
+              matchBiome: value
+            }))
+          }
+          onReplacementBiomeChange={(value) =>
+            advancedEditor.setReplaceBiomeDraft((current) => ({
+              ...current,
+              replacementBiome: value
+            }))
+          }
+          onApplyBiomeReplacement={() => {
+            const result = advancedEditor.applyBiomeReplacement();
+            if (result) {
+              updateEditorDraftFromMap(result);
+            }
           }}
           getFormatBrushLabel={editor.getFormatBrushLabel}
         />

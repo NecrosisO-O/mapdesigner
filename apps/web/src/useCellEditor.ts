@@ -26,6 +26,8 @@ export interface CellDraft {
 export interface FormatBrushScope {
   terrain: boolean;
   biome: boolean;
+  tags: boolean;
+  note: boolean;
 }
 
 function toDraft(cell: ActiveCell | null): CellDraft {
@@ -55,7 +57,9 @@ export function useCellEditor(
   const [formatBrushEnabled, setFormatBrushEnabled] = useState(false);
   const [formatBrushScope, setFormatBrushScope] = useState<FormatBrushScope>({
     terrain: true,
-    biome: true
+    biome: true,
+    tags: false,
+    note: false
   });
 
   const selectedCell =
@@ -103,7 +107,7 @@ export function useCellEditor(
 
   function setFormatBrushScopeField(field: keyof FormatBrushScope, value: boolean): void {
     setFormatBrushScope((current) => {
-      if (!value && !current[field === "terrain" ? "biome" : "terrain"]) {
+      if (!value && Object.entries(current).every(([key, enabled]) => key === field || !enabled)) {
         return current;
       }
       return {
@@ -114,13 +118,13 @@ export function useCellEditor(
   }
 
   function getFormatBrushLabel(): string {
-    if (formatBrushScope.terrain && formatBrushScope.biome) {
-      return "地形 + 生态";
-    }
-    if (formatBrushScope.terrain) {
-      return "地形";
-    }
-    return "生态";
+    const labels = [
+      formatBrushScope.terrain ? "地形" : null,
+      formatBrushScope.biome ? "生态" : null,
+      formatBrushScope.tags ? "标签" : null,
+      formatBrushScope.note ? "备注" : null
+    ].filter((entry): entry is string => entry !== null);
+    return labels.join(" + ");
   }
 
   function handleTerrainCategoryChange(nextCategory: string): void {
@@ -255,8 +259,8 @@ export function useCellEditor(
     if (targetCell.id === selectedCell.id) {
       return;
     }
-    if (!formatBrushScope.terrain && !formatBrushScope.biome) {
-      setMessage("请至少选择地形或生态");
+    if (Object.values(formatBrushScope).every((enabled) => !enabled)) {
+      setMessage("请至少选择一个格式刷字段");
       return;
     }
     if (!formatBrushScope.terrain && !targetCell.terrain) {
@@ -278,8 +282,8 @@ export function useCellEditor(
       changes: {
         terrain: nextTerrain as keyof typeof TERRAIN_ENTRIES,
         biome: nextBiome ? (nextBiome as keyof typeof BIOME_ENTRIES) : null,
-        tags: targetCell.tags as Array<keyof typeof TAG_ENTRIES>,
-        note: targetCell.note
+        tags: (formatBrushScope.tags ? selectedCell.tags : targetCell.tags) as Array<keyof typeof TAG_ENTRIES>,
+        note: formatBrushScope.note ? selectedCell.note : targetCell.note
       }
     });
 
