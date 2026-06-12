@@ -236,13 +236,6 @@ export function useAdvancedEditor(
       setMessage("匹配 terrain 与目标 terrain 相同");
       return null;
     }
-    const matchCount = currentMap.document.cells.filter(
-      (cell) => cell.terrain === replaceTerrainDraft.matchTerrain
-    ).length;
-    if (matchCount === 0) {
-      setMessage("没有匹配的 terrain");
-      return null;
-    }
     const result = await applyCommands([{
       action: "replace_terrain",
       source: "webui",
@@ -256,7 +249,7 @@ export function useAdvancedEditor(
     if (!result) {
       return null;
     }
-    setMessage(`已替换 ${matchCount} 个地形并保存到服务器`);
+    setMessage("地形替换已保存到服务器");
     return result;
   }
 
@@ -274,11 +267,6 @@ export function useAdvancedEditor(
       setMessage("匹配 biome 与目标 biome 相同");
       return null;
     }
-    const matchCount = currentMap.document.cells.filter((cell) => cell.biome === matchBiome).length;
-    if (matchCount === 0) {
-      setMessage("没有匹配的 biome");
-      return null;
-    }
     const result = await applyCommands([{
       action: "replace_biome",
       source: "webui",
@@ -292,7 +280,7 @@ export function useAdvancedEditor(
     if (!result) {
       return null;
     }
-    setMessage(`已替换 ${matchCount} 个生态并保存到服务器`);
+    setMessage("生态替换已保存到服务器");
     return result;
   }
 

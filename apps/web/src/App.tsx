@@ -21,9 +21,10 @@ export default function App() {
   const [lastOpaqueExportBackground, setLastOpaqueExportBackground] = useState("#F4F0E6");
   const [interactionMode, setInteractionMode] = useState<InteractionMode>("select");
   const workspace = useMapWorkspace(setMessage);
-  const editor = useCellEditor(workspace.currentMap, workspace.applyCommands, setMessage);
-  const advancedEditor = useAdvancedEditor(workspace.currentMap, workspace.applyCommands, setMessage);
-  const riverEditor = useRiverEditor(workspace.currentMap, workspace.applyCommands, setMessage);
+  const activeMap = workspace.visibleMap ?? workspace.currentMap;
+  const editor = useCellEditor(activeMap, workspace.applyCommands, setMessage);
+  const advancedEditor = useAdvancedEditor(activeMap, workspace.applyCommands, setMessage);
+  const riverEditor = useRiverEditor(activeMap, workspace.applyCommands, setMessage);
   const exportPanel = useExportPanel(setMessage);
 
   function updateEditorDraftFromMap(nextMap: NonNullable<typeof workspace.currentMap>): void {
@@ -228,9 +229,9 @@ export default function App() {
         />
 
         <section className="canvas-panel">
-          {workspace.visibleMap ? (
+          {activeMap ? (
             <MapCanvas
-              map={workspace.visibleMap}
+              map={activeMap}
               mapSummary={workspace.mapSummary}
               selectedCell={editor.selectedCell}
               selectedCellId={editor.selectedCellId}
@@ -268,7 +269,7 @@ export default function App() {
         </section>
 
         <DetailPanel
-          currentMap={workspace.currentMap}
+          currentMap={activeMap}
           mapHistory={workspace.mapHistory}
           selectedCell={editor.selectedCell}
           draft={editor.draft}
@@ -278,7 +279,7 @@ export default function App() {
           biomeOptions={editor.biomeOptions}
           formatBrushEnabled={editor.formatBrushEnabled}
           formatBrushScope={editor.formatBrushScope}
-          rivers={workspace.currentMap?.document.features?.rivers ?? []}
+          rivers={activeMap?.document.features?.rivers ?? []}
           selectedRiverId={riverEditor.selectedRiverId}
           riverDraft={riverEditor.riverDraft}
           riverDirty={riverEditor.riverDirty}

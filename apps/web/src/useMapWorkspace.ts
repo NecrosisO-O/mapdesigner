@@ -1,4 +1,13 @@
-import type { ActiveCell, CellRange, MapCommand, MapRuntimeState, MapSummary } from "@mapdesigner/map-core";
+import {
+  getHistoryLimitForDesignedCellCount,
+  type ActiveCell,
+  type CellRange,
+  type DesignedCellRecord,
+  type MapCommand,
+  type MapFeatures,
+  type MapRuntimeState,
+  type MapSummary
+} from "@mapdesigner/map-core";
 import { startTransition, useEffect, useMemo, useRef, useState } from "react";
 import { api, type MapHistory, type MapListItem } from "./api.js";
 
@@ -54,6 +63,29 @@ function normalizeVisibleRange(range: CellRange): CellRange {
   };
 }
 
+function initialVisibleRangeFromSummary(summary: MapSummary): CellRange {
+  const { bounds, grid } = summary;
+  if (
+    bounds.min_row === null ||
+    bounds.max_row === null ||
+    bounds.min_col === null ||
+    bounds.max_col === null
+  ) {
+    return {
+      minRow: grid.origin.row - 1,
+      maxRow: grid.origin.row + 1,
+      minCol: grid.origin.col - 1,
+      maxCol: grid.origin.col + 1
+    };
+  }
+  return {
+    minRow: bounds.min_row,
+    maxRow: bounds.max_row,
+    minCol: bounds.min_col,
+    maxCol: bounds.max_col
+  };
+}
+
 function summaryFromRuntime(map: MapRuntimeState): MapSummary {
   const rows = map.document.cells.map((cell) => cell.row);
   const cols = map.document.cells.map((cell) => cell.col);
@@ -76,11 +108,62 @@ function summaryFromRuntime(map: MapRuntimeState): MapSummary {
   };
 }
 
+function createEmptyFeatures(): MapFeatures {
+  return { rivers: [] };
+}
+
+function sortActiveCells(left: ActiveCell, right: ActiveCell): number {
+  if (left.row !== right.row) {
+    return left.row - right.row;
+  }
+  return left.col - right.col;
+}
+
+function activeCellsToDesignedRecords(cells: ActiveCell[]): DesignedCellRecord[] {
+  return cells
+    .filter((cell): cell is ActiveCell & { terrain: NonNullable<ActiveCell["terrain"]> } =>
+      cell.status === "designed" && Boolean(cell.terrain)
+    )
+    .sort(sortActiveCells)
+    .map((cell) => ({
+      row: cell.row,
+      col: cell.col,
+      terrain: cell.terrain,
+      biome: cell.biome,
+      tags: [...cell.tags],
+      note: cell.note
+    }));
+}
+
+function buildPartialRuntime(
+  summary: MapSummary,
+  features: MapFeatures,
+  activeCells: ActiveCell[]
+): MapRuntimeState {
+  const sortedActiveCells = [...activeCells].sort(sortActiveCells);
+  return {
+    document: {
+      schema_version: 1,
+      meta: summary.meta,
+      grid: summary.grid,
+      cells: activeCellsToDesignedRecords(sortedActiveCells),
+      features
+    },
+    activeCells: sortedActiveCells,
+    history: {
+      past: [],
+      future: [],
+      limit: getHistoryLimitForDesignedCellCount(summary.designed_cell_count)
+    }
+  };
+}
+
 export function useMapWorkspace(setMessage: (message: string) => void) {
   const [maps, setMaps] = useState<MapListItem[]>([]);
   const [currentMap, setCurrentMap] = useState<MapRuntimeState | null>(null);
   const [currentMapId, setCurrentMapId] = useState<string>("");
   const [mapSummary, setMapSummary] = useState<MapSummary | null>(null);
+  const [mapFeatures, setMapFeatures] = useState<MapFeatures>(() => createEmptyFeatures());
   const [mapHistory, setMapHistory] = useState<MapHistory | null>(null);
   const [cellCache, setCellCache] = useState<Map<string, ActiveCell>>(() => new Map());
   const [visibleCellIds, setVisibleCellIds] = useState<string[]>([]);
@@ -121,11 +204,8 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
     if (activeCells.length === 0) {
       return currentMap;
     }
-    return {
-      ...currentMap,
-      activeCells
-    };
-  }, [cellCache, currentMap, visibleCellIds]);
+    return buildPartialRuntime(mapSummary ?? summaryFromRuntime(currentMap), mapFeatures, activeCells);
+  }, [cellCache, currentMap, mapFeatures, mapSummary, visibleCellIds]);
 
   async function refreshMaps(selectId?: string): Promise<void> {
     const response = await api.listMaps();
@@ -142,10 +222,12 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
   }
 
   function loadMapIntoWorkspace(map: MapRuntimeState, summary: MapSummary | null = null): void {
+    visibleRangeRequestSeqRef.current += 1;
     suppressAutoOpenRef.current = false;
     setCurrentMap(map);
     setCurrentMapId(map.document.meta.id);
     setMapSummary(summary ?? summaryFromRuntime(map));
+    setMapFeatures(map.document.features ?? createEmptyFeatures());
     setCellCache(new Map());
     setVisibleCellIds([]);
     lastVisibleRangeRef.current = null;
@@ -153,6 +235,29 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
     setPersistedRevision(map.document.meta.revision);
     setIsRenaming(false);
     setRenameDraft(map.document.meta.name);
+  }
+
+  function loadPartialMapIntoWorkspace(
+    summary: MapSummary,
+    features: MapFeatures,
+    activeCells: ActiveCell[] = [],
+    loadedRange: CellRange | null = null
+  ): MapRuntimeState {
+    visibleRangeRequestSeqRef.current += 1;
+    const runtime = buildPartialRuntime(summary, features, activeCells);
+    suppressAutoOpenRef.current = false;
+    setCurrentMap(runtime);
+    setCurrentMapId(summary.meta.id);
+    setMapSummary(summary);
+    setMapFeatures(features);
+    setCellCache(new Map(activeCells.map((cell) => [cell.id, cell])));
+    setVisibleCellIds(activeCells.map((cell) => cell.id));
+    lastVisibleRangeRef.current = loadedRange;
+    lastVisibleRangeKeyRef.current = loadedRange ? `${summary.meta.id}:${rangeKey(loadedRange)}` : "";
+    setPersistedRevision(summary.meta.revision);
+    setIsRenaming(false);
+    setRenameDraft(summary.meta.name);
+    return runtime;
   }
 
   async function refreshMapSummary(id = currentMap?.document.meta.id): Promise<MapSummary | null> {
@@ -166,6 +271,20 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
       return null;
     }
     setMapSummary(response.result);
+    return response.result;
+  }
+
+  async function refreshMapFeatures(id = currentMap?.document.meta.id): Promise<MapFeatures | null> {
+    if (!id) {
+      setMapFeatures(createEmptyFeatures());
+      return null;
+    }
+    const response = await api.getMapFeatures(id);
+    if (!response.ok || !response.result) {
+      setMessage(formatStatusMessage(response.errors[0]?.message, "刷新地图要素失败"));
+      return null;
+    }
+    setMapFeatures(response.result);
     return response.result;
   }
 
@@ -185,19 +304,34 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
 
   async function openMap(id: string): Promise<MapRuntimeState | null> {
     setLoading(true);
-    const [summaryResponse, response] = await Promise.all([
+    const [summaryResponse, featuresResponse] = await Promise.all([
       api.getMapSummary(id),
-      api.getMap(id)
+      api.getMapFeatures(id)
     ]);
     setLoading(false);
-    if (!response.ok || !response.result) {
-      setMessage(formatStatusMessage(response.errors[0]?.message, "打开地图失败"));
+    if (!summaryResponse.ok || !summaryResponse.result) {
+      setMessage(formatStatusMessage(summaryResponse.errors[0]?.message, "打开地图失败"));
       return null;
     }
-    loadMapIntoWorkspace(response.result, summaryResponse.ok && summaryResponse.result ? summaryResponse.result : null);
-    await refreshMapHistory(response.result.document.meta.id);
-    setMessage(`已打开 ${response.result.document.meta.name}`);
-    return response.result;
+    if (!featuresResponse.ok || !featuresResponse.result) {
+      setMessage(formatStatusMessage(featuresResponse.errors[0]?.message, "打开地图要素失败"));
+      return null;
+    }
+    const initialRange = normalizeVisibleRange(initialVisibleRangeFromSummary(summaryResponse.result));
+    const cellsResponse = await api.getCellsInRange(summaryResponse.result.meta.id, initialRange, true);
+    if (!cellsResponse.ok || !cellsResponse.result) {
+      setMessage(formatStatusMessage(cellsResponse.errors[0]?.message, "加载可视单元格失败"));
+      return null;
+    }
+    const runtime = loadPartialMapIntoWorkspace(
+      summaryResponse.result,
+      featuresResponse.result,
+      cellsResponse.result.cells,
+      initialRange
+    );
+    await refreshMapHistory(summaryResponse.result.meta.id);
+    setMessage(`已打开 ${summaryResponse.result.meta.name}`);
+    return runtime;
   }
 
   function ensureCanLeaveMap(): boolean {
@@ -228,23 +362,26 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
     if (!currentMap || persistedRevision === null) {
       return null;
     }
-    const response = await api.saveMap(currentMap.document.meta.id, {
-      document: currentMap.document,
-      expectedRevision: persistedRevision
+    const response = await api.saveMapMeta(currentMap.document.meta.id, {
+      expectedRevision: persistedRevision,
+      name: currentMap.document.meta.name,
+      description: currentMap.document.meta.description,
+      tags: currentMap.document.meta.tags
     });
     if (!response.ok || !response.result) {
       setMessage(formatStatusMessage(response.errors[0]?.message, "保存失败"));
       return null;
     }
-    setCurrentMap(response.result);
-    setMapSummary(summaryFromRuntime(response.result));
-    setPersistedRevision(response.result.document.meta.revision);
+    const nextRuntime = buildPartialRuntime(response.result, mapFeatures, currentMap.activeCells);
+    setCurrentMap(nextRuntime);
+    setMapSummary(response.result);
+    setPersistedRevision(response.result.meta.revision);
     setIsRenaming(false);
-    setRenameDraft(response.result.document.meta.name);
-    await refreshMaps(response.result.document.meta.id);
-    await refreshMapHistory(response.result.document.meta.id);
+    setRenameDraft(response.result.meta.name);
+    await refreshMaps(response.result.meta.id);
+    await refreshMapHistory(response.result.meta.id);
     setMessage("保存成功");
-    return response.result;
+    return nextRuntime;
   }
 
   function startRenaming(): void {
@@ -288,7 +425,6 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
       return null;
     }
     const response = await api.saveMapAs(currentMap.document.meta.id, {
-      document: currentMap.document,
       name: name.trim()
     });
     if (!response.ok || !response.result) {
@@ -360,8 +496,10 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
     setCurrentMap(null);
     setCurrentMapId("");
     setMapSummary(null);
+    setMapFeatures(createEmptyFeatures());
     setCellCache(new Map());
     setVisibleCellIds([]);
+    visibleRangeRequestSeqRef.current += 1;
     lastVisibleRangeRef.current = null;
     lastVisibleRangeKeyRef.current = "";
     setPersistedRevision(null);
@@ -379,28 +517,36 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
       setMessage("请先选择一张地图");
       return null;
     }
-    const response = await api.applyCommands(currentMap.document.meta.id, commands);
+    const response = await api.applyCommands(currentMap.document.meta.id, commands, { includeMap: false });
     if (!response.ok || !response.result) {
       setMessage(formatStatusMessage(response.errors[0]?.message, "应用修改失败"));
       return null;
     }
-    setCurrentMap(response.result.map);
-    setMapSummary(summaryFromRuntime(response.result.map));
-    setPersistedRevision(response.result.map.document.meta.revision);
-    await refreshMaps(response.result.map.document.meta.id);
-    await refreshMapSummary(response.result.map.document.meta.id);
-    if (lastVisibleRangeRef.current) {
-      await requestVisibleRange(lastVisibleRangeRef.current, response.result.map.document.meta.id);
+    const nextSummary = response.result.summary ?? await refreshMapSummary(currentMap.document.meta.id);
+    const nextFeatures = response.result.features ?? await refreshMapFeatures(currentMap.document.meta.id);
+    if (!nextSummary || !nextFeatures) {
+      return null;
     }
-    await refreshMapHistory(response.result.map.document.meta.id);
-    return response.result.map;
+    setMapSummary(nextSummary);
+    setMapFeatures(nextFeatures);
+    setPersistedRevision(nextSummary.meta.revision);
+    await refreshMaps(nextSummary.meta.id);
+    let nextRuntime: MapRuntimeState | null = null;
+    if (lastVisibleRangeRef.current) {
+      nextRuntime = await loadVisibleRange(lastVisibleRangeRef.current, nextSummary.meta.id, nextSummary, nextFeatures, true);
+    } else {
+      nextRuntime = buildPartialRuntime(nextSummary, nextFeatures, currentMap.activeCells);
+      setCurrentMap(nextRuntime);
+    }
+    await refreshMapHistory(nextSummary.meta.id);
+    return nextRuntime;
   }
 
   async function undoCurrentMap(): Promise<MapRuntimeState | null> {
     if (!currentMap) {
       return null;
     }
-    const response = await api.undoMap(currentMap.document.meta.id);
+    const response = await api.undoMap(currentMap.document.meta.id, false);
     if (!response.ok) {
       setMessage(formatStatusMessage(response.errors[0]?.message, "撤销失败"));
       return null;
@@ -409,24 +555,32 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
       setMessage("没有可撤销的操作");
       return null;
     }
-    setCurrentMap(response.result.map);
-    setMapSummary(summaryFromRuntime(response.result.map));
-    setPersistedRevision(response.result.map.document.meta.revision);
-    await refreshMaps(response.result.map.document.meta.id);
-    await refreshMapSummary(response.result.map.document.meta.id);
-    if (lastVisibleRangeRef.current) {
-      await requestVisibleRange(lastVisibleRangeRef.current, response.result.map.document.meta.id);
+    const nextSummary = response.result.summary ?? await refreshMapSummary(currentMap.document.meta.id);
+    const nextFeatures = response.result.features ?? await refreshMapFeatures(currentMap.document.meta.id);
+    if (!nextSummary || !nextFeatures) {
+      return null;
     }
-    await refreshMapHistory(response.result.map.document.meta.id);
+    setMapSummary(nextSummary);
+    setMapFeatures(nextFeatures);
+    setPersistedRevision(nextSummary.meta.revision);
+    await refreshMaps(nextSummary.meta.id);
+    let nextRuntime: MapRuntimeState | null = null;
+    if (lastVisibleRangeRef.current) {
+      nextRuntime = await loadVisibleRange(lastVisibleRangeRef.current, nextSummary.meta.id, nextSummary, nextFeatures, true);
+    } else {
+      nextRuntime = buildPartialRuntime(nextSummary, nextFeatures, currentMap.activeCells);
+      setCurrentMap(nextRuntime);
+    }
+    await refreshMapHistory(nextSummary.meta.id);
     setMessage(response.result.warnings[0]?.message ?? "已撤销");
-    return response.result.map;
+    return nextRuntime;
   }
 
   async function redoCurrentMap(): Promise<MapRuntimeState | null> {
     if (!currentMap) {
       return null;
     }
-    const response = await api.redoMap(currentMap.document.meta.id);
+    const response = await api.redoMap(currentMap.document.meta.id, false);
     if (!response.ok) {
       setMessage(formatStatusMessage(response.errors[0]?.message, "重做失败"));
       return null;
@@ -435,39 +589,58 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
       setMessage("没有可重做的操作");
       return null;
     }
-    setCurrentMap(response.result.map);
-    setMapSummary(summaryFromRuntime(response.result.map));
-    setPersistedRevision(response.result.map.document.meta.revision);
-    await refreshMaps(response.result.map.document.meta.id);
-    await refreshMapSummary(response.result.map.document.meta.id);
-    if (lastVisibleRangeRef.current) {
-      await requestVisibleRange(lastVisibleRangeRef.current, response.result.map.document.meta.id);
+    const nextSummary = response.result.summary ?? await refreshMapSummary(currentMap.document.meta.id);
+    const nextFeatures = response.result.features ?? await refreshMapFeatures(currentMap.document.meta.id);
+    if (!nextSummary || !nextFeatures) {
+      return null;
     }
-    await refreshMapHistory(response.result.map.document.meta.id);
+    setMapSummary(nextSummary);
+    setMapFeatures(nextFeatures);
+    setPersistedRevision(nextSummary.meta.revision);
+    await refreshMaps(nextSummary.meta.id);
+    let nextRuntime: MapRuntimeState | null = null;
+    if (lastVisibleRangeRef.current) {
+      nextRuntime = await loadVisibleRange(lastVisibleRangeRef.current, nextSummary.meta.id, nextSummary, nextFeatures, true);
+    } else {
+      nextRuntime = buildPartialRuntime(nextSummary, nextFeatures, currentMap.activeCells);
+      setCurrentMap(nextRuntime);
+    }
+    await refreshMapHistory(nextSummary.meta.id);
     setMessage(response.result.warnings[0]?.message ?? "已重做");
-    return response.result.map;
+    return nextRuntime;
   }
 
-  async function requestVisibleRange(range: CellRange, mapId = currentMap?.document.meta.id): Promise<void> {
+  async function loadVisibleRange(
+    range: CellRange,
+    mapId = currentMap?.document.meta.id,
+    summaryOverride: MapSummary | null = null,
+    featuresOverride: MapFeatures | null = null,
+    force = false
+  ): Promise<MapRuntimeState | null> {
     if (!mapId) {
-      return;
+      return null;
     }
     const normalizedRange = normalizeVisibleRange(range);
     const key = `${mapId}:${rangeKey(normalizedRange)}`;
     lastVisibleRangeRef.current = normalizedRange;
-    if (key === lastVisibleRangeKeyRef.current) {
-      return;
+    if (!force && key === lastVisibleRangeKeyRef.current) {
+      return currentMap;
     }
     lastVisibleRangeKeyRef.current = key;
     const requestSeq = visibleRangeRequestSeqRef.current + 1;
     visibleRangeRequestSeqRef.current = requestSeq;
     const response = await api.getCellsInRange(mapId, normalizedRange, true);
     if (requestSeq !== visibleRangeRequestSeqRef.current) {
-      return;
+      return null;
     }
     if (!response.ok || !response.result) {
       setMessage(formatStatusMessage(response.errors[0]?.message, "加载可视单元格失败"));
-      return;
+      return null;
+    }
+    const nextSummary = summaryOverride ?? mapSummary ?? await refreshMapSummary(mapId);
+    const nextFeatures = featuresOverride ?? mapFeatures;
+    if (!nextSummary) {
+      return null;
     }
     setCellCache((current) => {
       const next = new Map(current);
@@ -477,6 +650,13 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
       return next;
     });
     setVisibleCellIds(response.result.cells.map((cell) => cell.id));
+    const runtime = buildPartialRuntime(nextSummary, nextFeatures, response.result.cells);
+    setCurrentMap(runtime);
+    return runtime;
+  }
+
+  async function requestVisibleRange(range: CellRange, mapId = currentMap?.document.meta.id): Promise<void> {
+    await loadVisibleRange(range, mapId);
   }
 
   useEffect(() => {
@@ -516,6 +696,7 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
     setRenameDraft,
     refreshMaps,
     refreshMapSummary,
+    refreshMapFeatures,
     refreshMapHistory,
     requestVisibleRange,
     openMap,

@@ -39,6 +39,7 @@ import {
   createMapDocument,
   deleteMapDocument,
   getCellsInRange as getRepositoryCellsInRange,
+  getMapFeatures as getRepositoryMapFeatures,
   getMapHistory as getRepositoryMapHistory,
   getHistoryStatus as getRepositoryHistoryStatus,
   getMapDocument,
@@ -50,6 +51,7 @@ import {
   moveHistoryCursor,
   recordOperation,
   saveMapDocument,
+  updateMapMetadata,
   type HistoryStatus,
   type MapHistory,
   type MapListItem
@@ -66,9 +68,18 @@ export interface SaveMapInput {
 }
 
 export interface SaveMapAsInput {
-  document: MapDocument;
+  document?: MapDocument;
+  sourceId?: string;
   name: string;
   id?: string;
+}
+
+export interface UpdateMapMetadataInput {
+  id: string;
+  expectedRevision: number;
+  name?: string;
+  description?: string;
+  tags?: string[];
 }
 
 export interface ApplyCommandsOptions {
@@ -137,6 +148,28 @@ const exportPath = (fileName: string) => exportFilePath(EXPORT_STORAGE_DIR, file
 
 function runtimeFromDocument(document: MapDocument): MapRuntimeState {
   return createRuntimeState(document);
+}
+
+export function summaryFromRuntime(map: MapRuntimeState): MapSummary {
+  const rows = map.document.cells.map((cell) => cell.row);
+  const cols = map.document.cells.map((cell) => cell.col);
+  return {
+    meta: map.document.meta,
+    grid: map.document.grid,
+    bounds:
+      map.document.cells.length === 0
+        ? { min_row: null, max_row: null, min_col: null, max_col: null }
+        : {
+            min_row: Math.min(...rows),
+            max_row: Math.max(...rows),
+            min_col: Math.min(...cols),
+            max_col: Math.max(...cols)
+          },
+    designed_cell_count: map.document.cells.length,
+    feature_counts: {
+      rivers: map.document.features.rivers.length
+    }
+  };
 }
 
 function cloneActiveCell(cell: MapRuntimeState["activeCells"][number]) {
@@ -473,11 +506,15 @@ export async function saveMapAs(input: SaveMapAsInput): Promise<MapRuntimeState>
   if (await mapExists(nextId)) {
     throw badRequest(`map id ${nextId} already exists`);
   }
+  const sourceDocument = input.document ?? (input.sourceId ? await getMapDocument(assertSafeMapId(input.sourceId)) : null);
+  if (!sourceDocument) {
+    throw badRequest("document or sourceId is required");
+  }
 
   const document: MapDocument = {
-    ...input.document,
+    ...sourceDocument,
     meta: {
-      ...input.document.meta,
+      ...sourceDocument.meta,
       id: nextId,
       name: input.name,
       created_at: now,
@@ -488,6 +525,25 @@ export async function saveMapAs(input: SaveMapAsInput): Promise<MapRuntimeState>
 
   validateDocumentForWrite(document);
   return runtimeFromDocument(await saveMapDocument(document));
+}
+
+export async function updateMapMeta(input: UpdateMapMetadataInput): Promise<MapSummary> {
+  await ensureDirectories();
+  const normalizedId = assertSafeMapId(input.id);
+  const current = await getRepositoryMapSummary(normalizedId);
+  if (current.meta.revision !== input.expectedRevision) {
+    throw revisionConflict(
+      `revision conflict: expected ${input.expectedRevision}, current is ${current.meta.revision}`
+    );
+  }
+  if (input.name !== undefined && !input.name.trim()) {
+    throw badRequest("name must be a non-empty string");
+  }
+  return updateMapMetadata(normalizedId, {
+    name: input.name?.trim(),
+    description: input.description,
+    tags: input.tags
+  });
 }
 
 export async function deleteMap(id: string): Promise<void> {
@@ -662,6 +718,10 @@ export async function redoMap(id: string): Promise<HistoryMoveResult | null> {
 
 export async function getMapSummary(id: string): Promise<MapSummary> {
   return getRepositoryMapSummary(assertSafeMapId(id));
+}
+
+export async function getMapFeatures(id: string) {
+  return getRepositoryMapFeatures(assertSafeMapId(id));
 }
 
 export async function getCellsInRange(

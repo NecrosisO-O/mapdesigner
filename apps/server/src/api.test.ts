@@ -284,17 +284,30 @@ describe("server api", () => {
         }
       });
       expect(dryRun.statusCode).toBe(200);
-      expect(dryRun.json().result.dryRun).toBe(true);
+      const dryRunBody = dryRun.json();
+      expect(dryRunBody.result.dryRun).toBe(true);
+      expect(dryRunBody.result.summary.designed_cell_count).toBe(1);
+      expect(dryRunBody.result.summary.bounds).toEqual({
+        min_row: 1,
+        max_row: 1,
+        min_col: 1,
+        max_col: 1
+      });
 
       const afterDryRun = await app.inject({
         method: "GET",
         url: `/api/maps/${mapId}`
       });
       expect(afterDryRun.json().result.document.cells).toHaveLength(0);
+      const persistedAfterDryRun = await app.inject({
+        method: "GET",
+        url: `/api/maps/${mapId}/summary`
+      });
+      expect(persistedAfterDryRun.json().result.designed_cell_count).toBe(0);
 
       const applied = await app.inject({
         method: "POST",
-        url: `/api/maps/${mapId}/commands`,
+        url: `/api/maps/${mapId}/commands?includeMap=false`,
         payload: {
           commands: [
             {
@@ -307,7 +320,12 @@ describe("server api", () => {
         }
       });
       expect(applied.statusCode).toBe(200);
-      expect(applied.json().result.map.document.cells).toHaveLength(1);
+      const appliedBody = applied.json();
+      expect(appliedBody.result.map).toBeUndefined();
+      expect(appliedBody.result.summary.designed_cell_count).toBe(1);
+      expect(appliedBody.result.features.rivers).toEqual([]);
+      expect(appliedBody.result.changes).toHaveLength(1);
+      expect(appliedBody.result.command_results).toHaveLength(1);
 
       const history = await app.inject({
         method: "GET",

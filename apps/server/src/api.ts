@@ -14,6 +14,7 @@ import {
   exportJson,
   exportPng,
   getCellsInRange,
+  getMapFeatures,
   getMapHistory,
   getHistoryStatus,
   getMap,
@@ -23,7 +24,9 @@ import {
   redoMap,
   saveMapAs,
   saveMap,
-  undoMap
+  summaryFromRuntime,
+  undoMap,
+  updateMapMeta
 } from "./service.js";
 import { assertExportDownloadFileName, exportFilePath, normalizeExportOptions } from "./storage.js";
 import { createEnvelope } from "./utils.js";
@@ -99,7 +102,20 @@ function readBooleanQuery(value: unknown, fallback: boolean): boolean {
   throw badRequest("includeUndesigned must be true or false");
 }
 
-async function applyCommandRequest(id: string, bodyInput: unknown, dryRun = false) {
+function readIncludeMapQuery(value: unknown): boolean {
+  if (value === undefined) {
+    return true;
+  }
+  if (value === "true") {
+    return true;
+  }
+  if (value === "false") {
+    return false;
+  }
+  throw badRequest("includeMap must be true or false");
+}
+
+async function applyCommandRequest(id: string, bodyInput: unknown, dryRun = false, includeMap = true) {
   const body = assertRecord(bodyInput, "request body is required");
   if (!Array.isArray(body.commands)) {
     throw badRequest("commands must be an array");
@@ -107,10 +123,31 @@ async function applyCommandRequest(id: string, bodyInput: unknown, dryRun = fals
   const result = await applyCommands(id, body.commands as MapCommand[], { dryRun });
   return createEnvelope({
     result: {
-      map: result.map,
+      ...(includeMap ? { map: result.map } : {}),
+      summary: summaryFromRuntime(result.map),
+      features: result.map.document.features,
       dryRun: result.dryRun,
       warnings: result.warnings,
+      command_results: result.command_results,
+      changes: result.changes,
       stats: result.stats
+    },
+    warnings: result.warnings
+  });
+}
+
+async function historyMoveResponse(result: Awaited<ReturnType<typeof undoMap>>, includeMap = true) {
+  if (!result) {
+    return createEnvelope({ result });
+  }
+  return createEnvelope({
+    result: {
+      ...(includeMap ? { map: result.map } : {}),
+      summary: summaryFromRuntime(result.map),
+      features: result.map.document.features,
+      warnings: result.warnings,
+      operation: result.operation,
+      status: result.status
     },
     warnings: result.warnings
   });
@@ -147,6 +184,14 @@ export async function createServer(): Promise<FastifyInstance> {
       return createEnvelope({ result: await getMapSummary(request.params.id) });
     } catch (error) {
       return sendError(reply, "map_summary_failed", error, 404);
+    }
+  });
+
+  app.get<{ Params: { id: string } }>("/api/maps/:id/features", async (request, reply) => {
+    try {
+      return createEnvelope({ result: await getMapFeatures(request.params.id) });
+    } catch (error) {
+      return sendError(reply, "map_features_failed", error, 404);
     }
   });
 
@@ -225,26 +270,52 @@ export async function createServer(): Promise<FastifyInstance> {
 
   app.post<{
     Params: { id: string };
-    Body: { document: Awaited<ReturnType<typeof getMap>>["document"]; name: string; id?: string };
+    Body: { document?: Awaited<ReturnType<typeof getMap>>["document"]; name: string; id?: string };
   }>("/api/maps/:id/save-as", async (request, reply) => {
     try {
       const body = assertRecord(request.body, "request body is required");
-      const document = body.document as Awaited<ReturnType<typeof getMap>>["document"];
-      if (!document || typeof document !== "object") {
-        throw badRequest("document is required");
-      }
-      if (!document.meta || typeof document.meta !== "object" || request.params.id !== document.meta.id) {
+      const document = body.document as Awaited<ReturnType<typeof getMap>>["document"] | undefined;
+      if (document !== undefined && (!document.meta || typeof document.meta !== "object" || request.params.id !== document.meta.id)) {
         throw badRequest("path id and document.meta.id must match");
       }
       return createEnvelope({
         result: await saveMapAs({
           document,
+          sourceId: document ? undefined : request.params.id,
           name: readStringField(body, "name")!,
           id: readStringField(body, "id", false)
         })
       });
     } catch (error) {
       return sendError(reply, "save_as_failed", error);
+    }
+  });
+
+  app.patch<{
+    Params: { id: string };
+    Body: { expectedRevision: number; name?: string; description?: string; tags?: string[] };
+  }>("/api/maps/:id/meta", async (request, reply) => {
+    try {
+      const body = assertRecord(request.body, "request body is required");
+      const expectedRevision = body.expectedRevision;
+      if (!Number.isInteger(expectedRevision)) {
+        throw badRequest("expectedRevision must be an integer");
+      }
+      const tags = body.tags;
+      if (tags !== undefined && (!Array.isArray(tags) || tags.some((entry) => typeof entry !== "string"))) {
+        throw badRequest("tags must be an array of strings");
+      }
+      return createEnvelope({
+        result: await updateMapMeta({
+          id: request.params.id,
+          expectedRevision: expectedRevision as number,
+          name: readStringField(body, "name", false),
+          description: readStringField(body, "description", false),
+          tags: tags as string[] | undefined
+        })
+      });
+    } catch (error) {
+      return sendError(reply, "meta_update_failed", error, 409);
     }
   });
 
@@ -315,27 +386,27 @@ export async function createServer(): Promise<FastifyInstance> {
     }
   });
 
-  app.post<{ Params: { id: string }; Body: { commands: MapCommand[] } }>("/api/maps/:id/apply", async (request, reply) => {
+  app.post<{ Params: { id: string }; Querystring: { includeMap?: string }; Body: { commands: MapCommand[] } }>("/api/maps/:id/apply", async (request, reply) => {
     try {
-      return await applyCommandRequest(request.params.id, request.body);
+      return await applyCommandRequest(request.params.id, request.body, false, readIncludeMapQuery(request.query.includeMap));
     } catch (error) {
       return sendError(reply, "apply_failed", error);
     }
   });
 
-  app.post<{ Params: { id: string }; Body: { commands: MapCommand[] } }>("/api/maps/:id/commands", async (request, reply) => {
+  app.post<{ Params: { id: string }; Querystring: { includeMap?: string }; Body: { commands: MapCommand[] } }>("/api/maps/:id/commands", async (request, reply) => {
     try {
-      return await applyCommandRequest(request.params.id, request.body);
+      return await applyCommandRequest(request.params.id, request.body, false, readIncludeMapQuery(request.query.includeMap));
     } catch (error) {
       return sendError(reply, "commands_failed", error);
     }
   });
 
-  app.post<{ Params: { id: string }; Body: { commands: MapCommand[] } }>(
+  app.post<{ Params: { id: string }; Querystring: { includeMap?: string }; Body: { commands: MapCommand[] } }>(
     "/api/maps/:id/commands/dry-run",
     async (request, reply) => {
       try {
-        return await applyCommandRequest(request.params.id, request.body, true);
+        return await applyCommandRequest(request.params.id, request.body, true, readIncludeMapQuery(request.query.includeMap));
       } catch (error) {
         return sendError(reply, "commands_dry_run_failed", error);
       }
@@ -359,17 +430,17 @@ export async function createServer(): Promise<FastifyInstance> {
     }
   });
 
-  app.post<{ Params: { id: string } }>("/api/maps/:id/undo", async (request, reply) => {
+  app.post<{ Params: { id: string }; Querystring: { includeMap?: string } }>("/api/maps/:id/undo", async (request, reply) => {
     try {
-      return createEnvelope({ result: await undoMap(request.params.id) });
+      return historyMoveResponse(await undoMap(request.params.id), readIncludeMapQuery(request.query.includeMap));
     } catch (error) {
       return sendError(reply, "undo_failed", error);
     }
   });
 
-  app.post<{ Params: { id: string } }>("/api/maps/:id/redo", async (request, reply) => {
+  app.post<{ Params: { id: string }; Querystring: { includeMap?: string } }>("/api/maps/:id/redo", async (request, reply) => {
     try {
-      return createEnvelope({ result: await redoMap(request.params.id) });
+      return historyMoveResponse(await redoMap(request.params.id), readIncludeMapQuery(request.query.includeMap));
     } catch (error) {
       return sendError(reply, "redo_failed", error);
     }

@@ -18,6 +18,7 @@ import {
   exportJson,
   exportPng,
   getCellsInRange,
+  getMapFeatures,
   getHistoryStatus,
   getMap,
   getMapSummary,
@@ -385,8 +386,8 @@ async function main(): Promise<void> {
             if (!id) {
               printFailure("maps rivers list requires --map-id");
             }
-            const map = await getMap(id);
-            printResult(createEnvelope({ result: map.document.features.rivers }));
+            const features = await getMapFeatures(id);
+            printResult(createEnvelope({ result: features.rivers }));
             break;
           }
           case "inspect": {
@@ -396,8 +397,8 @@ async function main(): Promise<void> {
             if (!id || !riverId) {
               printFailure("maps rivers inspect requires --map-id and --river-id");
             }
-            const map = await getMap(id);
-            const river = map.document.features.rivers.find((entry) => entry.id === riverId);
+            const features = await getMapFeatures(id);
+            const river = features.rivers.find((entry) => entry.id === riverId);
             if (!river) {
               throw badRequest(`river ${riverId} was not found`);
             }
