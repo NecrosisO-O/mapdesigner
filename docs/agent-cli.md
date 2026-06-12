@@ -2,11 +2,12 @@
 
 `MapDesigner` 的 CLI 已支持面向 AI agent 的结构化工作流，推荐固定采用下面这条顺序：
 
-1. `inspect`
-2. `dry-run`
-3. `apply`
-4. `inspect`
-5. `export-png`
+1. `summary`
+2. `cells` / `inspect-cell` / `inspect-area`
+3. `apply --dry-run --summary`
+4. `apply --summary`
+5. `summary` / `cells` / `inspect-area`
+6. `export-png`
 
 所有 CLI 输出都保持 JSON envelope：
 
@@ -21,13 +22,37 @@
 
 ## 推荐工作流
 
-### 1. 查看整张地图
+### 1. 查看地图摘要
+
+优先用 `summary` 了解地图元数据、边界和已设计单元格数量。这个命令不会返回完整单元格数组，适合作为大地图和 agent 工作流的入口。
+
+```bash
+pnpm exec tsx apps/server/src/cli.ts maps summary --map-id demo-map
+```
+
+### 2. 查看局部单元格范围
+
+需要扫描一块矩形窗口时使用 `cells`。默认只返回范围内已设计单元格；如果希望同时看到已设计格周边的可扩展空白格，加上 `--include-undesigned`。
+
+```bash
+pnpm exec tsx apps/server/src/cli.ts maps cells \
+  --map-id demo-map \
+  --min-row -10 \
+  --max-row 10 \
+  --min-col -10 \
+  --max-col 10 \
+  --include-undesigned
+```
+
+### 3. 查看整张地图
+
+`inspect` 会返回完整 runtime，适合小地图、调试和兼容旧脚本。大地图或自动化流程应优先使用 `summary`、`cells`、`inspect-cell`、`inspect-area`。
 
 ```bash
 pnpm exec tsx apps/server/src/cli.ts maps inspect --map-id demo-map
 ```
 
-### 2. 查看单格
+### 4. 查看单格
 
 ```bash
 pnpm exec tsx apps/server/src/cli.ts maps inspect-cell --map-id demo-map --row 0 --col 0
@@ -39,7 +64,7 @@ pnpm exec tsx apps/server/src/cli.ts maps inspect-cell --map-id demo-map --row 0
 - `neighbors`
 - `rivers`
 
-### 3. 查看一片区域
+### 5. 查看一片区域
 
 ```bash
 pnpm exec tsx apps/server/src/cli.ts maps inspect-area --map-id demo-map --row 0 --col 0 --radius 2
@@ -51,7 +76,7 @@ pnpm exec tsx apps/server/src/cli.ts maps inspect-area --map-id demo-map --row 0
 - `radius`
 - `cells`
 
-### 4. 查看某格六邻格
+### 6. 查看某格六邻格
 
 ```bash
 pnpm exec tsx apps/server/src/cli.ts maps neighbors --map-id demo-map --row 0 --col 0
@@ -62,7 +87,7 @@ pnpm exec tsx apps/server/src/cli.ts maps neighbors --map-id demo-map --row 0 --
 - `center`
 - `neighbors`
 
-### 5. 先 dry-run 再正式 apply
+### 7. 先 dry-run 再正式 apply
 
 推荐先预演：
 
@@ -76,18 +101,24 @@ echo '{
       "changes": { "terrain": "plain", "biome": "grassland" }
     }
   ]
-}' | pnpm exec tsx apps/server/src/cli.ts maps apply --map-id demo-map --stdin --dry-run
+}' | pnpm exec tsx apps/server/src/cli.ts maps apply --map-id demo-map --stdin --dry-run --summary
 ```
 
-`--dry-run` 不会写回磁盘，但会返回完整执行结果：
+`--dry-run` 不会写回磁盘。加上 `--summary` 会返回紧凑摘要，适合大批量修改：
 
-- `dryRun`
-- `map`
-- `warnings`
-- `command_results`
-- `changes`
+- `map_id`
+- `revision`
+- `designed_cell_count`
+- `dry_run`
+- `warning_count`
+- `changed_count`
+- `created_count`
+- `updated_count`
+- `cleared_count`
+- `terrain_summary`
+- `biome_summary`
 
-`command_results` 按命令顺序给出逐条执行摘要。`changes` 给出聚合后的变更明细。每条变更都包含：
+不加 `--summary` 时会返回完整执行结果，包含 `map`、`command_results` 和 `changes`。`command_results` 按命令顺序给出逐条执行摘要；`changes` 给出聚合后的变更明细。每条变更都包含：
 
 - `coord`
 - `cell_id`
@@ -107,10 +138,10 @@ echo '{
       "changes": { "terrain": "plain", "biome": "grassland" }
     }
   ]
-}' | pnpm exec tsx apps/server/src/cli.ts maps apply --map-id demo-map --stdin
+}' | pnpm exec tsx apps/server/src/cli.ts maps apply --map-id demo-map --stdin --summary
 ```
 
-### 6. 导出参考图
+### 8. 导出参考图
 
 ```bash
 pnpm exec tsx apps/server/src/cli.ts maps export-png \
@@ -135,7 +166,7 @@ pnpm exec tsx apps/server/src/cli.ts maps export-png \
 - `--include-shorthand`
 - `--include-undesigned`
 
-### 7. 高级编辑命令
+### 9. 高级编辑命令
 
 批量设置多个单元格可使用 `set_cells`：
 
@@ -158,7 +189,7 @@ echo '{
       }
     }
   ]
-}' | pnpm exec tsx apps/server/src/cli.ts maps apply --map-id demo-map --stdin --dry-run
+}' | pnpm exec tsx apps/server/src/cli.ts maps apply --map-id demo-map --stdin --dry-run --summary
 ```
 
 全图替换地形可使用 `replace_terrain`：
@@ -198,7 +229,7 @@ echo '{
 }
 ```
 
-### 8. 管理河流覆盖层
+### 10. 管理河流覆盖层
 
 河流覆盖层是叠加在单元格地貌之上的线性要素，适合小河、支流、溪流和穿过其他地形的河道。
 
@@ -285,13 +316,16 @@ pnpm exec tsx apps/server/src/cli.ts maps rivers delete --map-id demo-map --rive
 - 人工阅读时优先看 `display_coord`，例如 `R3C-2`
 - 程序内部稳定定位可使用 `cell_id`
 - 写入前优先使用 `--dry-run`
-- 批量操作后优先再次调用 `inspect-cell` 或 `inspect-area`
+- 大地图优先用 `summary` 和 `cells`，不要把 `inspect` 当作默认入口
+- 批量操作后优先再次调用 `summary`、`cells`、`inspect-cell` 或 `inspect-area`
 - `inspect-area --radius` 最大为 `50`
 - 若命令失败，优先读取 envelope 中的 `errors`
 
 ## 当前适合 agent 调用的命令
 
 - `maps list`
+- `maps summary`
+- `maps cells`
 - `maps inspect`
 - `maps inspect-cell`
 - `maps inspect-area`

@@ -19,6 +19,7 @@ It combines a visual WebUI with a structured CLI, so the same map can evolve alo
 - Save maps as structured JSON and reopen them later
 - Export rendered maps as PNG references
 - Inspect and modify maps through a structured CLI for scripts and AI agents
+- Use summary and range-based queries for larger maps instead of loading every cell
 - Use the same map rules across WebUI, CLI, and exports
 
 ## Screenshot
@@ -53,7 +54,8 @@ For detailed setup steps, see the [Deployment Guide](./docs/deployment.md) and [
 MapDesigner ships with a structured CLI so scripts and AI agents can inspect maps, apply deterministic edits, and export results without touching the WebUI.
 
 ```bash
-pnpm exec tsx apps/server/src/cli.ts maps inspect-cell --map-id my-map --row 0 --col 0
+pnpm exec tsx apps/server/src/cli.ts maps summary --map-id my-map
+pnpm exec tsx apps/server/src/cli.ts maps cells --map-id my-map --min-row -10 --max-row 10 --min-col -10 --max-col 10
 ```
 
 More examples and command conventions are documented in [Agent CLI Guide](./docs/agent-cli.md).
