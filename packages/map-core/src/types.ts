@@ -389,4 +389,5 @@ export interface ExportRenderOptions {
   background: string;
   padding: number;
   scale: number;
+  range?: CellRange | null;
 }

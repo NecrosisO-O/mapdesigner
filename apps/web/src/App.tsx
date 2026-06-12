@@ -163,10 +163,12 @@ export default function App() {
           exportPanelOpen={exportPanel.exportPanelOpen}
           isExportingPng={exportPanel.isExportingPng}
           pngOptions={exportPanel.pngOptions}
+          pngRangeMode={exportPanel.pngRangeMode}
           lastOpaqueBackground={lastOpaqueExportBackground}
           tagFilter={tagFilter}
           onToggleExportPanel={() => exportPanel.setExportPanelOpen((current) => !current)}
-          onExportPng={() => void exportPanel.handleExportPng(workspace.currentMap)}
+          onExportPng={() => void exportPanel.handleExportPng(workspace.currentMap, workspace.visibleRange)}
+          onPngRangeModeChange={exportPanel.setPngRangeMode}
           onPresetChange={(preset) =>
             exportPanel.setPngOptions((current) => ({
               ...current,

@@ -691,6 +691,7 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
     renameDraft,
     loading,
     mapDirty,
+    visibleRange: lastVisibleRangeRef.current,
     fileInputRef,
     setCurrentMap,
     setRenameDraft,

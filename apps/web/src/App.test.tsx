@@ -1063,7 +1063,13 @@ describe("App", () => {
           preset: "reference",
           scale: 3,
           includeCoordinates: true,
-          includeShorthand: true
+          includeShorthand: true,
+          range: expect.objectContaining({
+            minRow: expect.any(Number),
+            maxRow: expect.any(Number),
+            minCol: expect.any(Number),
+            maxCol: expect.any(Number)
+          })
         })
       )
     );
@@ -1120,6 +1126,27 @@ describe("App", () => {
         "sample-map",
         expect.objectContaining({
           background: "transparent"
+        })
+      )
+    );
+  });
+
+  it("can switch png export to whole map mode", async () => {
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    render(<App />);
+    await screen.findByText("已打开 Sample Map");
+
+    fireEvent.click(screen.getByRole("button", { name: "展开" }));
+    fireEvent.change(screen.getByLabelText("导出范围"), {
+      target: { value: "full" }
+    });
+    fireEvent.click(screen.getByText("导出图片"));
+
+    await waitFor(() =>
+      expect(apiMock.exportPng).toHaveBeenCalledWith(
+        "sample-map",
+        expect.objectContaining({
+          range: null
         })
       )
     );

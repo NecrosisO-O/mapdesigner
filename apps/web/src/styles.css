@@ -364,6 +364,12 @@ textarea {
   margin-bottom: 12px;
 }
 
+.export-range-note {
+  margin: -2px 0 10px;
+  color: #65736f;
+  font-size: 0.78rem;
+}
+
 .panel-subtitle-row {
   display: flex;
   align-items: center;

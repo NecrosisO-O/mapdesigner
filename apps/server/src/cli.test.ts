@@ -16,7 +16,7 @@ function runCli(args: string[], options?: { input?: string; tempRoot?: string })
   return new Promise((resolve, reject) => {
     const child = spawn(
       "pnpm",
-      ["exec", "tsx", "apps/server/src/cli.ts", ...args],
+      ["--dir", "apps/server", "exec", "tsx", "src/cli.ts", ...args],
       {
         cwd: repoRoot,
         env: {
@@ -120,13 +120,21 @@ describe("server cli", () => {
         "--include-grid",
         "--include-coordinates",
         "--include-shorthand",
-        "--include-undesigned"
+        "--include-undesigned",
+        "--min-row",
+        "-1",
+        "--max-row",
+        "1",
+        "--min-col",
+        "-1",
+        "--max-col",
+        "1"
       ],
       { tempRoot }
     );
     expect(exported.code).toBe(0);
     const exportedBody = JSON.parse(exported.stdout);
-    expect(exportedBody.result.fileName).toMatch(/cli-test-reference\.png$/);
+    expect(exportedBody.result.fileName).toMatch(/cli-test-reference-r-1_1-c-1_1\.png$/);
     await expect(fs.stat(exportedBody.result.path)).resolves.toBeTruthy();
   });
 

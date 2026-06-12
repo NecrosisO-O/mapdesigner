@@ -18,10 +18,12 @@ interface SidebarPanelProps {
   exportPanelOpen: boolean;
   isExportingPng: boolean;
   pngOptions: ExportRenderOptions;
+  pngRangeMode: "visible" | "full";
   lastOpaqueBackground: string;
   tagFilter: TagKey[];
   onToggleExportPanel: () => void;
   onExportPng: () => void;
+  onPngRangeModeChange: (mode: "visible" | "full") => void;
   onPresetChange: (preset: ExportRenderOptions["preset"]) => void;
   onScaleChange: (scale: number) => void;
   onPaddingChange: (padding: number) => void;
@@ -163,6 +165,21 @@ export function SidebarPanel(props: SidebarPanelProps) {
                 {props.isExportingPng ? "导出中..." : "导出图片"}
               </button>
             </div>
+            <label>
+              导出范围
+              <select
+                value={props.pngRangeMode}
+                onChange={(event) => props.onPngRangeModeChange(event.target.value as "visible" | "full")}
+              >
+                <option value="visible">当前加载区域</option>
+                <option value="full">全图</option>
+              </select>
+            </label>
+            <p className="export-range-note">
+              {props.pngRangeMode === "visible"
+                ? "适合大地图，会按当前视口附近区域导出。"
+                : "大地图全图导出可能被服务端拒绝。"}
+            </p>
             <label>
               预设
               <select
