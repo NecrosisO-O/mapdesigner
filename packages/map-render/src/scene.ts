@@ -18,7 +18,9 @@ import {
   type RiverFeature
 } from "@mapdesigner/map-core";
 
-const DEFAULT_OPTIONS: Required<Omit<MapRenderOptions, "previewRivers">> & { previewRivers: RiverFeature[] } = {
+type ResolvedMapRenderOptions = MapScene["options"];
+
+const DEFAULT_OPTIONS: ResolvedMapRenderOptions = {
   size: 36,
   padding: 48,
   background: "#F4F0E6",
@@ -162,7 +164,8 @@ export function buildMapScene(map: MapRuntimeState, options: MapRenderOptions = 
   const layout = buildHexLayout(cells, {
     size: resolved.size,
     padding: resolved.padding,
-    extraCoords: riverCoords
+    extraCoords: riverCoords,
+    boundsCoords: resolved.boundsCoords
   });
   return {
     width: layout.width,

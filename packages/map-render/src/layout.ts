@@ -33,7 +33,11 @@ export function buildHexLayout(
   const padding = options.padding ?? size * 2;
   const centers = cells.map((cell) => ({ cell, ...centerForCell(cell, size) }));
   const extraCenters = (options.extraCoords ?? []).map((coord) => centerForCoord(coord, size));
-  const boundsCenters = [...centers, ...extraCenters];
+  const boundsCenters = [
+    ...centers,
+    ...extraCenters,
+    ...(options.boundsCoords ?? []).map((coord) => centerForCoord(coord, size))
+  ];
 
   const minCenterX = Math.min(...boundsCenters.map((entry) => entry.x), 0);
   const maxCenterX = Math.max(...boundsCenters.map((entry) => entry.x), 0);

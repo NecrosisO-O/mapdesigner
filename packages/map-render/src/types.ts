@@ -4,6 +4,7 @@ export interface HexLayoutOptions {
   size: number;
   padding?: number;
   extraCoords?: GridCoordinate[];
+  boundsCoords?: GridCoordinate[];
 }
 
 export interface HexCellLayout {
@@ -67,6 +68,7 @@ export interface MapRenderOptions {
   selectedCellId?: string | null;
   hoveredCellId?: string | null;
   previewRivers?: RiverFeature[];
+  boundsCoords?: GridCoordinate[];
 }
 
 export interface MapScene {
@@ -80,7 +82,10 @@ export interface MapScene {
   riverEndpoints: RiverEndpointLayout[];
   riverControlPoints: RiverControlPointLayout[];
   defs: string[];
-  options: Required<Omit<MapRenderOptions, "previewRivers">> & { previewRivers: RiverFeature[] };
+  options: Required<Omit<MapRenderOptions, "previewRivers" | "boundsCoords">> & {
+    previewRivers: RiverFeature[];
+    boundsCoords?: GridCoordinate[];
+  };
 }
 
 export interface RenderLabel {
