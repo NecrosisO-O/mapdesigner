@@ -16,6 +16,7 @@ import {
   stringifyDocument,
   type GridCoordinate,
   type ExportRenderOptions,
+  type HistorySource,
   type MapCommand,
   type MapDocument,
   type MapSummary,
@@ -38,11 +39,17 @@ import {
   createMapDocument,
   deleteMapDocument,
   getCellsInRange as getRepositoryCellsInRange,
+  getHistoryStatus as getRepositoryHistoryStatus,
   getMapDocument,
   getMapSummary as getRepositoryMapSummary,
+  getRedoOperation,
+  getUndoOperation,
   listMapRows,
   mapExists,
+  moveHistoryCursor,
+  recordOperation,
   saveMapDocument,
+  type HistoryStatus,
   type MapListItem
 } from "./repository.js";
 import { createMapId, slugify } from "./utils.js";
@@ -101,6 +108,18 @@ export interface ApplyCommandsResult {
   command_results: CommandExecutionReport[];
   changes: CellChangeDetail[];
   stats: ApplyChangeStats;
+}
+
+export interface HistoryMoveResult {
+  map: MapRuntimeState;
+  warnings: ValidationIssue[];
+  operation: {
+    seq: number;
+    action: string;
+    source: HistorySource;
+    timestamp: string;
+  };
+  status: HistoryStatus;
 }
 
 async function ensureDirectories(): Promise<void> {
@@ -239,6 +258,174 @@ function buildApplyChangeStats(
     },
     terrain_summary: terrainSummary,
     biome_summary: biomeSummary
+  };
+}
+
+function activeCellToSetCellCommand(cell: NonNullable<CellChangeDetail["after"]>, source: HistorySource): MapCommand {
+  if (cell.status !== "designed" || !cell.terrain) {
+    return {
+      action: "clear_cell",
+      source,
+      target: { row: cell.row, col: cell.col }
+    };
+  }
+  return {
+    action: "set_cell",
+    source,
+    target: { row: cell.row, col: cell.col },
+    changes: {
+      terrain: cell.terrain,
+      biome: cell.biome,
+      tags: [...cell.tags],
+      note: cell.note
+    }
+  };
+}
+
+function buildInverseCellCommands(changes: CellChangeDetail[], source: HistorySource): MapCommand[] {
+  return changes
+    .map((change): MapCommand | null => {
+      if (!change.before || change.before.status !== "designed" || !change.before.terrain) {
+        return {
+          action: "clear_cell",
+          source,
+          target: { row: change.coord.row, col: change.coord.col }
+        };
+      }
+      return activeCellToSetCellCommand(change.before, source);
+    })
+    .filter((command): command is MapCommand => command !== null);
+}
+
+function findRiverById(document: MapDocument, id: string) {
+  return document.features.rivers.find((river) => river.id === id) ?? null;
+}
+
+function buildInverseFeatureCommands(before: MapDocument, after: MapDocument, commands: MapCommand[], source: HistorySource): MapCommand[] {
+  const inverse: MapCommand[] = [];
+  for (const command of commands) {
+    switch (command.action) {
+      case "create_river": {
+        const riverId = command.river.id ?? after.features.rivers.at(-1)?.id;
+        if (riverId && findRiverById(after, riverId)) {
+          inverse.push({
+            action: "delete_river",
+            source,
+            river_id: riverId
+          });
+        }
+        break;
+      }
+      case "update_river":
+      case "set_river_path":
+      case "set_river_width": {
+        const previous = findRiverById(before, command.river_id);
+        if (previous) {
+          inverse.push({
+            action: "update_river",
+            source,
+            river_id: command.river_id,
+            changes: {
+              name: previous.name,
+              points: previous.points,
+              color: previous.color ?? null,
+              opacity: previous.opacity ?? null
+            }
+          });
+        }
+        break;
+      }
+      case "delete_river": {
+        const previous = findRiverById(before, command.river_id);
+        if (previous) {
+          inverse.push({
+            action: "create_river",
+            source,
+            river: previous
+          });
+        }
+        break;
+      }
+      default:
+        break;
+    }
+  }
+  return inverse.reverse();
+}
+
+function buildInverseCommands(before: MapDocument, after: MapDocument, commands: MapCommand[], changes: CellChangeDetail[]): MapCommand[] {
+  const source: HistorySource = "system";
+  return [
+    ...buildInverseCellCommands(changes, source).reverse(),
+    ...buildInverseFeatureCommands(before, after, commands, source)
+  ];
+}
+
+function getCommandSource(commands: MapCommand[]): HistorySource {
+  return commands.find((command) => command.source)?.source ?? "system";
+}
+
+function getOperationAction(commands: MapCommand[]): string {
+  if (commands.length === 1) {
+    return commands[0]?.action ?? "empty";
+  }
+  return "commands";
+}
+
+async function applyCommandsWithoutHistory(
+  id: string,
+  commands: MapCommand[],
+  options: ApplyCommandsOptions = {}
+): Promise<ApplyCommandsResult & { beforeDocument: MapDocument }> {
+  const normalizedId = assertSafeMapId(id);
+  const document = await getMapDocument(normalizedId);
+  const beforeDocument = structuredClone(document);
+  let state = createRuntimeState(document);
+  const warnings: ValidationIssue[] = [];
+  const commandResults: CommandExecutionReport[] = [];
+  const changes: CellChangeDetail[] = [];
+
+  for (const [index, command] of commands.entries()) {
+    const result = applyCommand(state, command);
+    if (!result.ok) {
+      throw badRequest(result.errors.map((entry) => entry.message).join("; "), result.errors);
+    }
+    warnings.push(...result.warnings);
+    commandResults.push({
+      index,
+      action: command.action,
+      changed: result.changed.map((coord) => ({ row: coord.row, col: coord.col })),
+      details: result.details.map((detail) => ({
+        ...detail,
+        coord: { row: detail.coord.row, col: detail.coord.col },
+        before: detail.before ? cloneActiveCell(detail.before) : null,
+        after: detail.after ? cloneActiveCell(detail.after) : null
+      })),
+      warnings: result.warnings
+    });
+    changes.push(
+      ...result.details.map((detail) => ({
+        ...detail,
+        coord: { row: detail.coord.row, col: detail.coord.col },
+        before: detail.before ? cloneActiveCell(detail.before) : null,
+        after: detail.after ? cloneActiveCell(detail.after) : null
+      }))
+    );
+    state = result.map;
+  }
+
+  if (!options.dryRun) {
+    validateDocumentForWrite(state.document);
+    state = runtimeFromDocument(await saveMapDocument(state.document));
+  }
+  return {
+    map: state,
+    warnings,
+    dryRun: options.dryRun ?? false,
+    command_results: commandResults,
+    changes,
+    stats: buildApplyChangeStats(commands, changes),
+    beforeDocument
   };
 }
 
@@ -408,53 +595,62 @@ export async function applyCommands(
   commands: MapCommand[],
   options: ApplyCommandsOptions = {}
 ): Promise<ApplyCommandsResult> {
-  const normalizedId = assertSafeMapId(id);
-  const document = await getMapDocument(normalizedId);
-  let state = createRuntimeState(document);
-  const warnings: ValidationIssue[] = [];
-  const commandResults: CommandExecutionReport[] = [];
-  const changes: CellChangeDetail[] = [];
-
-  for (const [index, command] of commands.entries()) {
-    const result = applyCommand(state, command);
-    if (!result.ok) {
-      throw badRequest(result.errors.map((entry) => entry.message).join("; "), result.errors);
-    }
-    warnings.push(...result.warnings);
-    commandResults.push({
-      index,
-      action: command.action,
-      changed: result.changed.map((coord) => ({ row: coord.row, col: coord.col })),
-      details: result.details.map((detail) => ({
-        ...detail,
-        coord: { row: detail.coord.row, col: detail.coord.col },
-        before: detail.before ? cloneActiveCell(detail.before) : null,
-        after: detail.after ? cloneActiveCell(detail.after) : null
-      })),
-      warnings: result.warnings
+  const result = await applyCommandsWithoutHistory(id, commands, options);
+  if (!options.dryRun && commands.length > 0) {
+    await recordOperation(assertSafeMapId(id), {
+      source: getCommandSource(commands),
+      action: getOperationAction(commands),
+      commands,
+      inverseCommands: buildInverseCommands(result.beforeDocument, result.map.document, commands, result.changes),
+      summary: result.stats
     });
-    changes.push(
-      ...result.details.map((detail) => ({
-        ...detail,
-        coord: { row: detail.coord.row, col: detail.coord.col },
-        before: detail.before ? cloneActiveCell(detail.before) : null,
-        after: detail.after ? cloneActiveCell(detail.after) : null
-      }))
-    );
-    state = result.map;
   }
+  return result;
+}
 
-  if (!options.dryRun) {
-    validateDocumentForWrite(state.document);
-    state = runtimeFromDocument(await saveMapDocument(state.document));
+export async function getHistoryStatus(id: string): Promise<HistoryStatus> {
+  return getRepositoryHistoryStatus(assertSafeMapId(id));
+}
+
+export async function undoMap(id: string): Promise<HistoryMoveResult | null> {
+  const normalizedId = assertSafeMapId(id);
+  const operation = await getUndoOperation(normalizedId);
+  if (!operation) {
+    return null;
   }
+  const result = await applyCommandsWithoutHistory(normalizedId, operation.inverseCommands);
+  await moveHistoryCursor(normalizedId, operation.seq - 1);
   return {
-    map: state,
-    warnings,
-    dryRun: options.dryRun ?? false,
-    command_results: commandResults,
-    changes,
-    stats: buildApplyChangeStats(commands, changes)
+    map: result.map,
+    warnings: result.warnings,
+    operation: {
+      seq: operation.seq,
+      action: operation.action,
+      source: operation.source,
+      timestamp: operation.timestamp
+    },
+    status: await getHistoryStatus(normalizedId)
+  };
+}
+
+export async function redoMap(id: string): Promise<HistoryMoveResult | null> {
+  const normalizedId = assertSafeMapId(id);
+  const operation = await getRedoOperation(normalizedId);
+  if (!operation) {
+    return null;
+  }
+  const result = await applyCommandsWithoutHistory(normalizedId, operation.commands);
+  await moveHistoryCursor(normalizedId, operation.seq);
+  return {
+    map: result.map,
+    warnings: result.warnings,
+    operation: {
+      seq: operation.seq,
+      action: operation.action,
+      source: operation.source,
+      timestamp: operation.timestamp
+    },
+    status: await getHistoryStatus(normalizedId)
   };
 }
 

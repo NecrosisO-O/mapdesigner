@@ -359,6 +359,45 @@ describe("server cli", () => {
     expect(appliedBody.result.terrain_summary.after.plain).toBe(1);
   });
 
+  it("supports undo and redo commands for agent workflows", async () => {
+    const created = await runCli(["maps", "create", "--name", "Undo CLI"], { tempRoot });
+    expect(created.code).toBe(0);
+    const mapId = JSON.parse(created.stdout).result.document.meta.id as string;
+
+    const applied = await runCli(
+      ["maps", "apply", "--map-id", mapId, "--stdin"],
+      {
+        tempRoot,
+        input: JSON.stringify({
+          action: "set_cell",
+          source: "cli",
+          target: { row: 0, col: 0 },
+          changes: {
+            terrain: "plain",
+            biome: "grassland"
+          }
+        })
+      }
+    );
+    expect(applied.code).toBe(0);
+
+    const status = await runCli(["maps", "history-status", "--map-id", mapId], { tempRoot });
+    expect(status.code).toBe(0);
+    expect(JSON.parse(status.stdout).result.canUndo).toBe(true);
+
+    const undo = await runCli(["maps", "undo", "--map-id", mapId], { tempRoot });
+    expect(undo.code).toBe(0);
+    const undoBody = JSON.parse(undo.stdout);
+    expect(undoBody.result.map.document.cells).toHaveLength(0);
+    expect(undoBody.result.status.canRedo).toBe(true);
+
+    const redo = await runCli(["maps", "redo", "--map-id", mapId], { tempRoot });
+    expect(redo.code).toBe(0);
+    const redoBody = JSON.parse(redo.stdout);
+    expect(redoBody.result.map.document.cells[0].terrain).toBe("plain");
+    expect(redoBody.result.status.canUndo).toBe(true);
+  });
+
   it("supports advanced edit commands through maps apply", async () => {
     const created = await runCli(["maps", "create", "--name", "Advanced CLI"], { tempRoot });
     expect(created.code).toBe(0);
