@@ -116,6 +116,47 @@ describe("server service", () => {
     expect(withUndesigned.cells.some((cell) => cell.display_coord === "R0C0" && cell.status === "designed")).toBe(true);
   });
 
+  it("filters river features by expanded path range", async () => {
+    const service = await loadService(tempRoot);
+    const created = await service.createMap({ name: "Feature Range Test" });
+    const mapId = created.document.meta.id;
+
+    await service.applyCommands(mapId, [
+      {
+        action: "create_river",
+        source: "cli",
+        river: {
+          id: "crossing-river",
+          name: "Crossing River",
+          points: [
+            { row: 0, col: 0, width: 2 },
+            { row: 0, col: 8, width: 4 }
+          ]
+        }
+      },
+      {
+        action: "create_river",
+        source: "cli",
+        river: {
+          id: "far-river",
+          name: "Far River",
+          points: [
+            { row: 20, col: 20, width: 2 },
+            { row: 20, col: 22, width: 2 }
+          ]
+        }
+      }
+    ]);
+
+    const features = await service.getMapFeaturesInRange(mapId, {
+      minRow: -1,
+      maxRow: 1,
+      minCol: 3,
+      maxCol: 4
+    });
+    expect(features.rivers.map((river) => river.id)).toEqual(["crossing-river"]);
+  });
+
   it("records command history and supports undo/redo for cell edits", async () => {
     const service = await loadService(tempRoot);
     const created = await service.createMap({ name: "History Test" });

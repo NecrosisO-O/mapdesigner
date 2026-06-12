@@ -109,6 +109,10 @@ export const api = {
   getMap: (id: string) => request<MapRuntimeState>(`/api/maps/${id}`),
   getMapSummary: (id: string) => request<MapSummary>(`/api/maps/${id}/summary`),
   getMapFeatures: (id: string) => request<MapFeatures>(`/api/maps/${id}/features`),
+  getMapFeaturesInRange: (id: string, range: CellRange) =>
+    request<MapFeatures>(
+      `/api/maps/${id}/features/range?minRow=${range.minRow}&maxRow=${range.maxRow}&minCol=${range.minCol}&maxCol=${range.maxCol}`
+    ),
   getMapHistory: (id: string, limit = 5) => request<MapHistory>(`/api/maps/${id}/history?limit=${limit}`),
   getHistoryStatus: (id: string) => request<HistoryStatus>(`/api/maps/${id}/history-status`),
   getCellsInRange: (id: string, range: CellRange, includeUndesigned = true) =>

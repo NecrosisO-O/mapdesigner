@@ -16,7 +16,7 @@ It combines a visual WebUI with a structured CLI, so the same map can evolve alo
 - Edit hex-based maps in a visual WebUI
 - Layer terrain and biome data on each cell
 - Draw river overlays across cells from the WebUI or CLI, with width anchors and water endpoint hints
-- Save maps as structured JSON and reopen them later
+- Store maps in local SQLite storage, with structured JSON import/export for archives and interchange
 - Export rendered maps as PNG references
 - Inspect and modify maps through a structured CLI for scripts and AI agents
 - Use summary and range-based queries for larger maps instead of loading every cell

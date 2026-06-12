@@ -304,23 +304,23 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
 
   async function openMap(id: string): Promise<MapRuntimeState | null> {
     setLoading(true);
-    const [summaryResponse, featuresResponse] = await Promise.all([
-      api.getMapSummary(id),
-      api.getMapFeatures(id)
-    ]);
+    const summaryResponse = await api.getMapSummary(id);
     setLoading(false);
     if (!summaryResponse.ok || !summaryResponse.result) {
       setMessage(formatStatusMessage(summaryResponse.errors[0]?.message, "打开地图失败"));
       return null;
     }
-    if (!featuresResponse.ok || !featuresResponse.result) {
-      setMessage(formatStatusMessage(featuresResponse.errors[0]?.message, "打开地图要素失败"));
-      return null;
-    }
     const initialRange = normalizeVisibleRange(initialVisibleRangeFromSummary(summaryResponse.result));
-    const cellsResponse = await api.getCellsInRange(summaryResponse.result.meta.id, initialRange, true);
+    const [cellsResponse, featuresResponse] = await Promise.all([
+      api.getCellsInRange(summaryResponse.result.meta.id, initialRange, true),
+      api.getMapFeaturesInRange(summaryResponse.result.meta.id, initialRange)
+    ]);
     if (!cellsResponse.ok || !cellsResponse.result) {
       setMessage(formatStatusMessage(cellsResponse.errors[0]?.message, "加载可视单元格失败"));
+      return null;
+    }
+    if (!featuresResponse.ok || !featuresResponse.result) {
+      setMessage(formatStatusMessage(featuresResponse.errors[0]?.message, "打开地图要素失败"));
       return null;
     }
     const runtime = loadPartialMapIntoWorkspace(
@@ -523,19 +523,21 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
       return null;
     }
     const nextSummary = response.result.summary ?? await refreshMapSummary(currentMap.document.meta.id);
-    const nextFeatures = response.result.features ?? await refreshMapFeatures(currentMap.document.meta.id);
-    if (!nextSummary || !nextFeatures) {
+    const nextFeatures = response.result.features ?? null;
+    if (!nextSummary) {
       return null;
     }
     setMapSummary(nextSummary);
-    setMapFeatures(nextFeatures);
+    if (nextFeatures) {
+      setMapFeatures(nextFeatures);
+    }
     setPersistedRevision(nextSummary.meta.revision);
     await refreshMaps(nextSummary.meta.id);
     let nextRuntime: MapRuntimeState | null = null;
     if (lastVisibleRangeRef.current) {
-      nextRuntime = await loadVisibleRange(lastVisibleRangeRef.current, nextSummary.meta.id, nextSummary, nextFeatures, true);
+      nextRuntime = await loadVisibleRange(lastVisibleRangeRef.current, nextSummary.meta.id, nextSummary, nextFeatures, true, true);
     } else {
-      nextRuntime = buildPartialRuntime(nextSummary, nextFeatures, currentMap.activeCells);
+      nextRuntime = buildPartialRuntime(nextSummary, nextFeatures ?? mapFeatures, currentMap.activeCells);
       setCurrentMap(nextRuntime);
     }
     await refreshMapHistory(nextSummary.meta.id);
@@ -556,19 +558,21 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
       return null;
     }
     const nextSummary = response.result.summary ?? await refreshMapSummary(currentMap.document.meta.id);
-    const nextFeatures = response.result.features ?? await refreshMapFeatures(currentMap.document.meta.id);
-    if (!nextSummary || !nextFeatures) {
+    const nextFeatures = response.result.features ?? null;
+    if (!nextSummary) {
       return null;
     }
     setMapSummary(nextSummary);
-    setMapFeatures(nextFeatures);
+    if (nextFeatures) {
+      setMapFeatures(nextFeatures);
+    }
     setPersistedRevision(nextSummary.meta.revision);
     await refreshMaps(nextSummary.meta.id);
     let nextRuntime: MapRuntimeState | null = null;
     if (lastVisibleRangeRef.current) {
-      nextRuntime = await loadVisibleRange(lastVisibleRangeRef.current, nextSummary.meta.id, nextSummary, nextFeatures, true);
+      nextRuntime = await loadVisibleRange(lastVisibleRangeRef.current, nextSummary.meta.id, nextSummary, nextFeatures, true, true);
     } else {
-      nextRuntime = buildPartialRuntime(nextSummary, nextFeatures, currentMap.activeCells);
+      nextRuntime = buildPartialRuntime(nextSummary, nextFeatures ?? mapFeatures, currentMap.activeCells);
       setCurrentMap(nextRuntime);
     }
     await refreshMapHistory(nextSummary.meta.id);
@@ -590,19 +594,21 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
       return null;
     }
     const nextSummary = response.result.summary ?? await refreshMapSummary(currentMap.document.meta.id);
-    const nextFeatures = response.result.features ?? await refreshMapFeatures(currentMap.document.meta.id);
-    if (!nextSummary || !nextFeatures) {
+    const nextFeatures = response.result.features ?? null;
+    if (!nextSummary) {
       return null;
     }
     setMapSummary(nextSummary);
-    setMapFeatures(nextFeatures);
+    if (nextFeatures) {
+      setMapFeatures(nextFeatures);
+    }
     setPersistedRevision(nextSummary.meta.revision);
     await refreshMaps(nextSummary.meta.id);
     let nextRuntime: MapRuntimeState | null = null;
     if (lastVisibleRangeRef.current) {
-      nextRuntime = await loadVisibleRange(lastVisibleRangeRef.current, nextSummary.meta.id, nextSummary, nextFeatures, true);
+      nextRuntime = await loadVisibleRange(lastVisibleRangeRef.current, nextSummary.meta.id, nextSummary, nextFeatures, true, true);
     } else {
-      nextRuntime = buildPartialRuntime(nextSummary, nextFeatures, currentMap.activeCells);
+      nextRuntime = buildPartialRuntime(nextSummary, nextFeatures ?? mapFeatures, currentMap.activeCells);
       setCurrentMap(nextRuntime);
     }
     await refreshMapHistory(nextSummary.meta.id);
@@ -615,12 +621,13 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
     mapId = currentMap?.document.meta.id,
     summaryOverride: MapSummary | null = null,
     featuresOverride: MapFeatures | null = null,
-    force = false
+    force = false,
+    rangeIsNormalized = false
   ): Promise<MapRuntimeState | null> {
     if (!mapId) {
       return null;
     }
-    const normalizedRange = normalizeVisibleRange(range);
+    const normalizedRange = rangeIsNormalized ? range : normalizeVisibleRange(range);
     const key = `${mapId}:${rangeKey(normalizedRange)}`;
     lastVisibleRangeRef.current = normalizedRange;
     if (!force && key === lastVisibleRangeKeyRef.current) {
@@ -629,7 +636,10 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
     lastVisibleRangeKeyRef.current = key;
     const requestSeq = visibleRangeRequestSeqRef.current + 1;
     visibleRangeRequestSeqRef.current = requestSeq;
-    const response = await api.getCellsInRange(mapId, normalizedRange, true);
+    const [response, featuresResponse] = await Promise.all([
+      api.getCellsInRange(mapId, normalizedRange, true),
+      featuresOverride ? Promise.resolve(null) : api.getMapFeaturesInRange(mapId, normalizedRange)
+    ]);
     if (requestSeq !== visibleRangeRequestSeqRef.current) {
       return null;
     }
@@ -637,11 +647,16 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
       setMessage(formatStatusMessage(response.errors[0]?.message, "加载可视单元格失败"));
       return null;
     }
+    if (featuresResponse && (!featuresResponse.ok || !featuresResponse.result)) {
+      setMessage(formatStatusMessage(featuresResponse.errors[0]?.message, "加载可视要素失败"));
+      return null;
+    }
     const nextSummary = summaryOverride ?? mapSummary ?? await refreshMapSummary(mapId);
-    const nextFeatures = featuresOverride ?? mapFeatures;
+    const nextFeatures = featuresOverride ?? featuresResponse?.result ?? mapFeatures;
     if (!nextSummary) {
       return null;
     }
+    setMapFeatures(nextFeatures);
     setCellCache((current) => {
       const next = new Map(current);
       for (const cell of response.result!.cells) {

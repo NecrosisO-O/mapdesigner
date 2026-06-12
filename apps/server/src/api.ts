@@ -16,6 +16,7 @@ import {
   exportPng,
   getCellsInRange,
   getMapFeatures,
+  getMapFeaturesInRange,
   getMapHistory,
   getHistoryStatus,
   getMap,
@@ -23,10 +24,12 @@ import {
   importMap,
   listMaps,
   redoMap,
+  redoMapLight,
   saveMapAs,
   saveMap,
   summaryFromRuntime,
   undoMap,
+  undoMapLight,
   updateMapMeta
 } from "./service.js";
 import { assertExportDownloadFileName, exportFilePath, normalizeExportOptions } from "./storage.js";
@@ -126,7 +129,7 @@ async function applyCommandRequest(id: string, bodyInput: unknown, dryRun = fals
     return createEnvelope({
       result: {
         summary: result.summary,
-        features: result.features,
+        ...(result.features ? { features: result.features } : {}),
         dryRun: result.dryRun,
         warnings: result.warnings,
         command_results: result.command_results,
@@ -161,6 +164,22 @@ async function historyMoveResponse(result: Awaited<ReturnType<typeof undoMap>>, 
       ...(includeMap ? { map: result.map } : {}),
       summary: summaryFromRuntime(result.map),
       features: result.map.document.features,
+      warnings: result.warnings,
+      operation: result.operation,
+      status: result.status
+    },
+    warnings: result.warnings
+  });
+}
+
+async function lightHistoryMoveResponse(result: Awaited<ReturnType<typeof undoMapLight>>) {
+  if (!result) {
+    return createEnvelope({ result });
+  }
+  return createEnvelope({
+    result: {
+      summary: result.summary,
+      ...(result.features ? { features: result.features } : {}),
       warnings: result.warnings,
       operation: result.operation,
       status: result.status
@@ -208,6 +227,24 @@ export async function createServer(): Promise<FastifyInstance> {
       return createEnvelope({ result: await getMapFeatures(request.params.id) });
     } catch (error) {
       return sendError(reply, "map_features_failed", error, 404);
+    }
+  });
+
+  app.get<{
+    Params: { id: string };
+    Querystring: { minRow?: string; maxRow?: string; minCol?: string; maxCol?: string };
+  }>("/api/maps/:id/features/range", async (request, reply) => {
+    try {
+      return createEnvelope({
+        result: await getMapFeaturesInRange(request.params.id, {
+          minRow: readIntegerQuery(request.query.minRow, "minRow"),
+          maxRow: readIntegerQuery(request.query.maxRow, "maxRow"),
+          minCol: readIntegerQuery(request.query.minCol, "minCol"),
+          maxCol: readIntegerQuery(request.query.maxCol, "maxCol")
+        })
+      });
+    } catch (error) {
+      return sendError(reply, "map_features_range_failed", error, 404);
     }
   });
 
@@ -448,7 +485,10 @@ export async function createServer(): Promise<FastifyInstance> {
 
   app.post<{ Params: { id: string }; Querystring: { includeMap?: string } }>("/api/maps/:id/undo", async (request, reply) => {
     try {
-      return historyMoveResponse(await undoMap(request.params.id), readIncludeMapQuery(request.query.includeMap));
+      const includeMap = readIncludeMapQuery(request.query.includeMap);
+      return includeMap
+        ? historyMoveResponse(await undoMap(request.params.id), includeMap)
+        : lightHistoryMoveResponse(await undoMapLight(request.params.id));
     } catch (error) {
       return sendError(reply, "undo_failed", error);
     }
@@ -456,7 +496,10 @@ export async function createServer(): Promise<FastifyInstance> {
 
   app.post<{ Params: { id: string }; Querystring: { includeMap?: string } }>("/api/maps/:id/redo", async (request, reply) => {
     try {
-      return historyMoveResponse(await redoMap(request.params.id), readIncludeMapQuery(request.query.includeMap));
+      const includeMap = readIncludeMapQuery(request.query.includeMap);
+      return includeMap
+        ? historyMoveResponse(await redoMap(request.params.id), includeMap)
+        : lightHistoryMoveResponse(await redoMapLight(request.params.id));
     } catch (error) {
       return sendError(reply, "redo_failed", error);
     }
