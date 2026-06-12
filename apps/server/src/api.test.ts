@@ -332,9 +332,29 @@ describe("server api", () => {
       expect(appliedBody.result.map).toBeUndefined();
       expect(appliedBody.result.summary.designed_cell_count).toBe(1);
       expect(appliedBody.result.summary.meta.revision).toBe(2);
-      expect(appliedBody.result.features.rivers).toEqual([]);
+      expect(appliedBody.result.features).toBeUndefined();
       expect(appliedBody.result.changes).toHaveLength(1);
       expect(appliedBody.result.command_results).toHaveLength(1);
+
+      const undoLight = await app.inject({
+        method: "POST",
+        url: `/api/maps/${mapId}/undo?includeMap=false`
+      });
+      expect(undoLight.statusCode).toBe(200);
+      const undoLightBody = undoLight.json();
+      expect(undoLightBody.result.map).toBeUndefined();
+      expect(undoLightBody.result.summary.designed_cell_count).toBe(0);
+      expect(undoLightBody.result.status.canRedo).toBe(true);
+
+      const redoLight = await app.inject({
+        method: "POST",
+        url: `/api/maps/${mapId}/redo?includeMap=false`
+      });
+      expect(redoLight.statusCode).toBe(200);
+      const redoLightBody = redoLight.json();
+      expect(redoLightBody.result.map).toBeUndefined();
+      expect(redoLightBody.result.summary.designed_cell_count).toBe(1);
+      expect(redoLightBody.result.status.canUndo).toBe(true);
 
       const history = await app.inject({
         method: "GET",
@@ -379,6 +399,61 @@ describe("server api", () => {
       });
       expect(invalidBoolean.statusCode).toBe(400);
       expect(invalidBoolean.json().errors[0].message).toMatch(/includeUndesigned/);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("serves range-filtered map features", async () => {
+    const { createServer } = await loadApi(tempRoot);
+    const app = await createServer();
+    try {
+      const created = await app.inject({
+        method: "POST",
+        url: "/api/maps",
+        payload: { name: "Feature Range API Test" }
+      });
+      const mapId = created.json().result.document.meta.id as string;
+
+      await app.inject({
+        method: "POST",
+        url: `/api/maps/${mapId}/commands`,
+        payload: {
+          commands: [
+            {
+              action: "create_river",
+              source: "webui",
+              river: {
+                id: "near-river",
+                name: "Near River",
+                points: [
+                  { row: 0, col: 0, width: 2 },
+                  { row: 0, col: 6, width: 3 }
+                ]
+              }
+            },
+            {
+              action: "create_river",
+              source: "webui",
+              river: {
+                id: "far-river",
+                name: "Far River",
+                points: [
+                  { row: 30, col: 30, width: 2 },
+                  { row: 30, col: 32, width: 2 }
+                ]
+              }
+            }
+          ]
+        }
+      });
+
+      const features = await app.inject({
+        method: "GET",
+        url: `/api/maps/${mapId}/features/range?minRow=-1&maxRow=1&minCol=3&maxCol=4`
+      });
+      expect(features.statusCode).toBe(200);
+      expect(features.json().result.rivers.map((river: { id: string }) => river.id)).toEqual(["near-river"]);
     } finally {
       await app.close();
     }

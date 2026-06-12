@@ -30,7 +30,6 @@ import {
   type MapSummary,
   type MapRuntimeState,
   type NeighborInspectionResult,
-  type RiverFeature,
   type TagKey,
   type ValidationIssue
 } from "@mapdesigner/map-core";
@@ -54,6 +53,7 @@ import {
   getDesignedCellsByBiome,
   getDesignedCellsByTerrain,
   getMapFeatures as getRepositoryMapFeatures,
+  getMapFeaturesInRange as getRepositoryMapFeaturesInRange,
   getMapHistory as getRepositoryMapHistory,
   getHistoryStatus as getRepositoryHistoryStatus,
   getMapDocument,
@@ -141,7 +141,7 @@ export interface ApplyCommandsResult {
 export interface LightweightApplyCommandsResult {
   mapId: string;
   summary: MapSummary;
-  features: MapFeatures;
+  features?: MapFeatures;
   warnings: ValidationIssue[];
   dryRun: boolean;
   command_results: CommandExecutionReport[];
@@ -151,6 +151,20 @@ export interface LightweightApplyCommandsResult {
 
 export interface HistoryMoveResult {
   map: MapRuntimeState;
+  warnings: ValidationIssue[];
+  operation: {
+    seq: number;
+    action: string;
+    source: HistorySource;
+    timestamp: string;
+  };
+  status: HistoryStatus;
+}
+
+export interface LightweightHistoryMoveResult {
+  mapId: string;
+  summary: MapSummary;
+  features?: MapFeatures;
   warnings: ValidationIssue[];
   operation: {
     seq: number;
@@ -194,28 +208,10 @@ function exportRangeFileSuffix(range: CellRange | null | undefined): string {
   return range ? `-r${range.minRow}_${range.maxRow}-c${range.minCol}_${range.maxCol}` : "";
 }
 
-function isCoordInRange(coord: GridCoordinate, range: CellRange): boolean {
-  return coord.row >= range.minRow && coord.row <= range.maxRow && coord.col >= range.minCol && coord.col <= range.maxCol;
-}
-
-function padRange(range: CellRange, padding: number): CellRange {
-  return {
-    minRow: range.minRow - padding,
-    maxRow: range.maxRow + padding,
-    minCol: range.minCol - padding,
-    maxCol: range.maxCol + padding
-  };
-}
-
-function filterRiversForRange(rivers: RiverFeature[], range: CellRange): RiverFeature[] {
-  const padded = padRange(range, 1);
-  return rivers.filter((river) => river.points.some((point) => isCoordInRange(point, padded)));
-}
-
 async function buildRangeRuntime(id: string, range: CellRange): Promise<MapRuntimeState> {
   const [summary, features, rangeResult] = await Promise.all([
     getMapSummary(id),
-    getMapFeatures(id),
+    getMapFeaturesInRange(id, range),
     getCellsInRange(id, range, { includeUndesigned: true })
   ]);
   const document: MapDocument = {
@@ -225,9 +221,7 @@ async function buildRangeRuntime(id: string, range: CellRange): Promise<MapRunti
     cells: rangeResult.cells
       .map(designedRecordFromActiveCell)
       .filter((cell): cell is MapDocument["cells"][number] => cell !== null),
-    features: {
-      rivers: filterRiversForRange(features.rivers, range)
-    }
+    features
   };
   return {
     document,
@@ -790,7 +784,6 @@ async function applyLightweightCellCommands(
   return {
     mapId: normalizedId,
     summary,
-    features: await getMapFeatures(normalizedId),
     warnings,
     dryRun: options.dryRun ?? false,
     command_results: commandResults,
@@ -833,6 +826,24 @@ function buildInverseCellCommands(changes: CellChangeDetail[], source: HistorySo
       return activeCellToSetCellCommand(change.before, source);
     })
     .filter((command): command is MapCommand => command !== null);
+}
+
+function designedRecordFromChangeCell(cell: CellChangeDetail["after"]): DesignedCellRecord | null {
+  if (!cell || cell.status !== "designed" || !cell.terrain) {
+    return null;
+  }
+  return {
+    row: cell.row,
+    col: cell.col,
+    terrain: cell.terrain,
+    biome: cell.biome,
+    tags: [...cell.tags],
+    note: cell.note
+  };
+}
+
+function revisionIncrementFromCommandReports(reports: CommandExecutionReport[]): number {
+  return reports.filter((report) => report.details.length > 0).length;
 }
 
 function findRiverById(document: MapDocument, id: string) {
@@ -1228,6 +1239,50 @@ export async function undoMap(id: string): Promise<HistoryMoveResult | null> {
   };
 }
 
+export async function undoMapLight(id: string): Promise<LightweightHistoryMoveResult | null> {
+  const normalizedId = assertSafeMapId(id);
+  const operation = await getUndoOperation(normalizedId);
+  if (!operation) {
+    return null;
+  }
+  const lightweight = await applyLightweightCellCommands(normalizedId, operation.inverseCommands, { dryRun: true });
+  if (!lightweight) {
+    const full = await undoMap(normalizedId);
+    return full
+      ? {
+          mapId: full.map.document.meta.id,
+          summary: summaryFromRuntime(full.map),
+          features: full.map.document.features,
+          warnings: full.warnings,
+          operation: full.operation,
+          status: full.status
+        }
+      : null;
+  }
+  await applyCellWriteChanges(
+    normalizedId,
+    lightweight.changes.map((change) => ({
+      row: change.coord.row,
+      col: change.coord.col,
+      cell: designedRecordFromChangeCell(change.after)
+    })),
+    { revisionIncrement: revisionIncrementFromCommandReports(lightweight.command_results) }
+  );
+  await moveHistoryCursor(normalizedId, operation.seq - 1);
+  return {
+    mapId: normalizedId,
+    summary: await getMapSummary(normalizedId),
+    warnings: lightweight.warnings,
+    operation: {
+      seq: operation.seq,
+      action: operation.action,
+      source: operation.source,
+      timestamp: operation.timestamp
+    },
+    status: await getHistoryStatus(normalizedId)
+  };
+}
+
 export async function redoMap(id: string): Promise<HistoryMoveResult | null> {
   const normalizedId = assertSafeMapId(id);
   const operation = await getRedoOperation(normalizedId);
@@ -1249,12 +1304,60 @@ export async function redoMap(id: string): Promise<HistoryMoveResult | null> {
   };
 }
 
+export async function redoMapLight(id: string): Promise<LightweightHistoryMoveResult | null> {
+  const normalizedId = assertSafeMapId(id);
+  const operation = await getRedoOperation(normalizedId);
+  if (!operation) {
+    return null;
+  }
+  const lightweight = await applyLightweightCellCommands(normalizedId, operation.commands, { dryRun: true });
+  if (!lightweight) {
+    const full = await redoMap(normalizedId);
+    return full
+      ? {
+          mapId: full.map.document.meta.id,
+          summary: summaryFromRuntime(full.map),
+          features: full.map.document.features,
+          warnings: full.warnings,
+          operation: full.operation,
+          status: full.status
+        }
+      : null;
+  }
+  await applyCellWriteChanges(
+    normalizedId,
+    lightweight.changes.map((change) => ({
+      row: change.coord.row,
+      col: change.coord.col,
+      cell: designedRecordFromChangeCell(change.after)
+    })),
+    { revisionIncrement: revisionIncrementFromCommandReports(lightweight.command_results) }
+  );
+  await moveHistoryCursor(normalizedId, operation.seq);
+  return {
+    mapId: normalizedId,
+    summary: await getMapSummary(normalizedId),
+    warnings: lightweight.warnings,
+    operation: {
+      seq: operation.seq,
+      action: operation.action,
+      source: operation.source,
+      timestamp: operation.timestamp
+    },
+    status: await getHistoryStatus(normalizedId)
+  };
+}
+
 export async function getMapSummary(id: string): Promise<MapSummary> {
   return getRepositoryMapSummary(assertSafeMapId(id));
 }
 
 export async function getMapFeatures(id: string) {
   return getRepositoryMapFeatures(assertSafeMapId(id));
+}
+
+export async function getMapFeaturesInRange(id: string, range: CellRange) {
+  return getRepositoryMapFeaturesInRange(assertSafeMapId(id), range);
 }
 
 export async function getCellsInRange(

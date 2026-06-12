@@ -598,6 +598,46 @@ describe("server cli", () => {
     expect(listedBody.result[0].points[0].width).toBe(2);
     expect(listedBody.result[0].points[1]).toEqual({ row: 0, col: 1, width: 5 });
 
+    const farRiver = await runCli(
+      [
+        "maps",
+        "rivers",
+        "create",
+        "--map-id",
+        mapId,
+        "--id",
+        "far-river",
+        "--name",
+        "Far River",
+        "--points",
+        "R20C20,R20C22",
+        "--summary"
+      ],
+      { tempRoot }
+    );
+    expect(farRiver.code).toBe(0);
+
+    const rangedList = await runCli(
+      [
+        "maps",
+        "rivers",
+        "list",
+        "--map-id",
+        mapId,
+        "--min-row",
+        "-1",
+        "--max-row",
+        "1",
+        "--min-col",
+        "1",
+        "--max-col",
+        "1"
+      ],
+      { tempRoot }
+    );
+    expect(rangedList.code).toBe(0);
+    expect(JSON.parse(rangedList.stdout).result.map((river: { id: string }) => river.id)).toEqual(["main-river"]);
+
     const inspected = await runCli(
       ["maps", "rivers", "inspect", "--map-id", mapId, "--river-id", "main-river"],
       { tempRoot }
@@ -610,7 +650,7 @@ describe("server cli", () => {
       { tempRoot }
     );
     expect(deleted.code).toBe(0);
-    expect(JSON.parse(deleted.stdout).result.river_count).toBe(0);
+    expect(JSON.parse(deleted.stdout).result.river_count).toBe(1);
   });
 
   it("reports missing flag values and unknown flags as structured errors", async () => {

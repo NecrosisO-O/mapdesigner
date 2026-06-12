@@ -4,6 +4,7 @@ import {
   createCellId,
   createDisplayCoord,
   createEmptyDocument,
+  expandRiverPath,
   getNeighborCoords,
   normalizeDocument,
   parseDocument,
@@ -61,6 +62,10 @@ interface FeatureRow {
   kind: string;
   feature_id: string;
   json: string;
+  bounds_min_row: number | null;
+  bounds_max_row: number | null;
+  bounds_min_col: number | null;
+  bounds_max_col: number | null;
 }
 
 interface OperationRow {
@@ -263,6 +268,40 @@ function isWithinRange(coord: { row: number; col: number }, range: CellRange): b
   return coord.row >= range.minRow && coord.row <= range.maxRow && coord.col >= range.minCol && coord.col <= range.maxCol;
 }
 
+function doRangesOverlap(left: CellRange, right: CellRange): boolean {
+  return left.minRow <= right.maxRow && left.maxRow >= right.minRow && left.minCol <= right.maxCol && left.maxCol >= right.minCol;
+}
+
+function coordRangeForRiver(river: RiverFeature): CellRange | null {
+  const samples = expandRiverPath(river);
+  if (samples.length === 0) {
+    return null;
+  }
+  return {
+    minRow: Math.min(...samples.map((sample) => sample.row)),
+    maxRow: Math.max(...samples.map((sample) => sample.row)),
+    minCol: Math.min(...samples.map((sample) => sample.col)),
+    maxCol: Math.max(...samples.map((sample) => sample.col))
+  };
+}
+
+function rangeFromFeatureRow(row: FeatureRow): CellRange | null {
+  if (
+    row.bounds_min_row === null ||
+    row.bounds_max_row === null ||
+    row.bounds_min_col === null ||
+    row.bounds_max_col === null
+  ) {
+    return null;
+  }
+  return {
+    minRow: row.bounds_min_row,
+    maxRow: row.bounds_max_row,
+    minCol: row.bounds_min_col,
+    maxCol: row.bounds_max_col
+  };
+}
+
 function getMapRowOrThrow(db: Database.Database, id: string): MapRow {
   const normalizedId = assertSafeMapId(id);
   const row = db.prepare("SELECT * FROM maps WHERE id = ?").get(normalizedId) as MapRow | undefined;
@@ -289,8 +328,39 @@ function mapSummaryFromRow(db: Database.Database, row: MapRow): MapSummary {
 
 function readFeatureRows(db: Database.Database, id: string): FeatureRow[] {
   return db
-    .prepare("SELECT map_id, kind, feature_id, json FROM features WHERE map_id = ? ORDER BY kind, feature_id")
+    .prepare(
+      `SELECT map_id, kind, feature_id, json,
+              bounds_min_row, bounds_max_row, bounds_min_col, bounds_max_col
+       FROM features
+       WHERE map_id = ?
+       ORDER BY kind, feature_id`
+    )
     .all(id) as FeatureRow[];
+}
+
+function readFeatureRowsInRange(db: Database.Database, id: string, range: CellRange): FeatureRow[] {
+  return db
+    .prepare(
+      `SELECT map_id, kind, feature_id, json,
+              bounds_min_row, bounds_max_row, bounds_min_col, bounds_max_col
+       FROM features
+       WHERE map_id = ?
+         AND kind = 'river'
+         AND (
+           bounds_min_row IS NULL
+           OR bounds_max_row IS NULL
+           OR bounds_min_col IS NULL
+           OR bounds_max_col IS NULL
+           OR (
+             bounds_min_row <= ?
+             AND bounds_max_row >= ?
+             AND bounds_min_col <= ?
+             AND bounds_max_col >= ?
+           )
+         )
+       ORDER BY kind, feature_id`
+    )
+    .all(id, range.maxRow, range.minRow, range.maxCol, range.minCol) as FeatureRow[];
 }
 
 function featureRowsToFeatures(rows: FeatureRow[]): MapFeatures {
@@ -300,6 +370,65 @@ function featureRowsToFeatures(rows: FeatureRow[]): MapFeatures {
       .map((row) => JSON.parse(row.json) as RiverFeature)
       .sort((left, right) => left.id.localeCompare(right.id))
   };
+}
+
+function featureRowsToFeaturesInRange(rows: FeatureRow[], range: CellRange): MapFeatures {
+  return {
+    rivers: rows
+      .filter((row) => row.kind === "river")
+      .flatMap((row) => {
+        const river = JSON.parse(row.json) as RiverFeature;
+        const rowRange = rangeFromFeatureRow(row);
+        const riverRange = rowRange ?? coordRangeForRiver(river);
+        return riverRange && doRangesOverlap(riverRange, range) ? [river] : [];
+      })
+      .sort((left, right) => left.id.localeCompare(right.id))
+  };
+}
+
+function backfillMissingFeatureBounds(db: Database.Database, id: string): void {
+  const rows = db
+    .prepare(
+      `SELECT map_id, kind, feature_id, json,
+              bounds_min_row, bounds_max_row, bounds_min_col, bounds_max_col
+       FROM features
+       WHERE map_id = ?
+         AND kind = 'river'
+         AND (
+           bounds_min_row IS NULL
+           OR bounds_max_row IS NULL
+           OR bounds_min_col IS NULL
+           OR bounds_max_col IS NULL
+         )`
+    )
+    .all(id) as FeatureRow[];
+  if (rows.length === 0) {
+    return;
+  }
+  const update = db.prepare(
+    `UPDATE features
+     SET bounds_min_row = ?,
+         bounds_max_row = ?,
+         bounds_min_col = ?,
+         bounds_max_col = ?
+     WHERE map_id = ? AND kind = ? AND feature_id = ?`
+  );
+  const write = db.transaction(() => {
+    for (const row of rows) {
+      const river = JSON.parse(row.json) as RiverFeature;
+      const range = coordRangeForRiver(river);
+      update.run(
+        range?.minRow ?? null,
+        range?.maxRow ?? null,
+        range?.minCol ?? null,
+        range?.maxCol ?? null,
+        row.map_id,
+        row.kind,
+        row.feature_id
+      );
+    }
+  });
+  write();
 }
 
 function readCells(db: Database.Database, id: string): DesignedCellRecord[] {
@@ -417,10 +546,22 @@ function writeDocument(db: Database.Database, document: MapDocument): void {
 
     db.prepare("DELETE FROM features WHERE map_id = ?").run(normalized.meta.id);
     const insertFeature = db.prepare(
-      "INSERT INTO features (map_id, kind, feature_id, json) VALUES (?, ?, ?, ?)"
+      `INSERT INTO features (
+        map_id, kind, feature_id, json, bounds_min_row, bounds_max_row, bounds_min_col, bounds_max_col
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
     );
     for (const river of normalized.features.rivers) {
-      insertFeature.run(normalized.meta.id, "river", river.id, JSON.stringify(river));
+      const range = coordRangeForRiver(river);
+      insertFeature.run(
+        normalized.meta.id,
+        "river",
+        river.id,
+        JSON.stringify(river),
+        range?.minRow ?? null,
+        range?.maxRow ?? null,
+        range?.minCol ?? null,
+        range?.maxCol ?? null
+      );
     }
   });
   write();
@@ -574,7 +715,17 @@ export async function getMapFeatures(id: string): Promise<MapFeatures> {
   await ensureMapInDatabase(id);
   const db = getDatabase();
   const row = getMapRowOrThrow(db, id);
+  backfillMissingFeatureBounds(db, row.id);
   return featureRowsToFeatures(readFeatureRows(db, row.id));
+}
+
+export async function getMapFeaturesInRange(id: string, inputRange: CellRange): Promise<MapFeatures> {
+  const range = assertRange(inputRange);
+  await ensureMapInDatabase(id);
+  const db = getDatabase();
+  const row = getMapRowOrThrow(db, id);
+  backfillMissingFeatureBounds(db, row.id);
+  return featureRowsToFeaturesInRange(readFeatureRowsInRange(db, row.id, range), range);
 }
 
 export async function getDesignedCellsAt(

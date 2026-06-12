@@ -21,6 +21,7 @@ import {
   exportPng,
   getCellsInRange,
   getMapFeatures,
+  getMapFeaturesInRange,
   getHistoryStatus,
   getMap,
   getMapSummary,
@@ -411,12 +412,13 @@ async function main(): Promise<void> {
         }
         switch (riverAction) {
           case "list": {
-            assertKnownFlags(args, ["--map-id"]);
+            assertKnownFlags(args, ["--map-id", "--min-row", "--max-row", "--min-col", "--max-col"]);
             const id = readFlag(args, "--map-id");
             if (!id) {
               printFailure("maps rivers list requires --map-id");
             }
-            const features = await getMapFeatures(id);
+            const range = readOptionalRangeFlags(args);
+            const features = range ? await getMapFeaturesInRange(id, range) : await getMapFeatures(id);
             printResult(createEnvelope({ result: features.rivers }));
             break;
           }

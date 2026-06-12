@@ -68,6 +68,10 @@ export function getDatabase(): Database.Database {
         kind TEXT NOT NULL,
         feature_id TEXT NOT NULL,
         json TEXT NOT NULL,
+        bounds_min_row INTEGER,
+        bounds_max_row INTEGER,
+        bounds_min_col INTEGER,
+        bounds_max_col INTEGER,
         PRIMARY KEY (map_id, kind, feature_id)
       );
 
@@ -84,6 +88,14 @@ export function getDatabase(): Database.Database {
       );
     `);
     addColumnIfMissing(connection, "maps", "history_cursor", "INTEGER NOT NULL DEFAULT 0");
+    addColumnIfMissing(connection, "features", "bounds_min_row", "INTEGER");
+    addColumnIfMissing(connection, "features", "bounds_max_row", "INTEGER");
+    addColumnIfMissing(connection, "features", "bounds_min_col", "INTEGER");
+    addColumnIfMissing(connection, "features", "bounds_max_col", "INTEGER");
+    connection.exec(`
+      CREATE INDEX IF NOT EXISTS idx_features_map_kind_bounds
+        ON features(map_id, kind, bounds_min_row, bounds_max_row, bounds_min_col, bounds_max_col);
+    `);
     return connection;
   } catch (error) {
     throw storageError("failed to initialize map database", error);

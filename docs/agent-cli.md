@@ -118,6 +118,8 @@ echo '{
 - `terrain_summary`
 - `biome_summary`
 
+对于 `set_cell`、`set_cells`、`clear_cell`、`annotate_cell`、`replace_terrain`、`replace_biome` 这类单元格命令，`--summary` 会走轻量数据库路径，不需要返回完整地图。Web/API 的 `includeMap=false` 撤销、重做对纯单元格历史也会走轻量路径。河流命令仍保持兼容执行路径。
+
 不加 `--summary` 时会返回完整执行结果，包含 `map`、`command_results` 和 `changes`。`command_results` 按命令顺序给出逐条执行摘要；`changes` 给出聚合后的变更明细。每条变更都包含：
 
 - `coord`
@@ -242,6 +244,14 @@ echo '{
 
 ```bash
 pnpm exec tsx apps/server/src/cli.ts maps rivers list --map-id demo-map
+```
+
+大地图中建议加范围参数，只列出与当前工作区重叠的河流：
+
+```bash
+pnpm exec tsx apps/server/src/cli.ts maps rivers list \
+  --map-id demo-map \
+  --min-row -10 --max-row 10 --min-col -10 --max-col 10
 ```
 
 创建河流：

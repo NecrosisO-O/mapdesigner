@@ -88,6 +88,7 @@ const apiMock = vi.hoisted(() => ({
   getMap: vi.fn(),
   getMapSummary: vi.fn(),
   getMapFeatures: vi.fn(),
+  getMapFeaturesInRange: vi.fn(),
   getMapHistory: vi.fn(),
   getHistoryStatus: vi.fn(),
   getCellsInRange: vi.fn(),
@@ -179,6 +180,12 @@ function configureEditableMapMock(initialMap: typeof sampleMap): void {
     errors: []
   }));
   apiMock.getMapFeatures.mockImplementation(async () => ({
+    ok: true,
+    result: runtime.document.features,
+    warnings: [],
+    errors: []
+  }));
+  apiMock.getMapFeaturesInRange.mockImplementation(async () => ({
     ok: true,
     result: runtime.document.features,
     warnings: [],
@@ -485,8 +492,9 @@ describe("App", () => {
     render(<App />);
     await waitFor(() => expect(apiMock.listMaps).toHaveBeenCalled());
     await waitFor(() => expect(apiMock.getMapSummary).toHaveBeenCalledWith("sample-map"));
-    await waitFor(() => expect(apiMock.getMapFeatures).toHaveBeenCalledWith("sample-map"));
+    await waitFor(() => expect(apiMock.getMapFeaturesInRange).toHaveBeenCalled());
     await waitFor(() => expect(apiMock.getCellsInRange).toHaveBeenCalled());
+    expect(apiMock.getMapFeatures).not.toHaveBeenCalled();
     expect(apiMock.getMap).not.toHaveBeenCalled();
     expect(await screen.findByText("已打开 Sample Map")).toBeTruthy();
     expect(screen.getByRole("option", { name: "Sample Map" })).toBeTruthy();
@@ -500,6 +508,27 @@ describe("App", () => {
     expect(statusBar.textContent).toContain("版本");
     expect(screen.queryByRole("list", { name: "地图列表" })).toBeNull();
     expect(screen.queryByRole("heading", { name: "悬停信息" })).toBeNull();
+  });
+
+  it("refreshes the current loaded range after edits without expanding it repeatedly", async () => {
+    render(<App />);
+    await screen.findByText("已打开 Sample Map");
+    await waitFor(() => expect(apiMock.getCellsInRange).toHaveBeenCalled());
+    const initialRange = (apiMock.getCellsInRange.mock.calls.at(-1)?.[1] ?? null) as CellRange | null;
+    expect(initialRange).toBeTruthy();
+
+    fireEvent.click(getCellButton("R0C0", "designed"));
+    fireEvent.change(screen.getByLabelText("Terrain 分类"), { target: { value: "upland" } });
+    fireEvent.change(screen.getByLabelText("Terrain"), { target: { value: "hill" } });
+    const terrainField = screen.getByLabelText("Terrain");
+    const cellPanel = terrainField.closest("section");
+    expect(cellPanel).toBeTruthy();
+    fireEvent.click(within(cellPanel as HTMLElement).getByRole("button", { name: "应用" }));
+
+    await screen.findByText("单元格修改已保存到服务器");
+    await waitFor(() => expect(apiMock.getCellsInRange.mock.calls.length).toBeGreaterThan(1));
+    const refreshedRange = (apiMock.getCellsInRange.mock.calls.at(-1)?.[1] ?? null) as CellRange | null;
+    expect(refreshedRange).toEqual(initialRange);
   });
 
   it("ignores empty map selection in the top dropdown", async () => {

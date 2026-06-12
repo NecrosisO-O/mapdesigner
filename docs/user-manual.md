@@ -129,11 +129,11 @@ pnpm start
 
 ### 5.1 地图文件目录
 
-地图主文件默认存放在：
+运行时地图数据默认存放在：
 
-- `storage/maps`
+- `storage/mapdesigner.db`
 
-地图主文件格式为 `JSON`。
+历史版本的 JSON 地图会在需要时迁移进 SQLite。`storage/maps` 仍可作为旧地图导入/兼容目录使用。
 
 ### 5.2 导出文件目录
 
@@ -421,7 +421,7 @@ pnpm start
 
 ## 14. JSON 文件说明
 
-当前地图的主持久化格式为 `JSON`。
+当前运行时持久化格式为 SQLite。JSON 是导入、导出、归档和外部交换格式，CLI / server 侧仍保留 JSON 导出能力。
 
 顶层结构包括：
 
@@ -434,6 +434,7 @@ pnpm start
 
 - `cells` 只保存 `designed` 单元格
 - `undesigned` 单元格不写入文件，只在运行时生成
+- 大地图在线工作流应优先使用 `summary`、`cells`、`inspect-cell`、`inspect-area` 和 `apply --summary`；完整 JSON 导出更适合归档，不适合作为高频检查入口
 
 ## 15. CLI 基础用法
 
@@ -596,6 +597,8 @@ pnpm exec tsx apps/server/src/cli.ts maps rivers create \
 ```
 
 `points` 是河流控制点。第一个点通常表示源头、入图点或上游控制点，最后一个点通常表示河口、汇入水域或出图点。系统会在相邻控制点之间自动补齐连续六角格路径。`width` 是可选宽度锚点，相邻宽度锚点之间会渐变；锚点可以落在自动补齐路径的中间格上。河流起点或终点接入湖泊、海洋、河口、潮滩等水域地貌时，渲染结果会显示端点衔接提示。
+
+大地图中查看河流时可以为 `maps rivers list` 添加 `--min-row --max-row --min-col --max-col`，只返回与指定范围重叠的河流，避免把所有线性要素一次性读出。
 
 ## 16. AI agent 使用建议
 
