@@ -87,6 +87,7 @@ const apiMock = vi.hoisted(() => ({
   listMaps: vi.fn(),
   getMap: vi.fn(),
   getMapSummary: vi.fn(),
+  getMapFeatures: vi.fn(),
   getMapHistory: vi.fn(),
   getHistoryStatus: vi.fn(),
   getCellsInRange: vi.fn(),
@@ -95,6 +96,7 @@ const apiMock = vi.hoisted(() => ({
   redoMap: vi.fn(),
   createMap: vi.fn(),
   saveMap: vi.fn(),
+  saveMapMeta: vi.fn(),
   saveMapAs: vi.fn(),
   duplicateMap: vi.fn(),
   deleteMap: vi.fn(),
@@ -176,6 +178,12 @@ function configureEditableMapMock(initialMap: typeof sampleMap): void {
     warnings: [],
     errors: []
   }));
+  apiMock.getMapFeatures.mockImplementation(async () => ({
+    ok: true,
+    result: runtime.document.features,
+    warnings: [],
+    errors: []
+  }));
   apiMock.getCellsInRange.mockImplementation(async (_id: string, range: CellRange) => ({
     ok: true,
     result: {
@@ -205,7 +213,12 @@ function configureEditableMapMock(initialMap: typeof sampleMap): void {
     warnings: [],
     errors: []
   }));
-  apiMock.applyCommands.mockImplementation(async (_id: string, commands: MapCommand[], dryRun = false) => {
+  apiMock.applyCommands.mockImplementation(async (
+    _id: string,
+    commands: MapCommand[],
+    options: { dryRun?: boolean; includeMap?: boolean } = {}
+  ) => {
+    const dryRun = options.dryRun ?? false;
     const before = structuredClone(runtime.document);
     let next = runtime;
     const warnings = [];
@@ -237,7 +250,9 @@ function configureEditableMapMock(initialMap: typeof sampleMap): void {
     return {
       ok: true,
       result: {
-        map: next,
+        ...(options.includeMap === false ? {} : { map: next }),
+        summary: createMockSummary(next),
+        features: next.document.features,
         dryRun,
         warnings,
         stats: {
@@ -268,6 +283,8 @@ function configureEditableMapMock(initialMap: typeof sampleMap): void {
       ok: true,
       result: {
         map: runtime,
+        summary: createMockSummary(runtime),
+        features: runtime.document.features,
         warnings: [],
         operation: {
           seq: operation.seq,
@@ -292,6 +309,8 @@ function configureEditableMapMock(initialMap: typeof sampleMap): void {
       ok: true,
       result: {
         map: runtime,
+        summary: createMockSummary(runtime),
+        features: runtime.document.features,
         warnings: [],
         operation: {
           seq: operation.seq,
@@ -396,6 +415,12 @@ describe("App", () => {
       warnings: [],
       errors: []
     });
+    apiMock.saveMapMeta.mockResolvedValue({
+      ok: true,
+      result: createMockSummary(sampleMap),
+      warnings: [],
+      errors: []
+    });
     apiMock.saveMapAs.mockResolvedValue({
       ok: true,
       result: {
@@ -459,9 +484,10 @@ describe("App", () => {
   it("loads and opens the first map", async () => {
     render(<App />);
     await waitFor(() => expect(apiMock.listMaps).toHaveBeenCalled());
-    await waitFor(() => expect(apiMock.getMap).toHaveBeenCalledWith("sample-map"));
     await waitFor(() => expect(apiMock.getMapSummary).toHaveBeenCalledWith("sample-map"));
+    await waitFor(() => expect(apiMock.getMapFeatures).toHaveBeenCalledWith("sample-map"));
     await waitFor(() => expect(apiMock.getCellsInRange).toHaveBeenCalled());
+    expect(apiMock.getMap).not.toHaveBeenCalled();
     expect(await screen.findByText("已打开 Sample Map")).toBeTruthy();
     expect(screen.getByRole("option", { name: "Sample Map" })).toBeTruthy();
     const statusBar = screen.getByLabelText("当前状态");
@@ -483,12 +509,12 @@ describe("App", () => {
 
     fireEvent.change(mapSelector, { target: { value: "" } });
 
-    expect(apiMock.getMap).toHaveBeenCalledTimes(1);
+    expect(apiMock.getMap).not.toHaveBeenCalled();
     expect(screen.getByText("当前地图：", { exact: false })).toBeTruthy();
   });
 
   it("normalizes low-level file errors in the status panel", async () => {
-    apiMock.getMap.mockResolvedValueOnce({
+    apiMock.getMapSummary.mockResolvedValueOnce({
       ok: false,
       result: undefined,
       warnings: [],
@@ -503,7 +529,7 @@ describe("App", () => {
 
     render(<App />);
 
-    await waitFor(() => expect(apiMock.getMap).toHaveBeenCalledWith("sample-map"));
+    await waitFor(() => expect(apiMock.getMapSummary).toHaveBeenCalledWith("sample-map"));
     expect(await screen.findByText("地图文件不存在或暂时无法读取")).toBeTruthy();
     expect(screen.queryByText(/ENOENT:/)).toBeNull();
   });
@@ -615,6 +641,7 @@ describe("App", () => {
     expect(screen.getByText("已将 R0C0 的地形刷到 R0C1 并保存到服务器")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "格式刷" }));
+    await waitFor(() => expect(getCellButton("R0C1", "designed")).toBeTruthy());
     fireEvent.click(getCellButton("R0C1", "designed"));
 
     expect(await screen.findByLabelText("当前选中信息")).toBeTruthy();
@@ -635,6 +662,8 @@ describe("App", () => {
     expect(cellPanel).toBeTruthy();
     fireEvent.click(within(cellPanel as HTMLElement).getByRole("button", { name: "应用" }));
     await screen.findByText("单元格修改已保存到服务器");
+    await waitFor(() => expect(getCellButton("R0C0", "designed")).toBeTruthy());
+    await waitFor(() => expect(getCellButton("R0C1", "designed")).toBeTruthy());
 
     fireEvent.click(getCellButton("R0C0", "designed"));
     fireEvent.click(screen.getByLabelText("刷地形"));
@@ -742,7 +771,7 @@ describe("App", () => {
     });
     fireEvent.click(within(advancedPanel as HTMLElement).getByRole("button", { name: "替换地形" }));
 
-    expect(await screen.findByText("已替换 1 个地形并保存到服务器")).toBeTruthy();
+    expect(await screen.findByText("地形替换已保存到服务器")).toBeTruthy();
 
     fireEvent.change(within(advancedPanel as HTMLElement).getByLabelText("匹配 Biome"), {
       target: { value: "grassland" }
@@ -752,7 +781,7 @@ describe("App", () => {
     });
     fireEvent.click(within(advancedPanel as HTMLElement).getByRole("button", { name: "替换生态" }));
 
-    expect(await screen.findByText("已替换 1 个生态并保存到服务器")).toBeTruthy();
+    expect(await screen.findByText("生态替换已保存到服务器")).toBeTruthy();
 
     fireEvent.click(getCellButton("R0C0", "designed"));
     expect((screen.getByLabelText("Terrain") as HTMLSelectElement).value).toBe("hill");
@@ -1006,7 +1035,7 @@ describe("App", () => {
 
     await waitFor(() => expect(apiMock.deleteMap).toHaveBeenCalledWith("sample-map"));
     expect(await screen.findByText("地图已删除")).toBeTruthy();
-    expect(screen.getByText("当前没有打开地图。")).toBeTruthy();
+    await waitFor(() => expect(screen.getByText("当前没有打开地图。")).toBeTruthy());
     expect(apiMock.getMap).not.toHaveBeenCalledWith("other-map");
   });
 

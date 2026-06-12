@@ -121,6 +121,12 @@ export interface OperationInput {
   summary: unknown;
 }
 
+export interface MapMetadataUpdate {
+  name?: string;
+  description?: string;
+  tags?: string[];
+}
+
 const MAX_LEGACY_IMPORT_FILE_BYTES = 32 * 1024 * 1024;
 
 function safeJsonArray(value: string): string[] {
@@ -493,6 +499,38 @@ export async function getMapDocument(id: string): Promise<MapDocument> {
     cells: readCells(db, row.id),
     features: featureRowsToFeatures(readFeatureRows(db, row.id))
   });
+}
+
+export async function getMapFeatures(id: string): Promise<MapFeatures> {
+  await ensureMapInDatabase(id);
+  const db = getDatabase();
+  const row = getMapRowOrThrow(db, id);
+  return featureRowsToFeatures(readFeatureRows(db, row.id));
+}
+
+export async function updateMapMetadata(id: string, input: MapMetadataUpdate): Promise<MapSummary> {
+  const normalizedId = assertSafeMapId(id);
+  await ensureMapInDatabase(normalizedId);
+  const db = getDatabase();
+  const row = getMapRowOrThrow(db, normalizedId);
+  const now = new Date().toISOString();
+  db.prepare(
+    `UPDATE maps
+     SET name = @name,
+         description = @description,
+         tags_json = @tags_json,
+         updated_at = @updated_at,
+         revision = @revision
+     WHERE id = @id`
+  ).run({
+    id: row.id,
+    name: input.name ?? row.name,
+    description: input.description ?? row.description,
+    tags_json: input.tags ? serializeStringArray(input.tags) : row.tags_json,
+    updated_at: now,
+    revision: row.revision + 1
+  });
+  return getMapSummary(row.id);
 }
 
 export async function saveMapDocument(document: MapDocument): Promise<MapDocument> {

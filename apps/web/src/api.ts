@@ -1,9 +1,11 @@
 import type {
   CellRange,
   CellRangeResult,
+  CellChangeDetail,
   ExportRenderOptions,
   MapCommand,
   MapDocument,
+  MapFeatures,
   MapRuntimeState,
   MapSummary
 } from "@mapdesigner/map-core";
@@ -44,7 +46,9 @@ export interface MapHistory {
 }
 
 export interface HistoryMoveResult {
-  map: MapRuntimeState;
+  map?: MapRuntimeState;
+  summary?: MapSummary;
+  features?: MapFeatures;
   warnings: ApiEnvelope<unknown>["warnings"];
   operation: {
     seq: number;
@@ -53,6 +57,36 @@ export interface HistoryMoveResult {
     timestamp: string;
   };
   status: HistoryStatus;
+}
+
+export interface CommandExecutionReport {
+  index: number;
+  action: MapCommand["action"];
+  changed: Array<{ row: number; col: number }>;
+  details: CellChangeDetail[];
+  warnings: ApiEnvelope<unknown>["warnings"];
+}
+
+export interface CommandApplyResponse {
+  map?: MapRuntimeState;
+  summary?: MapSummary;
+  features?: MapFeatures;
+  dryRun: boolean;
+  warnings: ApiEnvelope<unknown>["warnings"];
+  command_results?: CommandExecutionReport[];
+  changes?: CellChangeDetail[];
+  stats: {
+    command_count: number;
+    changed_count: number;
+    created_count: number;
+    updated_count: number;
+    cleared_count: number;
+    feature_stats: {
+      river_created_count: number;
+      river_updated_count: number;
+      river_deleted_count: number;
+    };
+  };
 }
 
 async function request<T>(input: RequestInfo, init?: RequestInit): Promise<ApiEnvelope<T>> {
@@ -74,6 +108,7 @@ export const api = {
   listMaps: () => request<MapListItem[]>("/api/maps"),
   getMap: (id: string) => request<MapRuntimeState>(`/api/maps/${id}`),
   getMapSummary: (id: string) => request<MapSummary>(`/api/maps/${id}/summary`),
+  getMapFeatures: (id: string) => request<MapFeatures>(`/api/maps/${id}/features`),
   getMapHistory: (id: string, limit = 5) => request<MapHistory>(`/api/maps/${id}/history?limit=${limit}`),
   getHistoryStatus: (id: string) => request<HistoryStatus>(`/api/maps/${id}/history-status`),
   getCellsInRange: (id: string, range: CellRange, includeUndesigned = true) =>
@@ -90,29 +125,18 @@ export const api = {
       method: "PUT",
       body: JSON.stringify(input)
     }),
-  saveMapAs: (id: string, input: { document: MapDocument; name: string; id?: string }) =>
+  saveMapMeta: (id: string, input: { expectedRevision: number; name?: string; description?: string; tags?: string[] }) =>
+    request<MapSummary>(`/api/maps/${id}/meta`, {
+      method: "PATCH",
+      body: JSON.stringify(input)
+    }),
+  saveMapAs: (id: string, input: { document?: MapDocument; name: string; id?: string }) =>
     request<MapRuntimeState>(`/api/maps/${id}/save-as`, {
       method: "POST",
       body: JSON.stringify(input)
     }),
-  applyCommands: (id: string, commands: MapCommand[], dryRun = false) =>
-    request<{
-      map: MapRuntimeState;
-      dryRun: boolean;
-      warnings: ApiEnvelope<unknown>["warnings"];
-      stats: {
-        command_count: number;
-        changed_count: number;
-        created_count: number;
-        updated_count: number;
-        cleared_count: number;
-        feature_stats: {
-          river_created_count: number;
-          river_updated_count: number;
-          river_deleted_count: number;
-        };
-      };
-    }>(`/api/maps/${id}/commands${dryRun ? "/dry-run" : ""}`, {
+  applyCommands: (id: string, commands: MapCommand[], options: { dryRun?: boolean; includeMap?: boolean } = {}) =>
+    request<CommandApplyResponse>(`/api/maps/${id}/commands${options.dryRun ? "/dry-run" : ""}?includeMap=${options.includeMap ?? true}`, {
       method: "POST",
       body: JSON.stringify({ commands })
     }),
@@ -124,12 +148,12 @@ export const api = {
     request<{ deleted: true }>(`/api/maps/${id}`, {
       method: "DELETE"
     }),
-  undoMap: (id: string) =>
-    request<HistoryMoveResult | null>(`/api/maps/${id}/undo`, {
+  undoMap: (id: string, includeMap = true) =>
+    request<HistoryMoveResult | null>(`/api/maps/${id}/undo?includeMap=${includeMap}`, {
       method: "POST"
     }),
-  redoMap: (id: string) =>
-    request<HistoryMoveResult | null>(`/api/maps/${id}/redo`, {
+  redoMap: (id: string, includeMap = true) =>
+    request<HistoryMoveResult | null>(`/api/maps/${id}/redo?includeMap=${includeMap}`, {
       method: "POST"
     }),
   importMap: (content: string, generateNewId = false) =>
