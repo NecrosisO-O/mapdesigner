@@ -1,4 +1,4 @@
-import { redo, undo, type TagKey } from "@mapdesigner/map-core";
+import type { TagKey } from "@mapdesigner/map-core";
 import { useState } from "react";
 import { DetailPanel } from "./DetailPanel.js";
 import { MapCanvas } from "./MapCanvas.js";
@@ -21,9 +21,9 @@ export default function App() {
   const [lastOpaqueExportBackground, setLastOpaqueExportBackground] = useState("#F4F0E6");
   const [interactionMode, setInteractionMode] = useState<InteractionMode>("select");
   const workspace = useMapWorkspace(setMessage);
-  const editor = useCellEditor(workspace.currentMap, workspace.setCurrentMap, setMessage);
-  const advancedEditor = useAdvancedEditor(workspace.currentMap, workspace.setCurrentMap, setMessage);
-  const riverEditor = useRiverEditor(workspace.currentMap, workspace.setCurrentMap, setMessage);
+  const editor = useCellEditor(workspace.currentMap, workspace.applyCommands, setMessage);
+  const advancedEditor = useAdvancedEditor(workspace.currentMap, workspace.applyCommands, setMessage);
+  const riverEditor = useRiverEditor(workspace.currentMap, workspace.applyCommands, setMessage);
   const exportPanel = useExportPanel(setMessage);
 
   function updateEditorDraftFromMap(nextMap: NonNullable<typeof workspace.currentMap>): void {
@@ -94,6 +94,7 @@ export default function App() {
     <div className="app-shell">
       <TopToolbar
         currentMap={workspace.currentMap}
+        mapHistory={workspace.mapHistory}
         currentMapId={workspace.currentMapId}
         displayMaps={workspace.displayMaps}
         mapDirty={workspace.mapDirty}
@@ -128,18 +129,18 @@ export default function App() {
           }
         }}
         onUndo={() => {
-          if (!workspace.currentMap) {
-            return;
-          }
-          workspace.setCurrentMap(undo(workspace.currentMap));
-          setMessage("已撤销");
+          void workspace.undoCurrentMap().then((result) => {
+            if (result) {
+              updateEditorDraftFromMap(result);
+            }
+          });
         }}
         onRedo={() => {
-          if (!workspace.currentMap) {
-            return;
-          }
-          workspace.setCurrentMap(redo(workspace.currentMap));
-          setMessage("已重做");
+          void workspace.redoCurrentMap().then((result) => {
+            if (result) {
+              updateEditorDraftFromMap(result);
+            }
+          });
         }}
       />
 
@@ -239,9 +240,11 @@ export default function App() {
               riverDrawingPointCount={riverEditor.riverDrawingPoints.length}
               onRiverPointAdd={riverEditor.appendRiverPoint}
               onFinishRiverDrawing={() => {
-                if (riverEditor.finishRiverDrawing()) {
-                  setInteractionMode("select");
-                }
+                void riverEditor.finishRiverDrawing().then((finished) => {
+                  if (finished) {
+                    setInteractionMode("select");
+                  }
+                });
               }}
               onCancelRiverDrawing={() => {
                 riverEditor.cancelRiverDrawing();
@@ -263,6 +266,7 @@ export default function App() {
 
         <DetailPanel
           currentMap={workspace.currentMap}
+          mapHistory={workspace.mapHistory}
           selectedCell={editor.selectedCell}
           draft={editor.draft}
           terrainCategory={editor.terrainCategory}
@@ -289,9 +293,9 @@ export default function App() {
           noneBiomeValue={advancedEditor.noneBiomeValue}
           canUseFormatBrush={editor.canUseFormatBrush}
           cellDirty={editor.cellDirty}
-          onApplyDraft={editor.applyDraft}
+          onApplyDraft={() => void editor.applyDraft()}
           onRevertDraft={() => editor.syncDraftFromCell(editor.selectedCell)}
-          onClearSelected={editor.clearSelected}
+          onClearSelected={() => void editor.clearSelected()}
           onToggleFormatBrush={editor.toggleFormatBrush}
           onFormatBrushScopeChange={editor.setFormatBrushScopeField}
           onTerrainCategoryChange={editor.handleTerrainCategoryChange}
@@ -326,13 +330,16 @@ export default function App() {
             }))
           }
           onApplyRiverDraft={() => {
-            if (riverEditor.applyRiverDraft()) {
-              setInteractionMode("select");
-            }
+            void riverEditor.applyRiverDraft().then((applied) => {
+              if (applied) {
+                setInteractionMode("select");
+              }
+            });
           }}
           onDeleteSelectedRiver={() => {
-            riverEditor.deleteSelectedRiver();
-            setInteractionMode("select");
+            void riverEditor.deleteSelectedRiver().then(() => {
+              setInteractionMode("select");
+            });
           }}
           onStartRiverDrawing={() => {
             setInteractionMode("river-draw");
@@ -340,9 +347,11 @@ export default function App() {
             riverEditor.startRiverDrawing();
           }}
           onFinishRiverDrawing={() => {
-            if (riverEditor.finishRiverDrawing()) {
-              setInteractionMode("select");
-            }
+            void riverEditor.finishRiverDrawing().then((finished) => {
+              if (finished) {
+                setInteractionMode("select");
+              }
+            });
           }}
           onCancelRiverDrawing={() => {
             riverEditor.cancelRiverDrawing();
@@ -361,10 +370,11 @@ export default function App() {
           }}
           onClearBatchSelection={advancedEditor.clearBatchSelection}
           onApplyBatchEdit={() => {
-            const result = advancedEditor.applyBatchEdit();
-            if (result) {
-              updateEditorDraftFromMap(result);
-            }
+            void advancedEditor.applyBatchEdit().then((result) => {
+              if (result) {
+                updateEditorDraftFromMap(result);
+              }
+            });
           }}
           onBatchTerrainCategoryChange={advancedEditor.setBatchTerrainCategory}
           onBatchTerrainChange={advancedEditor.setBatchTerrain}
@@ -385,10 +395,11 @@ export default function App() {
           onReplacementTerrainCategoryChange={advancedEditor.setReplacementTerrainCategory}
           onReplacementTerrainChange={advancedEditor.setReplacementTerrain}
           onApplyTerrainReplacement={() => {
-            const result = advancedEditor.applyTerrainReplacement();
-            if (result) {
-              updateEditorDraftFromMap(result);
-            }
+            void advancedEditor.applyTerrainReplacement().then((result) => {
+              if (result) {
+                updateEditorDraftFromMap(result);
+              }
+            });
           }}
           onReplaceBiomeMatchChange={(value) =>
             advancedEditor.setReplaceBiomeDraft((current) => ({
@@ -403,10 +414,11 @@ export default function App() {
             }))
           }
           onApplyBiomeReplacement={() => {
-            const result = advancedEditor.applyBiomeReplacement();
-            if (result) {
-              updateEditorDraftFromMap(result);
-            }
+            void advancedEditor.applyBiomeReplacement().then((result) => {
+              if (result) {
+                updateEditorDraftFromMap(result);
+              }
+            });
           }}
           getFormatBrushLabel={editor.getFormatBrushLabel}
         />

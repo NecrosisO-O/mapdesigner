@@ -2,6 +2,7 @@ import type {
   CellRange,
   CellRangeResult,
   ExportRenderOptions,
+  MapCommand,
   MapDocument,
   MapRuntimeState,
   MapSummary
@@ -28,6 +29,18 @@ export interface HistoryStatus {
   canRedo: boolean;
   cursor: number;
   latest: number;
+}
+
+export interface HistoryEntry {
+  seq: number;
+  action: string;
+  source: string;
+  timestamp: string;
+}
+
+export interface MapHistory {
+  status: HistoryStatus;
+  entries: HistoryEntry[];
 }
 
 export interface HistoryMoveResult {
@@ -61,6 +74,7 @@ export const api = {
   listMaps: () => request<MapListItem[]>("/api/maps"),
   getMap: (id: string) => request<MapRuntimeState>(`/api/maps/${id}`),
   getMapSummary: (id: string) => request<MapSummary>(`/api/maps/${id}/summary`),
+  getMapHistory: (id: string, limit = 5) => request<MapHistory>(`/api/maps/${id}/history?limit=${limit}`),
   getHistoryStatus: (id: string) => request<HistoryStatus>(`/api/maps/${id}/history-status`),
   getCellsInRange: (id: string, range: CellRange, includeUndesigned = true) =>
     request<CellRangeResult>(
@@ -80,6 +94,27 @@ export const api = {
     request<MapRuntimeState>(`/api/maps/${id}/save-as`, {
       method: "POST",
       body: JSON.stringify(input)
+    }),
+  applyCommands: (id: string, commands: MapCommand[], dryRun = false) =>
+    request<{
+      map: MapRuntimeState;
+      dryRun: boolean;
+      warnings: ApiEnvelope<unknown>["warnings"];
+      stats: {
+        command_count: number;
+        changed_count: number;
+        created_count: number;
+        updated_count: number;
+        cleared_count: number;
+        feature_stats: {
+          river_created_count: number;
+          river_updated_count: number;
+          river_deleted_count: number;
+        };
+      };
+    }>(`/api/maps/${id}/commands${dryRun ? "/dry-run" : ""}`, {
+      method: "POST",
+      body: JSON.stringify({ commands })
     }),
   duplicateMap: (id: string) =>
     request<MapRuntimeState>(`/api/maps/${id}/duplicate`, {

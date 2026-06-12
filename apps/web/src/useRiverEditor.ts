@@ -1,10 +1,10 @@
 import {
-  applyCommand,
   buildHexLine,
   createDisplayCoord,
   parseDisplayCoord,
   DEFAULT_RIVER_WIDTH,
   type ActiveCell,
+  type MapCommand,
   type MapRuntimeState,
   type RiverFeature,
   type RiverPoint
@@ -120,7 +120,7 @@ function parseRiverDraftPreviewPoints(draft: RiverDraft): RiverPoint[] {
 
 export function useRiverEditor(
   currentMap: MapRuntimeState | null,
-  setCurrentMap: (map: MapRuntimeState | null) => void,
+  applyCommands: (commands: MapCommand[]) => Promise<MapRuntimeState | null>,
   setMessage: (message: string) => void
 ) {
   const [selectedRiverId, setSelectedRiverId] = useState<string>("");
@@ -202,7 +202,7 @@ export function useRiverEditor(
     });
   }
 
-  function applyRiverDraft(): boolean {
+  async function applyRiverDraft(): Promise<boolean> {
     if (!currentMap) {
       return false;
     }
@@ -226,8 +226,7 @@ export function useRiverEditor(
     }
 
     const existingIds = new Set(rivers.map((river) => river.id));
-    const result = applyCommand(
-      currentMap,
+    const result = await applyCommands([
       selectedRiver
         ? {
             action: "update_river",
@@ -250,25 +249,22 @@ export function useRiverEditor(
               opacity
             }
           }
-    );
-
-    if (!result.ok) {
-      setMessage(result.errors[0]?.message ?? "河流保存失败");
+    ]);
+    if (!result) {
       return false;
     }
-    setCurrentMap(result.map);
     const nextRiver = selectedRiver
-      ? result.map.document.features.rivers.find((river) => river.id === selectedRiver.id) ?? null
-      : result.map.document.features.rivers.find((river) => !existingIds.has(river.id)) ?? null;
+      ? result.document.features.rivers.find((river) => river.id === selectedRiver.id) ?? null
+      : result.document.features.rivers.find((river) => !existingIds.has(river.id)) ?? null;
     setSelectedRiverId(nextRiver?.id ?? "");
     setDraft(draftFromRiver(nextRiver));
     setDrawingStatus("idle");
     setDrawingPoints([]);
-    setMessage("河流修改已应用，等待保存到文件");
+    setMessage("河流修改已保存到服务器");
     return true;
   }
 
-  function finishRiverDrawing(): boolean {
+  async function finishRiverDrawing(): Promise<boolean> {
     if (drawingPoints.length < 2) {
       setMessage("河流至少需要两个路径点");
       return false;
@@ -283,23 +279,21 @@ export function useRiverEditor(
     setMessage("已取消河流绘制");
   }
 
-  function deleteSelectedRiver(): void {
+  async function deleteSelectedRiver(): Promise<void> {
     if (!currentMap || !selectedRiver) {
       return;
     }
-    const result = applyCommand(currentMap, {
+    const result = await applyCommands([{
       action: "delete_river",
       source: "webui",
       river_id: selectedRiver.id
-    });
-    if (!result.ok) {
-      setMessage(result.errors[0]?.message ?? "删除河流失败");
+    }]);
+    if (!result) {
       return;
     }
-    setCurrentMap(result.map);
     startNewRiver();
     setDrawingStatus("idle");
-    setMessage("河流已删除，等待保存到文件");
+    setMessage("河流已删除并保存到服务器");
   }
 
   const riverPreview =

@@ -1,10 +1,11 @@
 /* @vitest-environment jsdom */
 
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { applyCommand, createRuntimeState, type MapCommand, type MapRuntimeState } from "@mapdesigner/map-core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App.js";
 
-const sampleMap = {
+const sampleMap: MapRuntimeState = {
   document: {
     schema_version: 1,
     meta: {
@@ -50,7 +51,7 @@ const sampleMap = {
   }
 };
 
-const taggedMap = {
+const taggedMap: MapRuntimeState = {
   ...sampleMap,
   document: {
     ...sampleMap.document,
@@ -85,6 +86,11 @@ const taggedMap = {
 const apiMock = vi.hoisted(() => ({
   listMaps: vi.fn(),
   getMap: vi.fn(),
+  getMapHistory: vi.fn(),
+  getHistoryStatus: vi.fn(),
+  applyCommands: vi.fn(),
+  undoMap: vi.fn(),
+  redoMap: vi.fn(),
   createMap: vi.fn(),
   saveMap: vi.fn(),
   saveMapAs: vi.fn(),
@@ -98,6 +104,161 @@ const apiMock = vi.hoisted(() => ({
 vi.mock("./api.js", () => ({
   api: apiMock
 }));
+
+interface MockHistoryEntry {
+  seq: number;
+  action: string;
+  source: string;
+  timestamp: string;
+  before: MapRuntimeState["document"];
+  after: MapRuntimeState["document"];
+}
+
+function cloneRuntime(map: MapRuntimeState): MapRuntimeState {
+  return createRuntimeState(structuredClone(map.document) as MapRuntimeState["document"]);
+}
+
+function createMockHistory(entries: MockHistoryEntry[], cursor: number) {
+  const latest = entries.length;
+  return {
+    status: {
+      canUndo: cursor > 0,
+      canRedo: cursor < latest,
+      cursor,
+      latest
+    },
+    entries: entries
+      .filter((entry) => entry.seq <= cursor)
+      .slice(-5)
+      .reverse()
+      .map(({ seq, action, source, timestamp }) => ({ seq, action, source, timestamp }))
+  };
+}
+
+function configureEditableMapMock(initialMap: typeof sampleMap): void {
+  let runtime = cloneRuntime(initialMap);
+  let historyCursor = 0;
+  let historyEntries: MockHistoryEntry[] = [];
+
+  apiMock.getMap.mockImplementation(async () => ({
+    ok: true,
+    result: runtime,
+    warnings: [],
+    errors: []
+  }));
+  apiMock.getMapHistory.mockImplementation(async () => ({
+    ok: true,
+    result: createMockHistory(historyEntries, historyCursor),
+    warnings: [],
+    errors: []
+  }));
+  apiMock.getHistoryStatus.mockImplementation(async () => ({
+    ok: true,
+    result: createMockHistory(historyEntries, historyCursor).status,
+    warnings: [],
+    errors: []
+  }));
+  apiMock.applyCommands.mockImplementation(async (_id: string, commands: MapCommand[], dryRun = false) => {
+    const before = structuredClone(runtime.document);
+    let next = runtime;
+    const warnings = [];
+    for (const command of commands) {
+      const result = applyCommand(next, command);
+      if (!result.ok) {
+        return {
+          ok: false,
+          warnings: result.warnings,
+          errors: result.errors
+        };
+      }
+      warnings.push(...result.warnings);
+      next = createRuntimeState(result.map.document);
+    }
+    if (!dryRun) {
+      runtime = next;
+      historyEntries = historyEntries.slice(0, historyCursor);
+      historyEntries.push({
+        seq: historyEntries.length + 1,
+        action: commands.length === 1 ? commands[0]?.action ?? "commands" : "commands",
+        source: commands.find((command) => command.source)?.source ?? "system",
+        timestamp: new Date().toISOString(),
+        before,
+        after: structuredClone(runtime.document)
+      });
+      historyCursor = historyEntries.length;
+    }
+    return {
+      ok: true,
+      result: {
+        map: next,
+        dryRun,
+        warnings,
+        stats: {
+          command_count: commands.length,
+          changed_count: 0,
+          created_count: 0,
+          updated_count: 0,
+          cleared_count: 0,
+          feature_stats: {
+            river_created_count: commands.filter((command) => command.action === "create_river").length,
+            river_updated_count: commands.filter((command) => command.action === "update_river").length,
+            river_deleted_count: commands.filter((command) => command.action === "delete_river").length
+          }
+        }
+      },
+      warnings,
+      errors: []
+    };
+  });
+  apiMock.undoMap.mockImplementation(async () => {
+    if (historyCursor <= 0) {
+      return { ok: true, result: null, warnings: [], errors: [] };
+    }
+    const operation = historyEntries[historyCursor - 1]!;
+    historyCursor -= 1;
+    runtime = createRuntimeState(operation.before);
+    return {
+      ok: true,
+      result: {
+        map: runtime,
+        warnings: [],
+        operation: {
+          seq: operation.seq,
+          action: operation.action,
+          source: operation.source,
+          timestamp: operation.timestamp
+        },
+        status: createMockHistory(historyEntries, historyCursor).status
+      },
+      warnings: [],
+      errors: []
+    };
+  });
+  apiMock.redoMap.mockImplementation(async () => {
+    if (historyCursor >= historyEntries.length) {
+      return { ok: true, result: null, warnings: [], errors: [] };
+    }
+    const operation = historyEntries[historyCursor]!;
+    historyCursor += 1;
+    runtime = createRuntimeState(operation.after);
+    return {
+      ok: true,
+      result: {
+        map: runtime,
+        warnings: [],
+        operation: {
+          seq: operation.seq,
+          action: operation.action,
+          source: operation.source,
+          timestamp: operation.timestamp
+        },
+        status: createMockHistory(historyEntries, historyCursor).status
+      },
+      warnings: [],
+      errors: []
+    };
+  });
+}
 
 function getViewportTransform(): SVGGElement {
   const svg = screen.getByLabelText("Map canvas");
@@ -181,12 +342,7 @@ describe("App", () => {
       warnings: [],
       errors: []
     });
-    apiMock.getMap.mockResolvedValue({
-      ok: true,
-      result: sampleMap,
-      warnings: [],
-      errors: []
-    });
+    configureEditableMapMock(sampleMap);
     apiMock.saveMap.mockResolvedValue({
       ok: true,
       result: sampleMap,
@@ -334,7 +490,7 @@ describe("App", () => {
     });
     fireEvent.click(within(riverPanel as HTMLElement).getByRole("button", { name: "应用河流" }));
 
-    expect(await screen.findByText("河流修改已应用，等待保存到文件")).toBeTruthy();
+    expect(await screen.findByText("河流修改已保存到服务器")).toBeTruthy();
     expect(within(riverPanel as HTMLElement).getByRole("option", { name: "Main River (main-river)" })).toBeTruthy();
     const svg = screen.getByLabelText("Map canvas");
     expect(svg.querySelector('[data-river-id="main-river"]')).toBeTruthy();
@@ -364,7 +520,7 @@ describe("App", () => {
 
     fireEvent.click(within(screen.getByLabelText("河流绘制工具")).getByRole("button", { name: "完成" }));
 
-    expect(await screen.findByText("河流修改已应用，等待保存到文件")).toBeTruthy();
+    expect(await screen.findByText("河流修改已保存到服务器")).toBeTruthy();
     expect(screen.getByRole("button", { name: "选择" }).getAttribute("aria-pressed")).toBe("true");
     expect(screen.getByLabelText("Map canvas").querySelector('[data-river-id="river-1"]')).toBeTruthy();
 
@@ -407,7 +563,7 @@ describe("App", () => {
       expect(statusBar.textContent).toContain("已设计");
       expect(statusBar.textContent).toContain("2");
     });
-    expect(screen.getByText("已将 R0C0 的地形刷到 R0C1，等待保存到文件")).toBeTruthy();
+    expect(screen.getByText("已将 R0C0 的地形刷到 R0C1 并保存到服务器")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "格式刷" }));
     fireEvent.click(getCellButton("R0C1", "designed"));
@@ -429,13 +585,14 @@ describe("App", () => {
     const cellPanel = terrainField.closest("section");
     expect(cellPanel).toBeTruthy();
     fireEvent.click(within(cellPanel as HTMLElement).getByRole("button", { name: "应用" }));
+    await screen.findByText("单元格修改已保存到服务器");
 
     fireEvent.click(getCellButton("R0C0", "designed"));
     fireEvent.click(screen.getByLabelText("刷地形"));
     fireEvent.click(screen.getByRole("button", { name: "格式刷" }));
     fireEvent.click(getCellButton("R0C1", "designed"));
 
-    expect(await screen.findByText("已将 R0C0 的生态刷到 R0C1，等待保存到文件")).toBeTruthy();
+    expect(await screen.findByText("已将 R0C0 的生态刷到 R0C1 并保存到服务器")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "格式刷" }));
     fireEvent.click(getCellButton("R0C1", "designed"));
@@ -459,13 +616,14 @@ describe("App", () => {
       target: { value: "source note" }
     });
     fireEvent.click(within(cellPanel as HTMLElement).getByRole("button", { name: "应用" }));
+    await screen.findByText("单元格修改已保存到服务器");
 
     fireEvent.click(within(cellPanel as HTMLElement).getByLabelText("刷标签"));
     fireEvent.click(within(cellPanel as HTMLElement).getByLabelText("刷备注"));
     fireEvent.click(within(cellPanel as HTMLElement).getByRole("button", { name: "格式刷" }));
     fireEvent.click(getCellButton("R0C1", "undesigned"));
 
-    expect(await screen.findByText("已将 R0C0 的地形 + 生态 + 标签 + 备注刷到 R0C1，等待保存到文件")).toBeTruthy();
+    expect(await screen.findByText("已将 R0C0 的地形 + 生态 + 标签 + 备注刷到 R0C1 并保存到服务器")).toBeTruthy();
 
     fireEvent.click(within(cellPanel as HTMLElement).getByRole("button", { name: "格式刷" }));
     fireEvent.click(getCellButton("R0C1", "designed"));
@@ -504,7 +662,7 @@ describe("App", () => {
     });
     fireEvent.click(within(advancedPanel as HTMLElement).getByRole("button", { name: "应用到选中格" }));
 
-    expect(await screen.findByText("已批量设置 2 个单元格，等待保存到文件")).toBeTruthy();
+    expect(await screen.findByText("已批量设置 2 个单元格并保存到服务器")).toBeTruthy();
     expect(within(advancedPanel as HTMLElement).getByText("已选 2 格")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "选择" }));
@@ -535,7 +693,7 @@ describe("App", () => {
     });
     fireEvent.click(within(advancedPanel as HTMLElement).getByRole("button", { name: "替换地形" }));
 
-    expect(await screen.findByText("已替换 1 个地形，等待保存到文件")).toBeTruthy();
+    expect(await screen.findByText("已替换 1 个地形并保存到服务器")).toBeTruthy();
 
     fireEvent.change(within(advancedPanel as HTMLElement).getByLabelText("匹配 Biome"), {
       target: { value: "grassland" }
@@ -545,7 +703,7 @@ describe("App", () => {
     });
     fireEvent.click(within(advancedPanel as HTMLElement).getByRole("button", { name: "替换生态" }));
 
-    expect(await screen.findByText("已替换 1 个生态，等待保存到文件")).toBeTruthy();
+    expect(await screen.findByText("已替换 1 个生态并保存到服务器")).toBeTruthy();
 
     fireEvent.click(getCellButton("R0C0", "designed"));
     expect((screen.getByLabelText("Terrain") as HTMLSelectElement).value).toBe("hill");
@@ -890,12 +1048,7 @@ describe("App", () => {
   });
 
   it("dims cells that do not match the selected tag filter", async () => {
-    apiMock.getMap.mockResolvedValueOnce({
-      ok: true,
-      result: taggedMap,
-      warnings: [],
-      errors: []
-    });
+    configureEditableMapMock(taggedMap);
     render(<App />);
     await screen.findByText("已打开 Sample Map");
 

@@ -10,6 +10,7 @@ import {
 } from "@mapdesigner/map-core";
 import type { TerrainCategoryKey } from "@mapdesigner/map-core";
 import { AdvancedEditPanel } from "./AdvancedEditPanel.js";
+import type { MapHistory } from "./api.js";
 import type {
   BatchEditDraft,
   ReplaceBiomeDraft,
@@ -35,6 +36,7 @@ const HISTORY_LABELS: Record<string, string> = {
 
 interface DetailPanelProps {
   currentMap: MapRuntimeState | null;
+  mapHistory: MapHistory | null;
   selectedCell: ActiveCell | null;
   draft: CellDraft;
   terrainCategory: string;
@@ -440,26 +442,24 @@ export function DetailPanel(props: DetailPanelProps) {
         {props.currentMap ? (
           <>
             <p>
-              已记录 {props.currentMap.history.past.length} 步 | 可重做 {props.currentMap.history.future.length} 步
+              已记录 {props.mapHistory?.status.cursor ?? 0} 步 | 可重做{" "}
+              {Math.max((props.mapHistory?.status.latest ?? 0) - (props.mapHistory?.status.cursor ?? 0), 0)} 步
             </p>
-            {props.currentMap.history.past.length > 0 ? (
+            {props.mapHistory && props.mapHistory.entries.length > 0 ? (
               <div className="history-list">
-                {props.currentMap.history.past
-                  .slice(-5)
-                  .reverse()
-                  .map((entry) => (
-                    <div key={`${entry.timestamp}-${entry.label}`} className="history-entry">
-                      <strong>{HISTORY_LABELS[entry.label] ?? entry.label}</strong>
+                {props.mapHistory.entries.map((entry) => (
+                    <div key={`${entry.seq}-${entry.timestamp}-${entry.action}`} className="history-entry">
+                      <strong>{HISTORY_LABELS[entry.action] ?? entry.action}</strong>
                       <span>{entry.source} · {formatDateTime(entry.timestamp)}</span>
                     </div>
                   ))}
               </div>
             ) : (
-              <p>当前会话还没有编辑历史。</p>
+              <p>当前地图还没有持久编辑历史。</p>
             )}
           </>
         ) : (
-          <p>打开地图后会显示当前会话历史。</p>
+          <p>打开地图后会显示持久编辑历史。</p>
         )}
       </section>
     </aside>

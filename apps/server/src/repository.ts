@@ -90,6 +90,18 @@ export interface HistoryStatus {
   latest: number;
 }
 
+export interface HistoryEntry {
+  seq: number;
+  source: HistorySource;
+  action: string;
+  timestamp: string;
+}
+
+export interface MapHistory {
+  status: HistoryStatus;
+  entries: HistoryEntry[];
+}
+
 export interface StoredOperation {
   mapId: string;
   seq: number;
@@ -569,6 +581,38 @@ export async function getHistoryStatus(mapId: string): Promise<HistoryStatus> {
     canRedo: Boolean(redoExists),
     cursor,
     latest
+  };
+}
+
+export async function getMapHistory(mapId: string, limit = 5): Promise<MapHistory> {
+  const normalizedId = assertSafeMapId(mapId);
+  if (!Number.isInteger(limit) || limit < 1 || limit > 50) {
+    throw badRequest("history limit must be an integer between 1 and 50");
+  }
+  await ensureMapInDatabase(normalizedId);
+  const db = getDatabase();
+  const status = await getHistoryStatus(normalizedId);
+  const rows = db
+    .prepare(
+      `SELECT seq, source, action, timestamp FROM operations
+       WHERE map_id = ? AND seq <= ?
+       ORDER BY seq DESC
+       LIMIT ?`
+    )
+    .all(normalizedId, status.cursor, limit) as Array<{
+      seq: number;
+      source: HistorySource;
+      action: string;
+      timestamp: string;
+    }>;
+  return {
+    status,
+    entries: rows.map((row) => ({
+      seq: row.seq,
+      source: row.source,
+      action: row.action,
+      timestamp: row.timestamp
+    }))
   };
 }
 
