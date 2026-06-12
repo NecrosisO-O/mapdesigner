@@ -149,6 +149,7 @@ export default function App() {
           loading={workspace.loading}
           message={message}
           currentMap={workspace.currentMap}
+          mapSummary={workspace.mapSummary}
           mapDirty={workspace.mapDirty}
           showCoordinates={showCoordinates}
           showShorthand={showShorthand}
@@ -227,9 +228,10 @@ export default function App() {
         />
 
         <section className="canvas-panel">
-          {workspace.currentMap ? (
+          {workspace.visibleMap ? (
             <MapCanvas
-              map={workspace.currentMap}
+              map={workspace.visibleMap}
+              mapSummary={workspace.mapSummary}
               selectedCell={editor.selectedCell}
               selectedCellId={editor.selectedCellId}
               onSelectCell={editor.handleCanvasCellSelect}
@@ -250,6 +252,7 @@ export default function App() {
                 riverEditor.cancelRiverDrawing();
                 setInteractionMode("select");
               }}
+              onVisibleRangeChange={(range) => void workspace.requestVisibleRange(range)}
               showCoordinates={showCoordinates}
               showShorthand={showShorthand}
               showGrid={showGrid}

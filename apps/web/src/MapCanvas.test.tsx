@@ -273,6 +273,38 @@ describe("MapCanvas", () => {
     expect(onBatchCellToggle).toHaveBeenCalledTimes(1);
   });
 
+  it("reports the visible coordinate range for range-backed loading", async () => {
+    const onVisibleRangeChange = vi.fn();
+    render(
+      <MapCanvas
+        map={sampleMap}
+        selectedCell={null}
+        selectedCellId={null}
+        onSelectCell={() => {}}
+        onVisibleRangeChange={onVisibleRangeChange}
+        showCoordinates
+        showShorthand
+        showGrid
+        showUndesigned
+      />
+    );
+
+    const container = screen.getByLabelText("Map canvas").parentElement as HTMLDivElement;
+    mockCanvasRect(container);
+    fireEvent(window, new Event("resize"));
+
+    await waitFor(() => {
+      expect(onVisibleRangeChange).toHaveBeenCalledWith(
+        expect.objectContaining({
+          minRow: expect.any(Number),
+          maxRow: expect.any(Number),
+          minCol: expect.any(Number),
+          maxCol: expect.any(Number)
+        })
+      );
+    });
+  });
+
   it("limits coordinate labels by viewport and density instead of rendering every cell at once", async () => {
     const largeMap = buildLargeMap();
     render(

@@ -1,7 +1,7 @@
 /* @vitest-environment jsdom */
 
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { applyCommand, createRuntimeState, type MapCommand, type MapRuntimeState } from "@mapdesigner/map-core";
+import { applyCommand, createRuntimeState, type CellRange, type MapCommand, type MapRuntimeState } from "@mapdesigner/map-core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App.js";
 
@@ -86,8 +86,10 @@ const taggedMap: MapRuntimeState = {
 const apiMock = vi.hoisted(() => ({
   listMaps: vi.fn(),
   getMap: vi.fn(),
+  getMapSummary: vi.fn(),
   getMapHistory: vi.fn(),
   getHistoryStatus: vi.fn(),
+  getCellsInRange: vi.fn(),
   applyCommands: vi.fn(),
   undoMap: vi.fn(),
   redoMap: vi.fn(),
@@ -118,6 +120,28 @@ function cloneRuntime(map: MapRuntimeState): MapRuntimeState {
   return createRuntimeState(structuredClone(map.document) as MapRuntimeState["document"]);
 }
 
+function createMockSummary(map: MapRuntimeState) {
+  const rows = map.document.cells.map((cell) => cell.row);
+  const cols = map.document.cells.map((cell) => cell.col);
+  return {
+    meta: map.document.meta,
+    grid: map.document.grid,
+    bounds:
+      map.document.cells.length === 0
+        ? { min_row: null, max_row: null, min_col: null, max_col: null }
+        : {
+            min_row: Math.min(...rows),
+            max_row: Math.max(...rows),
+            min_col: Math.min(...cols),
+            max_col: Math.max(...cols)
+          },
+    designed_cell_count: map.document.cells.length,
+    feature_counts: {
+      rivers: map.document.features.rivers.length
+    }
+  };
+}
+
 function createMockHistory(entries: MockHistoryEntry[], cursor: number) {
   const latest = entries.length;
   return {
@@ -143,6 +167,29 @@ function configureEditableMapMock(initialMap: typeof sampleMap): void {
   apiMock.getMap.mockImplementation(async () => ({
     ok: true,
     result: runtime,
+    warnings: [],
+    errors: []
+  }));
+  apiMock.getMapSummary.mockImplementation(async () => ({
+    ok: true,
+    result: createMockSummary(runtime),
+    warnings: [],
+    errors: []
+  }));
+  apiMock.getCellsInRange.mockImplementation(async (_id: string, range: CellRange) => ({
+    ok: true,
+    result: {
+      map_id: runtime.document.meta.id,
+      revision: runtime.document.meta.revision,
+      range,
+      cells: runtime.activeCells.filter(
+        (cell) =>
+          cell.row >= range.minRow &&
+          cell.row <= range.maxRow &&
+          cell.col >= range.minCol &&
+          cell.col <= range.maxCol
+      )
+    },
     warnings: [],
     errors: []
   }));
@@ -413,6 +460,8 @@ describe("App", () => {
     render(<App />);
     await waitFor(() => expect(apiMock.listMaps).toHaveBeenCalled());
     await waitFor(() => expect(apiMock.getMap).toHaveBeenCalledWith("sample-map"));
+    await waitFor(() => expect(apiMock.getMapSummary).toHaveBeenCalledWith("sample-map"));
+    await waitFor(() => expect(apiMock.getCellsInRange).toHaveBeenCalled());
     expect(await screen.findByText("已打开 Sample Map")).toBeTruthy();
     expect(screen.getByRole("option", { name: "Sample Map" })).toBeTruthy();
     const statusBar = screen.getByLabelText("当前状态");

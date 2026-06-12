@@ -1,10 +1,11 @@
-import { TAG_ENTRIES, type ExportRenderOptions, type MapRuntimeState, type TagKey } from "@mapdesigner/map-core";
+import { TAG_ENTRIES, type ExportRenderOptions, type MapRuntimeState, type MapSummary, type TagKey } from "@mapdesigner/map-core";
 import { formatDateTime } from "./useMapWorkspace.js";
 
 interface SidebarPanelProps {
   loading: boolean;
   message: string;
   currentMap: MapRuntimeState | null;
+  mapSummary: MapSummary | null;
   mapDirty: boolean;
   showCoordinates: boolean;
   showShorthand: boolean;
@@ -36,6 +37,7 @@ interface SidebarPanelProps {
 export function SidebarPanel(props: SidebarPanelProps) {
   const backgroundColorValue =
     props.pngOptions.background === "transparent" ? props.lastOpaqueBackground : props.pngOptions.background;
+  const designedCellCount = props.mapSummary?.designed_cell_count ?? props.currentMap?.document.cells.length ?? 0;
 
   return (
     <aside className="sidebar">
@@ -61,7 +63,7 @@ export function SidebarPanel(props: SidebarPanelProps) {
               </div>
               <div>
                 <dt>已设计</dt>
-                <dd>{props.currentMap.document.cells.length}</dd>
+                <dd>{designedCellCount}</dd>
               </div>
               <div>
                 <dt>版本</dt>
@@ -156,7 +158,7 @@ export function SidebarPanel(props: SidebarPanelProps) {
               <button
                 className="primary-button"
                 onClick={props.onExportPng}
-                disabled={!props.currentMap || props.currentMap.document.cells.length === 0 || props.isExportingPng}
+                disabled={!props.currentMap || designedCellCount === 0 || props.isExportingPng}
               >
                 {props.isExportingPng ? "导出中..." : "导出图片"}
               </button>

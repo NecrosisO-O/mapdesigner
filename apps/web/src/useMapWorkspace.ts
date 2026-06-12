@@ -1,6 +1,10 @@
-import type { MapCommand, MapRuntimeState } from "@mapdesigner/map-core";
-import { startTransition, useEffect, useRef, useState } from "react";
+import type { ActiveCell, CellRange, MapCommand, MapRuntimeState, MapSummary } from "@mapdesigner/map-core";
+import { startTransition, useEffect, useMemo, useRef, useState } from "react";
 import { api, type MapHistory, type MapListItem } from "./api.js";
+
+const RANGE_CHUNK_SIZE = 24;
+const RANGE_OVERSCAN = 6;
+const MAX_RANGE_SPAN = 160;
 
 export function formatDateTime(value: string): string {
   const date = new Date(value);
@@ -23,17 +27,72 @@ export function formatStatusMessage(message: string | undefined, fallback: strin
   return message;
 }
 
+function rangeKey(range: CellRange): string {
+  return `${range.minRow}:${range.maxRow}:${range.minCol}:${range.maxCol}`;
+}
+
+function clampRangeSpan(min: number, max: number): { min: number; max: number } {
+  if (max - min + 1 <= MAX_RANGE_SPAN) {
+    return { min, max };
+  }
+  const center = Math.floor((min + max) / 2);
+  const half = Math.floor(MAX_RANGE_SPAN / 2);
+  return {
+    min: center - half,
+    max: center + half - 1
+  };
+}
+
+function normalizeVisibleRange(range: CellRange): CellRange {
+  const rowSpan = clampRangeSpan(range.minRow - RANGE_OVERSCAN, range.maxRow + RANGE_OVERSCAN);
+  const colSpan = clampRangeSpan(range.minCol - RANGE_OVERSCAN, range.maxCol + RANGE_OVERSCAN);
+  return {
+    minRow: Math.floor(rowSpan.min / RANGE_CHUNK_SIZE) * RANGE_CHUNK_SIZE,
+    maxRow: Math.ceil((rowSpan.max + 1) / RANGE_CHUNK_SIZE) * RANGE_CHUNK_SIZE - 1,
+    minCol: Math.floor(colSpan.min / RANGE_CHUNK_SIZE) * RANGE_CHUNK_SIZE,
+    maxCol: Math.ceil((colSpan.max + 1) / RANGE_CHUNK_SIZE) * RANGE_CHUNK_SIZE - 1
+  };
+}
+
+function summaryFromRuntime(map: MapRuntimeState): MapSummary {
+  const rows = map.document.cells.map((cell) => cell.row);
+  const cols = map.document.cells.map((cell) => cell.col);
+  return {
+    meta: map.document.meta,
+    grid: map.document.grid,
+    bounds:
+      map.document.cells.length === 0
+        ? { min_row: null, max_row: null, min_col: null, max_col: null }
+        : {
+            min_row: Math.min(...rows),
+            max_row: Math.max(...rows),
+            min_col: Math.min(...cols),
+            max_col: Math.max(...cols)
+          },
+    designed_cell_count: map.document.cells.length,
+    feature_counts: {
+      rivers: map.document.features.rivers.length
+    }
+  };
+}
+
 export function useMapWorkspace(setMessage: (message: string) => void) {
   const [maps, setMaps] = useState<MapListItem[]>([]);
   const [currentMap, setCurrentMap] = useState<MapRuntimeState | null>(null);
   const [currentMapId, setCurrentMapId] = useState<string>("");
+  const [mapSummary, setMapSummary] = useState<MapSummary | null>(null);
   const [mapHistory, setMapHistory] = useState<MapHistory | null>(null);
+  const [cellCache, setCellCache] = useState<Map<string, ActiveCell>>(() => new Map());
+  const [visibleCellIds, setVisibleCellIds] = useState<string[]>([]);
   const [isRenaming, setIsRenaming] = useState(false);
   const [renameDraft, setRenameDraft] = useState("");
   const [persistedRevision, setPersistedRevision] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const suppressAutoOpenRef = useRef(false);
+  const lastVisibleRangeRef = useRef<CellRange | null>(null);
+  const lastVisibleRangeKeyRef = useRef("");
+  const visibleRangeRequestSeqRef = useRef(0);
 
   const mapDirty =
     currentMap !== null &&
@@ -46,11 +105,27 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
           ...map,
           name: currentMap.document.meta.name,
           revision: currentMap.document.meta.revision,
-          designedCellCount: currentMap.document.cells.length,
+          designedCellCount: mapSummary?.designed_cell_count ?? currentMap.document.cells.length,
           updatedAt: currentMap.document.meta.updated_at
         }
       : map
   );
+
+  const visibleMap = useMemo(() => {
+    if (!currentMap || visibleCellIds.length === 0) {
+      return currentMap;
+    }
+    const activeCells = visibleCellIds
+      .map((id) => cellCache.get(id))
+      .filter((cell): cell is ActiveCell => Boolean(cell));
+    if (activeCells.length === 0) {
+      return currentMap;
+    }
+    return {
+      ...currentMap,
+      activeCells
+    };
+  }, [cellCache, currentMap, visibleCellIds]);
 
   async function refreshMaps(selectId?: string): Promise<void> {
     const response = await api.listMaps();
@@ -66,13 +141,32 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
     }
   }
 
-  function loadMapIntoWorkspace(map: MapRuntimeState): void {
+  function loadMapIntoWorkspace(map: MapRuntimeState, summary: MapSummary | null = null): void {
     suppressAutoOpenRef.current = false;
     setCurrentMap(map);
     setCurrentMapId(map.document.meta.id);
+    setMapSummary(summary ?? summaryFromRuntime(map));
+    setCellCache(new Map());
+    setVisibleCellIds([]);
+    lastVisibleRangeRef.current = null;
+    lastVisibleRangeKeyRef.current = "";
     setPersistedRevision(map.document.meta.revision);
     setIsRenaming(false);
     setRenameDraft(map.document.meta.name);
+  }
+
+  async function refreshMapSummary(id = currentMap?.document.meta.id): Promise<MapSummary | null> {
+    if (!id) {
+      setMapSummary(null);
+      return null;
+    }
+    const response = await api.getMapSummary(id);
+    if (!response.ok || !response.result) {
+      setMessage(formatStatusMessage(response.errors[0]?.message, "刷新地图摘要失败"));
+      return null;
+    }
+    setMapSummary(response.result);
+    return response.result;
   }
 
   async function refreshMapHistory(id = currentMap?.document.meta.id): Promise<MapHistory | null> {
@@ -91,13 +185,16 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
 
   async function openMap(id: string): Promise<MapRuntimeState | null> {
     setLoading(true);
-    const response = await api.getMap(id);
+    const [summaryResponse, response] = await Promise.all([
+      api.getMapSummary(id),
+      api.getMap(id)
+    ]);
     setLoading(false);
     if (!response.ok || !response.result) {
       setMessage(formatStatusMessage(response.errors[0]?.message, "打开地图失败"));
       return null;
     }
-    loadMapIntoWorkspace(response.result);
+    loadMapIntoWorkspace(response.result, summaryResponse.ok && summaryResponse.result ? summaryResponse.result : null);
     await refreshMapHistory(response.result.document.meta.id);
     setMessage(`已打开 ${response.result.document.meta.name}`);
     return response.result;
@@ -140,6 +237,7 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
       return null;
     }
     setCurrentMap(response.result);
+    setMapSummary(summaryFromRuntime(response.result));
     setPersistedRevision(response.result.document.meta.revision);
     setIsRenaming(false);
     setRenameDraft(response.result.document.meta.name);
@@ -261,6 +359,11 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
     }
     setCurrentMap(null);
     setCurrentMapId("");
+    setMapSummary(null);
+    setCellCache(new Map());
+    setVisibleCellIds([]);
+    lastVisibleRangeRef.current = null;
+    lastVisibleRangeKeyRef.current = "";
     setPersistedRevision(null);
     setIsRenaming(false);
     setRenameDraft("");
@@ -282,8 +385,13 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
       return null;
     }
     setCurrentMap(response.result.map);
+    setMapSummary(summaryFromRuntime(response.result.map));
     setPersistedRevision(response.result.map.document.meta.revision);
     await refreshMaps(response.result.map.document.meta.id);
+    await refreshMapSummary(response.result.map.document.meta.id);
+    if (lastVisibleRangeRef.current) {
+      await requestVisibleRange(lastVisibleRangeRef.current, response.result.map.document.meta.id);
+    }
     await refreshMapHistory(response.result.map.document.meta.id);
     return response.result.map;
   }
@@ -302,8 +410,13 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
       return null;
     }
     setCurrentMap(response.result.map);
+    setMapSummary(summaryFromRuntime(response.result.map));
     setPersistedRevision(response.result.map.document.meta.revision);
     await refreshMaps(response.result.map.document.meta.id);
+    await refreshMapSummary(response.result.map.document.meta.id);
+    if (lastVisibleRangeRef.current) {
+      await requestVisibleRange(lastVisibleRangeRef.current, response.result.map.document.meta.id);
+    }
     await refreshMapHistory(response.result.map.document.meta.id);
     setMessage(response.result.warnings[0]?.message ?? "已撤销");
     return response.result.map;
@@ -323,11 +436,47 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
       return null;
     }
     setCurrentMap(response.result.map);
+    setMapSummary(summaryFromRuntime(response.result.map));
     setPersistedRevision(response.result.map.document.meta.revision);
     await refreshMaps(response.result.map.document.meta.id);
+    await refreshMapSummary(response.result.map.document.meta.id);
+    if (lastVisibleRangeRef.current) {
+      await requestVisibleRange(lastVisibleRangeRef.current, response.result.map.document.meta.id);
+    }
     await refreshMapHistory(response.result.map.document.meta.id);
     setMessage(response.result.warnings[0]?.message ?? "已重做");
     return response.result.map;
+  }
+
+  async function requestVisibleRange(range: CellRange, mapId = currentMap?.document.meta.id): Promise<void> {
+    if (!mapId) {
+      return;
+    }
+    const normalizedRange = normalizeVisibleRange(range);
+    const key = `${mapId}:${rangeKey(normalizedRange)}`;
+    lastVisibleRangeRef.current = normalizedRange;
+    if (key === lastVisibleRangeKeyRef.current) {
+      return;
+    }
+    lastVisibleRangeKeyRef.current = key;
+    const requestSeq = visibleRangeRequestSeqRef.current + 1;
+    visibleRangeRequestSeqRef.current = requestSeq;
+    const response = await api.getCellsInRange(mapId, normalizedRange, true);
+    if (requestSeq !== visibleRangeRequestSeqRef.current) {
+      return;
+    }
+    if (!response.ok || !response.result) {
+      setMessage(formatStatusMessage(response.errors[0]?.message, "加载可视单元格失败"));
+      return;
+    }
+    setCellCache((current) => {
+      const next = new Map(current);
+      for (const cell of response.result!.cells) {
+        next.set(cell.id, cell);
+      }
+      return next;
+    });
+    setVisibleCellIds(response.result.cells.map((cell) => cell.id));
   }
 
   useEffect(() => {
@@ -353,7 +502,9 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
   return {
     maps,
     currentMap,
+    visibleMap,
     currentMapId,
+    mapSummary,
     mapHistory,
     displayMaps,
     isRenaming,
@@ -364,7 +515,9 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
     setCurrentMap,
     setRenameDraft,
     refreshMaps,
+    refreshMapSummary,
     refreshMapHistory,
+    requestVisibleRange,
     openMap,
     ensureCanLeaveMap,
     createMap,

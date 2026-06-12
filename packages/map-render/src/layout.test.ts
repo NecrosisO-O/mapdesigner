@@ -37,6 +37,32 @@ describe("buildHexLayout", () => {
     expect(lowerRight!.centerX).toBeGreaterThan(origin!.centerX);
     expect(lowerRight!.centerY).toBeGreaterThan(origin!.centerY);
   });
+
+  it("keeps cell positions stable when rendering a subset with fixed bounds", () => {
+    const boundsCoords = [
+      { row: -5, col: -5 },
+      { row: -5, col: 5 },
+      { row: 5, col: -5 },
+      { row: 5, col: 5 }
+    ];
+    const full = buildHexLayout(
+      [makeCell(0, 0), makeCell(2, 2)],
+      { size: 36, padding: 48, boundsCoords }
+    );
+    const subset = buildHexLayout(
+      [makeCell(2, 2)],
+      { size: 36, padding: 48, boundsCoords }
+    );
+    const fullCell = full.layout.find((entry) => entry.cell.row === 2 && entry.cell.col === 2);
+    const subsetCell = subset.layout.find((entry) => entry.cell.row === 2 && entry.cell.col === 2);
+
+    expect(subset.width).toBe(full.width);
+    expect(subset.height).toBe(full.height);
+    expect(subset.minX).toBe(full.minX);
+    expect(subset.minY).toBe(full.minY);
+    expect(subsetCell?.centerX).toBe(fullCell?.centerX);
+    expect(subsetCell?.centerY).toBe(fullCell?.centerY);
+  });
 });
 
 describe("river rendering", () => {

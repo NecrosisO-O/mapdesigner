@@ -1,6 +1,9 @@
 import {
   type ActiveCell,
+  type CellRange,
+  type GridCoordinate,
   type MapRuntimeState,
+  type MapSummary,
   type RiverFeature,
   type TagKey
 } from "@mapdesigner/map-core";
@@ -34,6 +37,7 @@ const LABEL_VIEWPORT_MARGIN_PX = 120;
 
 interface MapCanvasProps {
   map: MapRuntimeState;
+  mapSummary?: MapSummary | null;
   selectedCell: ActiveCell | null;
   selectedCellId: string | null;
   onSelectCell: (cell: ActiveCell) => void;
@@ -46,6 +50,7 @@ interface MapCanvasProps {
   onFinishRiverDrawing?: () => void;
   onCancelRiverDrawing?: () => void;
   onHoverCellChange?: (cell: ActiveCell | null) => void;
+  onVisibleRangeChange?: (range: CellRange) => void;
   showCoordinates: boolean;
   showShorthand: boolean;
   showGrid: boolean;
@@ -94,6 +99,66 @@ function getViewportMetrics(width: number, height: number, sceneWidth: number, s
       x: (width - sceneWidth * baseScale) / 2,
       y: 0
     }
+  };
+}
+
+function boundsCoordsFromSummary(summary: MapSummary | null | undefined): GridCoordinate[] | undefined {
+  const bounds = summary?.bounds;
+  if (
+    !bounds ||
+    bounds.min_row === null ||
+    bounds.max_row === null ||
+    bounds.min_col === null ||
+    bounds.max_col === null
+  ) {
+    return undefined;
+  }
+  return [
+    { row: bounds.min_row, col: bounds.min_col },
+    { row: bounds.min_row, col: bounds.max_col },
+    { row: bounds.max_row, col: bounds.min_col },
+    { row: bounds.max_row, col: bounds.max_col }
+  ];
+}
+
+function scenePointToCoord(point: { x: number; y: number }, scene: { minX: number; minY: number }, size: number): GridCoordinate {
+  const worldX = point.x + scene.minX;
+  const worldY = point.y + scene.minY;
+  const col = Math.round(worldX / (size * 1.5));
+  const row = Math.round(-worldY / (Math.sqrt(3) * size) - col / 2);
+  return { row, col };
+}
+
+function getVisibleCoordRange(input: {
+  viewportSize: { width: number; height: number };
+  viewportMetrics: ViewportMetrics;
+  camera: CanvasCamera;
+  scene: { minX: number; minY: number };
+  size: number;
+}): CellRange {
+  const scale = input.viewportMetrics.baseScale * input.camera.zoom;
+  const translateX = input.viewportMetrics.baseOffset.x + input.camera.offset.x;
+  const translateY = input.viewportMetrics.baseOffset.y + input.camera.offset.y;
+  const corners = [
+    { x: 0, y: 0 },
+    { x: input.viewportSize.width, y: 0 },
+    { x: 0, y: input.viewportSize.height },
+    { x: input.viewportSize.width, y: input.viewportSize.height }
+  ].map((point) =>
+    scenePointToCoord(
+      {
+        x: (point.x - translateX) / scale,
+        y: (point.y - translateY) / scale
+      },
+      input.scene,
+      input.size
+    )
+  );
+  return {
+    minRow: Math.min(...corners.map((coord) => coord.row)) - 2,
+    maxRow: Math.max(...corners.map((coord) => coord.row)) + 2,
+    minCol: Math.min(...corners.map((coord) => coord.col)) - 2,
+    maxCol: Math.max(...corners.map((coord) => coord.col)) + 2
   };
 }
 
@@ -274,6 +339,7 @@ export function MapCanvas(props: MapCanvasProps) {
     startCell: ActiveCell | null;
   } | null>(null);
   const suppressNextCellClickRef = useRef(false);
+  const lastReportedRangeKeyRef = useRef("");
 
   const scene = useMemo(
     () =>
@@ -282,9 +348,18 @@ export function MapCanvas(props: MapCanvasProps) {
         includeShorthand: props.showShorthand,
         includeGrid: props.showGrid,
         includeUndesigned: props.showUndesigned,
-        previewRivers: props.riverPreview ? [props.riverPreview] : []
+        previewRivers: props.riverPreview ? [props.riverPreview] : [],
+        boundsCoords: boundsCoordsFromSummary(props.mapSummary)
       }),
-    [props.map, props.riverPreview, props.showCoordinates, props.showGrid, props.showShorthand, props.showUndesigned]
+    [
+      props.map,
+      props.mapSummary,
+      props.riverPreview,
+      props.showCoordinates,
+      props.showGrid,
+      props.showShorthand,
+      props.showUndesigned
+    ]
   );
   const sceneCellsById = useMemo(
     () => new Map(scene.layout.map((entry) => [entry.cell.id, entry.cell])),
@@ -385,6 +460,37 @@ export function MapCanvas(props: MapCanvasProps) {
       observer.disconnect();
     };
   }, [updateViewportSize]);
+
+  useEffect(() => {
+    if (!props.onVisibleRangeChange || effectiveScale <= 0) {
+      return;
+    }
+    const range = getVisibleCoordRange({
+      viewportSize,
+      viewportMetrics,
+      camera,
+      scene: {
+        minX: scene.minX,
+        minY: scene.minY
+      },
+      size: scene.options.size
+    });
+    const key = `${range.minRow}:${range.maxRow}:${range.minCol}:${range.maxCol}`;
+    if (key === lastReportedRangeKeyRef.current) {
+      return;
+    }
+    lastReportedRangeKeyRef.current = key;
+    props.onVisibleRangeChange(range);
+  }, [
+    camera,
+    effectiveScale,
+    props.onVisibleRangeChange,
+    scene.minX,
+    scene.minY,
+    scene.options.size,
+    viewportMetrics,
+    viewportSize
+  ]);
 
   useEffect(() => {
     const node = containerRef.current;
