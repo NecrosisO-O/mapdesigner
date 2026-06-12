@@ -23,6 +23,25 @@ export interface MapListItem {
   designedCellCount: number;
 }
 
+export interface HistoryStatus {
+  canUndo: boolean;
+  canRedo: boolean;
+  cursor: number;
+  latest: number;
+}
+
+export interface HistoryMoveResult {
+  map: MapRuntimeState;
+  warnings: ApiEnvelope<unknown>["warnings"];
+  operation: {
+    seq: number;
+    action: string;
+    source: string;
+    timestamp: string;
+  };
+  status: HistoryStatus;
+}
+
 async function request<T>(input: RequestInfo, init?: RequestInit): Promise<ApiEnvelope<T>> {
   const headers =
     init?.body === undefined
@@ -42,6 +61,7 @@ export const api = {
   listMaps: () => request<MapListItem[]>("/api/maps"),
   getMap: (id: string) => request<MapRuntimeState>(`/api/maps/${id}`),
   getMapSummary: (id: string) => request<MapSummary>(`/api/maps/${id}/summary`),
+  getHistoryStatus: (id: string) => request<HistoryStatus>(`/api/maps/${id}/history-status`),
   getCellsInRange: (id: string, range: CellRange, includeUndesigned = true) =>
     request<CellRangeResult>(
       `/api/maps/${id}/cells?minRow=${range.minRow}&maxRow=${range.maxRow}&minCol=${range.minCol}&maxCol=${range.maxCol}&includeUndesigned=${includeUndesigned}`
@@ -68,6 +88,14 @@ export const api = {
   deleteMap: (id: string) =>
     request<{ deleted: true }>(`/api/maps/${id}`, {
       method: "DELETE"
+    }),
+  undoMap: (id: string) =>
+    request<HistoryMoveResult | null>(`/api/maps/${id}/undo`, {
+      method: "POST"
+    }),
+  redoMap: (id: string) =>
+    request<HistoryMoveResult | null>(`/api/maps/${id}/redo`, {
+      method: "POST"
     }),
   importMap: (content: string, generateNewId = false) =>
     request<MapRuntimeState>("/api/maps/import", {

@@ -6,6 +6,18 @@ import { storageError } from "./errors.js";
 
 let connection: Database.Database | null = null;
 
+function addColumnIfMissing(
+  db: Database.Database,
+  table: string,
+  column: string,
+  definition: string
+): void {
+  const rows = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+  if (!rows.some((row) => row.name === column)) {
+    db.prepare(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`).run();
+  }
+}
+
 export function getDatabase(): Database.Database {
   if (connection) {
     return connection;
@@ -31,7 +43,8 @@ export function getDatabase(): Database.Database {
         bounds_max_row INTEGER,
         bounds_min_col INTEGER,
         bounds_max_col INTEGER,
-        designed_cell_count INTEGER NOT NULL DEFAULT 0
+        designed_cell_count INTEGER NOT NULL DEFAULT 0,
+        history_cursor INTEGER NOT NULL DEFAULT 0
       );
 
       CREATE TABLE IF NOT EXISTS cells (
@@ -70,6 +83,7 @@ export function getDatabase(): Database.Database {
         PRIMARY KEY (map_id, seq)
       );
     `);
+    addColumnIfMissing(connection, "maps", "history_cursor", "INTEGER NOT NULL DEFAULT 0");
     return connection;
   } catch (error) {
     throw storageError("failed to initialize map database", error);

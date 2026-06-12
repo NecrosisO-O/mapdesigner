@@ -18,13 +18,16 @@ import {
   exportJson,
   exportPng,
   getCellsInRange,
+  getHistoryStatus,
   getMap,
   getMapSummary,
   getNeighbors,
   importMap,
   inspectArea,
   inspectCell,
-  listMaps
+  listMaps,
+  redoMap,
+  undoMap
 } from "./service.js";
 import { badRequest, isServiceError } from "./errors.js";
 import { normalizeExportOptions } from "./storage.js";
@@ -235,7 +238,7 @@ async function main(): Promise<void> {
   const [group, action] = args;
 
   if (group !== "maps" || !action) {
-    printFailure("usage: mapdesigner maps <list|create|summary|cells|inspect|inspect-cell|inspect-area|neighbors|apply|rivers|import|export-json|export-png|duplicate|delete>");
+    printFailure("usage: mapdesigner maps <list|create|summary|cells|inspect|inspect-cell|inspect-area|neighbors|apply|undo|redo|history-status|rivers|import|export-json|export-png|duplicate|delete>");
   }
 
   try {
@@ -339,6 +342,35 @@ async function main(): Promise<void> {
         const result = await applyCommands(id, commands, { dryRun: hasFlag(args, "--dry-run") });
         const envelopeResult = hasFlag(args, "--summary") ? buildApplySummary(result) : result;
         printResult(createEnvelope({ result: envelopeResult, warnings: result.warnings }));
+        break;
+      }
+      case "history-status": {
+        assertKnownFlags(args, ["--map-id"]);
+        const id = readFlag(args, "--map-id");
+        if (!id) {
+          printFailure("maps history-status requires --map-id");
+        }
+        printResult(createEnvelope({ result: await getHistoryStatus(id) }));
+        break;
+      }
+      case "undo": {
+        assertKnownFlags(args, ["--map-id"]);
+        const id = readFlag(args, "--map-id");
+        if (!id) {
+          printFailure("maps undo requires --map-id");
+        }
+        const result = await undoMap(id);
+        printResult(createEnvelope({ result, warnings: result?.warnings ?? [] }));
+        break;
+      }
+      case "redo": {
+        assertKnownFlags(args, ["--map-id"]);
+        const id = readFlag(args, "--map-id");
+        if (!id) {
+          printFailure("maps redo requires --map-id");
+        }
+        const result = await redoMap(id);
+        printResult(createEnvelope({ result, warnings: result?.warnings ?? [] }));
         break;
       }
       case "rivers": {

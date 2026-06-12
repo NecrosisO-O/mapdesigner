@@ -12,6 +12,8 @@ import {
   type CellRangeResult,
   type DesignedCellRecord,
   type GridConfig,
+  type HistorySource,
+  type MapCommand,
   type MapBounds,
   type MapDocument,
   type MapFeatures,
@@ -41,6 +43,7 @@ interface MapRow {
   bounds_min_col: number | null;
   bounds_max_col: number | null;
   designed_cell_count: number;
+  history_cursor: number;
 }
 
 interface CellRow {
@@ -60,6 +63,17 @@ interface FeatureRow {
   json: string;
 }
 
+interface OperationRow {
+  map_id: string;
+  seq: number;
+  source: HistorySource;
+  action: string;
+  command_json: string;
+  inverse_json: string;
+  summary_json: string;
+  timestamp: string;
+}
+
 export interface MapListItem {
   id: string;
   name: string;
@@ -67,6 +81,32 @@ export interface MapListItem {
   updatedAt: string;
   revision: number;
   designedCellCount: number;
+}
+
+export interface HistoryStatus {
+  canUndo: boolean;
+  canRedo: boolean;
+  cursor: number;
+  latest: number;
+}
+
+export interface StoredOperation {
+  mapId: string;
+  seq: number;
+  source: HistorySource;
+  action: string;
+  commands: MapCommand[];
+  inverseCommands: MapCommand[];
+  summary: unknown;
+  timestamp: string;
+}
+
+export interface OperationInput {
+  source: HistorySource;
+  action: string;
+  commands: MapCommand[];
+  inverseCommands: MapCommand[];
+  summary: unknown;
 }
 
 const MAX_LEGACY_IMPORT_FILE_BYTES = 32 * 1024 * 1024;
@@ -299,6 +339,33 @@ function writeDocument(db: Database.Database, document: MapDocument): void {
   write();
 }
 
+function rowToStoredOperation(row: OperationRow): StoredOperation {
+  return {
+    mapId: row.map_id,
+    seq: row.seq,
+    source: row.source,
+    action: row.action,
+    commands: JSON.parse(row.command_json) as MapCommand[],
+    inverseCommands: JSON.parse(row.inverse_json) as MapCommand[],
+    summary: JSON.parse(row.summary_json) as unknown,
+    timestamp: row.timestamp
+  };
+}
+
+function readHistoryCursor(db: Database.Database, mapId: string): number {
+  const row = db.prepare("SELECT history_cursor FROM maps WHERE id = ?").get(mapId) as
+    | { history_cursor: number }
+    | undefined;
+  return row?.history_cursor ?? 0;
+}
+
+function readLatestOperationSeq(db: Database.Database, mapId: string): number {
+  const row = db.prepare("SELECT COALESCE(MAX(seq), 0) AS latest FROM operations WHERE map_id = ?").get(mapId) as
+    | { latest: number }
+    | undefined;
+  return row?.latest ?? 0;
+}
+
 async function readLegacyDocument(id: string): Promise<MapDocument | null> {
   try {
     const raw = await fs.readFile(mapFilePath(MAP_STORAGE_DIR, id), "utf8");
@@ -454,6 +521,89 @@ export async function getMapSummary(id: string): Promise<MapSummary> {
       rivers: riverCount?.count ?? 0
     }
   };
+}
+
+export async function recordOperation(mapId: string, input: OperationInput): Promise<StoredOperation> {
+  const normalizedId = assertSafeMapId(mapId);
+  await ensureMapInDatabase(normalizedId);
+  const db = getDatabase();
+  const timestamp = new Date().toISOString();
+  const write = db.transaction(() => {
+    const cursor = readHistoryCursor(db, normalizedId);
+    const nextSeq = cursor + 1;
+    db.prepare("DELETE FROM operations WHERE map_id = ? AND seq > ?").run(normalizedId, cursor);
+    db.prepare(
+      `INSERT INTO operations (
+        map_id, seq, source, action, command_json, inverse_json, summary_json, timestamp
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      normalizedId,
+      nextSeq,
+      input.source,
+      input.action,
+      JSON.stringify(input.commands),
+      JSON.stringify(input.inverseCommands),
+      JSON.stringify(input.summary),
+      timestamp
+    );
+    db.prepare("UPDATE maps SET history_cursor = ? WHERE id = ?").run(nextSeq, normalizedId);
+    return nextSeq;
+  });
+  const seq = write();
+  const operation = db
+    .prepare("SELECT * FROM operations WHERE map_id = ? AND seq = ?")
+    .get(normalizedId, seq) as OperationRow;
+  return rowToStoredOperation(operation);
+}
+
+export async function getHistoryStatus(mapId: string): Promise<HistoryStatus> {
+  const normalizedId = assertSafeMapId(mapId);
+  await ensureMapInDatabase(normalizedId);
+  const db = getDatabase();
+  const cursor = readHistoryCursor(db, normalizedId);
+  const latest = readLatestOperationSeq(db, normalizedId);
+  const undoExists = db.prepare("SELECT 1 FROM operations WHERE map_id = ? AND seq = ?").get(normalizedId, cursor);
+  const redoExists = db.prepare("SELECT 1 FROM operations WHERE map_id = ? AND seq = ?").get(normalizedId, cursor + 1);
+  return {
+    canUndo: cursor > 0 && Boolean(undoExists),
+    canRedo: Boolean(redoExists),
+    cursor,
+    latest
+  };
+}
+
+export async function getUndoOperation(mapId: string): Promise<StoredOperation | null> {
+  const normalizedId = assertSafeMapId(mapId);
+  await ensureMapInDatabase(normalizedId);
+  const db = getDatabase();
+  const cursor = readHistoryCursor(db, normalizedId);
+  if (cursor <= 0) {
+    return null;
+  }
+  const row = db.prepare("SELECT * FROM operations WHERE map_id = ? AND seq = ?").get(normalizedId, cursor) as
+    | OperationRow
+    | undefined;
+  return row ? rowToStoredOperation(row) : null;
+}
+
+export async function getRedoOperation(mapId: string): Promise<StoredOperation | null> {
+  const normalizedId = assertSafeMapId(mapId);
+  await ensureMapInDatabase(normalizedId);
+  const db = getDatabase();
+  const cursor = readHistoryCursor(db, normalizedId);
+  const row = db.prepare("SELECT * FROM operations WHERE map_id = ? AND seq = ?").get(normalizedId, cursor + 1) as
+    | OperationRow
+    | undefined;
+  return row ? rowToStoredOperation(row) : null;
+}
+
+export async function moveHistoryCursor(mapId: string, cursor: number): Promise<void> {
+  const normalizedId = assertSafeMapId(mapId);
+  if (!Number.isInteger(cursor) || cursor < 0) {
+    throw badRequest("history cursor must be a non-negative integer");
+  }
+  await ensureMapInDatabase(normalizedId);
+  getDatabase().prepare("UPDATE maps SET history_cursor = ? WHERE id = ?").run(cursor, normalizedId);
 }
 
 export async function getCellsInRange(

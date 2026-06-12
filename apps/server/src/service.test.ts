@@ -116,6 +116,118 @@ describe("server service", () => {
     expect(withUndesigned.cells.some((cell) => cell.display_coord === "R0C0" && cell.status === "designed")).toBe(true);
   });
 
+  it("records command history and supports undo/redo for cell edits", async () => {
+    const service = await loadService(tempRoot);
+    const created = await service.createMap({ name: "History Test" });
+    const mapId = created.document.meta.id;
+
+    expect(await service.getHistoryStatus(mapId)).toEqual({
+      canUndo: false,
+      canRedo: false,
+      cursor: 0,
+      latest: 0
+    });
+
+    await service.applyCommands(mapId, [
+      {
+        action: "set_cell",
+        source: "cli",
+        target: { row: 0, col: 0 },
+        changes: {
+          terrain: "plain",
+          biome: "grassland",
+          note: "first"
+        }
+      }
+    ]);
+    expect(await service.getHistoryStatus(mapId)).toEqual({
+      canUndo: true,
+      canRedo: false,
+      cursor: 1,
+      latest: 1
+    });
+
+    const undone = await service.undoMap(mapId);
+    expect(undone?.map.document.cells).toHaveLength(0);
+    expect(undone?.status).toEqual({
+      canUndo: false,
+      canRedo: true,
+      cursor: 0,
+      latest: 1
+    });
+
+    const redone = await service.redoMap(mapId);
+    expect(redone?.map.document.cells).toHaveLength(1);
+    expect(redone?.map.document.cells[0]?.note).toBe("first");
+    expect(redone?.status.canUndo).toBe(true);
+    expect(redone?.status.canRedo).toBe(false);
+  });
+
+  it("supports undo/redo for river feature commands and truncates redo branches", async () => {
+    const service = await loadService(tempRoot);
+    const created = await service.createMap({ name: "River History Test" });
+    const mapId = created.document.meta.id;
+
+    await service.applyCommands(mapId, [
+      {
+        action: "create_river",
+        source: "cli",
+        river: {
+          id: "history-river",
+          name: "History River",
+          points: [
+            { row: 0, col: 0, width: 2 },
+            { row: 0, col: 2, width: 6 }
+          ]
+        }
+      }
+    ]);
+    await service.applyCommands(mapId, [
+      {
+        action: "set_river_width",
+        source: "cli",
+        river_id: "history-river",
+        target: { row: 0, col: 1 },
+        width: 4
+      }
+    ]);
+
+    expect((await service.getMap(mapId)).document.features.rivers[0]?.points).toEqual([
+      { row: 0, col: 0, width: 2 },
+      { row: 0, col: 1, width: 4 },
+      { row: 0, col: 2, width: 6 }
+    ]);
+
+    const undoWidth = await service.undoMap(mapId);
+    expect(undoWidth?.map.document.features.rivers[0]?.points).toEqual([
+      { row: 0, col: 0, width: 2 },
+      { row: 0, col: 2, width: 6 }
+    ]);
+
+    const undoCreate = await service.undoMap(mapId);
+    expect(undoCreate?.map.document.features.rivers).toHaveLength(0);
+    expect((await service.getHistoryStatus(mapId)).canRedo).toBe(true);
+
+    await service.applyCommands(mapId, [
+      {
+        action: "set_cell",
+        source: "cli",
+        target: { row: 1, col: 0 },
+        changes: {
+          terrain: "hill",
+          biome: "grassland"
+        }
+      }
+    ]);
+    expect(await service.getHistoryStatus(mapId)).toEqual({
+      canUndo: true,
+      canRedo: false,
+      cursor: 1,
+      latest: 1
+    });
+    expect(await service.redoMap(mapId)).toBeNull();
+  });
+
   it("migrates existing json maps into sqlite on demand", async () => {
     const service = await loadService(tempRoot);
     const mapsDir = path.join(tempRoot, "storage/maps");

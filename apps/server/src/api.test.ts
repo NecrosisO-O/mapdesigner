@@ -287,6 +287,64 @@ describe("server api", () => {
     }
   });
 
+  it("exposes history status, undo, and redo routes", async () => {
+    const { createServer } = await loadApi(tempRoot);
+    const app = await createServer();
+    try {
+      const created = await app.inject({
+        method: "POST",
+        url: "/api/maps",
+        payload: { name: "History API Test" }
+      });
+      const mapId = created.json().result.document.meta.id as string;
+
+      const initialStatus = await app.inject({
+        method: "GET",
+        url: `/api/maps/${mapId}/history-status`
+      });
+      expect(initialStatus.statusCode).toBe(200);
+      expect(initialStatus.json().result.canUndo).toBe(false);
+
+      await app.inject({
+        method: "POST",
+        url: `/api/maps/${mapId}/apply`,
+        payload: {
+          commands: [
+            {
+              action: "set_cell",
+              source: "webui",
+              target: { row: 0, col: 0 },
+              changes: {
+                terrain: "plain",
+                biome: "grassland"
+              }
+            }
+          ]
+        }
+      });
+
+      const undo = await app.inject({
+        method: "POST",
+        url: `/api/maps/${mapId}/undo`
+      });
+      expect(undo.statusCode).toBe(200);
+      const undoBody = undo.json();
+      expect(undoBody.result.map.document.cells).toHaveLength(0);
+      expect(undoBody.result.status.canRedo).toBe(true);
+
+      const redo = await app.inject({
+        method: "POST",
+        url: `/api/maps/${mapId}/redo`
+      });
+      expect(redo.statusCode).toBe(200);
+      const redoBody = redo.json();
+      expect(redoBody.result.map.document.cells).toHaveLength(1);
+      expect(redoBody.result.status.canUndo).toBe(true);
+    } finally {
+      await app.close();
+    }
+  });
+
   it("rejects invalid apply and export payloads with structured errors", async () => {
     const { createServer } = await loadApi(tempRoot);
     const app = await createServer();

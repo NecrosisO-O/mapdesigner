@@ -14,12 +14,15 @@ import {
   exportJson,
   exportPng,
   getCellsInRange,
+  getHistoryStatus,
   getMap,
   getMapSummary,
   importMap,
   listMaps,
+  redoMap,
   saveMapAs,
-  saveMap
+  saveMap,
+  undoMap
 } from "./service.js";
 import { assertExportDownloadFileName, exportFilePath, normalizeExportOptions } from "./storage.js";
 import { createEnvelope } from "./utils.js";
@@ -312,6 +315,30 @@ export async function createServer(): Promise<FastifyInstance> {
       });
     } catch (error) {
       return sendError(reply, "apply_failed", error);
+    }
+  });
+
+  app.get<{ Params: { id: string } }>("/api/maps/:id/history-status", async (request, reply) => {
+    try {
+      return createEnvelope({ result: await getHistoryStatus(request.params.id) });
+    } catch (error) {
+      return sendError(reply, "history_status_failed", error, 404);
+    }
+  });
+
+  app.post<{ Params: { id: string } }>("/api/maps/:id/undo", async (request, reply) => {
+    try {
+      return createEnvelope({ result: await undoMap(request.params.id) });
+    } catch (error) {
+      return sendError(reply, "undo_failed", error);
+    }
+  });
+
+  app.post<{ Params: { id: string } }>("/api/maps/:id/redo", async (request, reply) => {
+    try {
+      return createEnvelope({ result: await redoMap(request.params.id) });
+    } catch (error) {
+      return sendError(reply, "redo_failed", error);
     }
   });
 
