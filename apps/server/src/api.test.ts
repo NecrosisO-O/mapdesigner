@@ -331,6 +331,7 @@ describe("server api", () => {
       const appliedBody = applied.json();
       expect(appliedBody.result.map).toBeUndefined();
       expect(appliedBody.result.summary.designed_cell_count).toBe(1);
+      expect(appliedBody.result.summary.meta.revision).toBe(2);
       expect(appliedBody.result.features.rivers).toEqual([]);
       expect(appliedBody.result.changes).toHaveLength(1);
       expect(appliedBody.result.command_results).toHaveLength(1);

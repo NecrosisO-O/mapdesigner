@@ -443,6 +443,104 @@ describe("server service", () => {
     expect(persisted.document.meta.revision).toBe(1);
   });
 
+  it("applies lightweight cell commands without returning a full map", async () => {
+    const service = await loadService(tempRoot);
+    const created = await service.createMap({ name: "Light Apply Test" });
+    const mapId = created.document.meta.id;
+
+    const result = await service.applyCommandsLight(mapId, [
+      {
+        action: "set_cells",
+        source: "cli",
+        targets: [
+          { row: 0, col: 0 },
+          { row: 0, col: 1 }
+        ],
+        changes: {
+          terrain: "plain",
+          biome: "grassland",
+          tags: ["peak"],
+          note: "batch"
+        }
+      },
+      {
+        action: "replace_terrain",
+        source: "cli",
+        match: { terrain: "plain" },
+        changes: { terrain: "hill" }
+      },
+      {
+        action: "replace_biome",
+        source: "cli",
+        match: { biome: "grassland" },
+        changes: { biome: "shrubland" }
+      }
+    ]);
+
+    expect(result.mapId).toBe(mapId);
+    expect(result.summary.designed_cell_count).toBe(2);
+    expect(result.summary.meta.revision).toBe(4);
+    expect(result.changes).toHaveLength(6);
+    expect(result.stats.changed_count).toBe(6);
+    expect(result.stats.terrain_summary.after.hill).toBe(4);
+    expect(result.stats.biome_summary.after.shrubland).toBe(2);
+
+    const persisted = await service.getMap(mapId);
+    expect(persisted.document.cells).toEqual([
+      expect.objectContaining({
+        row: 0,
+        col: 0,
+        terrain: "hill",
+        biome: "shrubland",
+        tags: ["peak"],
+        note: "batch"
+      }),
+      expect.objectContaining({
+        row: 0,
+        col: 1,
+        terrain: "hill",
+        biome: "shrubland",
+        tags: ["peak"],
+        note: "batch"
+      })
+    ]);
+
+    const undone = await service.undoMap(mapId);
+    expect(undone?.map.document.cells).toHaveLength(0);
+  });
+
+  it("supports lightweight dry-run without persisting cells or history", async () => {
+    const service = await loadService(tempRoot);
+    const created = await service.createMap({ name: "Light Dry Run Test" });
+    const mapId = created.document.meta.id;
+
+    const result = await service.applyCommandsLight(
+      mapId,
+      [
+        {
+          action: "set_cell",
+          source: "cli",
+          target: { row: 0, col: 0 },
+          changes: {
+            terrain: "plain",
+            biome: "grassland"
+          }
+        }
+      ],
+      { dryRun: true }
+    );
+
+    expect(result.summary.designed_cell_count).toBe(1);
+    expect(result.summary.meta.revision).toBe(2);
+    expect((await service.getMap(mapId)).document.cells).toHaveLength(0);
+    expect(await service.getHistoryStatus(mapId)).toEqual({
+      canUndo: false,
+      canRedo: false,
+      cursor: 0,
+      latest: 0
+    });
+  });
+
   it("provides inspect-cell, inspect-area, and neighbors queries", async () => {
     const service = await loadService(tempRoot);
     const created = await service.createMap({ name: "Inspect Test" });

@@ -127,6 +127,12 @@ export interface MapMetadataUpdate {
   tags?: string[];
 }
 
+export interface CellWriteChange {
+  row: number;
+  col: number;
+  cell: DesignedCellRecord | null;
+}
+
 const MAX_LEGACY_IMPORT_FILE_BYTES = 32 * 1024 * 1024;
 
 function safeJsonArray(value: string): string[] {
@@ -266,6 +272,21 @@ function getMapRowOrThrow(db: Database.Database, id: string): MapRow {
   return row;
 }
 
+function mapSummaryFromRow(db: Database.Database, row: MapRow): MapSummary {
+  const riverCount = db.prepare("SELECT COUNT(*) AS count FROM features WHERE map_id = ? AND kind = 'river'").get(row.id) as
+    | { count: number }
+    | undefined;
+  return {
+    meta: mapRowToMeta(row),
+    grid: mapRowToGrid(row),
+    bounds: mapRowToBounds(row),
+    designed_cell_count: row.designed_cell_count,
+    feature_counts: {
+      rivers: riverCount?.count ?? 0
+    }
+  };
+}
+
 function readFeatureRows(db: Database.Database, id: string): FeatureRow[] {
   return db
     .prepare("SELECT map_id, kind, feature_id, json FROM features WHERE map_id = ? ORDER BY kind, feature_id")
@@ -285,6 +306,54 @@ function readCells(db: Database.Database, id: string): DesignedCellRecord[] {
   return (db
     .prepare("SELECT map_id, row, col, terrain, biome, tags_json, note FROM cells WHERE map_id = ? ORDER BY row, col")
     .all(id) as CellRow[]).map(cellRowToDesignedCell);
+}
+
+function readCellAt(db: Database.Database, id: string, row: number, col: number): DesignedCellRecord | null {
+  const found = db
+    .prepare("SELECT map_id, row, col, terrain, biome, tags_json, note FROM cells WHERE map_id = ? AND row = ? AND col = ?")
+    .get(id, row, col) as CellRow | undefined;
+  return found ? cellRowToDesignedCell(found) : null;
+}
+
+function updateMapCellAggregate(db: Database.Database, id: string, revisionIncrement: number): MapRow {
+  const row = getMapRowOrThrow(db, id);
+  const aggregate = db.prepare(
+    `SELECT
+       COUNT(*) AS count,
+       MIN(row) AS min_row,
+       MAX(row) AS max_row,
+       MIN(col) AS min_col,
+       MAX(col) AS max_col
+     FROM cells
+     WHERE map_id = ?`
+  ).get(id) as {
+    count: number;
+    min_row: number | null;
+    max_row: number | null;
+    min_col: number | null;
+    max_col: number | null;
+  };
+  db.prepare(
+    `UPDATE maps
+     SET updated_at = @updated_at,
+         revision = @revision,
+         bounds_min_row = @bounds_min_row,
+         bounds_max_row = @bounds_max_row,
+         bounds_min_col = @bounds_min_col,
+         bounds_max_col = @bounds_max_col,
+         designed_cell_count = @designed_cell_count
+     WHERE id = @id`
+  ).run({
+    id,
+    updated_at: revisionIncrement > 0 ? new Date().toISOString() : row.updated_at,
+    revision: row.revision + revisionIncrement,
+    bounds_min_row: aggregate.count > 0 ? aggregate.min_row : null,
+    bounds_max_row: aggregate.count > 0 ? aggregate.max_row : null,
+    bounds_min_col: aggregate.count > 0 ? aggregate.min_col : null,
+    bounds_max_col: aggregate.count > 0 ? aggregate.max_col : null,
+    designed_cell_count: aggregate.count
+  });
+  return getMapRowOrThrow(db, id);
 }
 
 function writeDocument(db: Database.Database, document: MapDocument): void {
@@ -508,6 +577,109 @@ export async function getMapFeatures(id: string): Promise<MapFeatures> {
   return featureRowsToFeatures(readFeatureRows(db, row.id));
 }
 
+export async function getDesignedCellsAt(
+  id: string,
+  targets: Array<{ row: number; col: number }>
+): Promise<DesignedCellRecord[]> {
+  await ensureMapInDatabase(id);
+  const db = getDatabase();
+  const row = getMapRowOrThrow(db, id);
+  const seen = new Set<string>();
+  const cells: DesignedCellRecord[] = [];
+  for (const target of targets) {
+    const key = `${target.row},${target.col}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    const cell = readCellAt(db, row.id, target.row, target.col);
+    if (cell) {
+      cells.push(cell);
+    }
+  }
+  return cells;
+}
+
+export async function getDesignedCellsByTerrain(id: string, terrain: DesignedCellRecord["terrain"]): Promise<DesignedCellRecord[]> {
+  await ensureMapInDatabase(id);
+  const db = getDatabase();
+  const row = getMapRowOrThrow(db, id);
+  return (db
+    .prepare("SELECT map_id, row, col, terrain, biome, tags_json, note FROM cells WHERE map_id = ? AND terrain = ? ORDER BY row, col")
+    .all(row.id, terrain) as CellRow[]).map(cellRowToDesignedCell);
+}
+
+export async function getDesignedCellsByBiome(id: string, biome: DesignedCellRecord["biome"]): Promise<DesignedCellRecord[]> {
+  await ensureMapInDatabase(id);
+  const db = getDatabase();
+  const row = getMapRowOrThrow(db, id);
+  const rows = biome === null
+    ? db
+        .prepare("SELECT map_id, row, col, terrain, biome, tags_json, note FROM cells WHERE map_id = ? AND biome IS NULL ORDER BY row, col")
+        .all(row.id)
+    : db
+        .prepare("SELECT map_id, row, col, terrain, biome, tags_json, note FROM cells WHERE map_id = ? AND biome = ? ORDER BY row, col")
+        .all(row.id, biome);
+  return (rows as CellRow[]).map(cellRowToDesignedCell);
+}
+
+export async function applyCellWriteChanges(
+  id: string,
+  changes: CellWriteChange[],
+  options: { dryRun?: boolean; revisionIncrement?: number } = {}
+): Promise<MapSummary> {
+  const normalizedId = assertSafeMapId(id);
+  await ensureMapInDatabase(normalizedId);
+  const db = getDatabase();
+  const applyChanges = () => {
+    const row = getMapRowOrThrow(db, normalizedId);
+    if (changes.length === 0) {
+      return row;
+    }
+    const deleteCell = db.prepare("DELETE FROM cells WHERE map_id = ? AND row = ? AND col = ?");
+    const upsertCell = db.prepare(
+      `INSERT INTO cells (map_id, row, col, terrain, biome, tags_json, note)
+       VALUES (@map_id, @row, @col, @terrain, @biome, @tags_json, @note)
+       ON CONFLICT(map_id, row, col) DO UPDATE SET
+         terrain = excluded.terrain,
+         biome = excluded.biome,
+         tags_json = excluded.tags_json,
+         note = excluded.note`
+    );
+    for (const change of changes) {
+      if (!change.cell) {
+        deleteCell.run(row.id, change.row, change.col);
+        continue;
+      }
+      upsertCell.run({
+        map_id: row.id,
+        row: change.cell.row,
+        col: change.cell.col,
+        terrain: change.cell.terrain,
+        biome: change.cell.biome,
+        tags_json: serializeStringArray(change.cell.tags),
+        note: change.cell.note
+      });
+    }
+    return updateMapCellAggregate(db, row.id, options.revisionIncrement ?? 1);
+  };
+  if (options.dryRun) {
+    db.prepare("SAVEPOINT cell_write_preview").run();
+    try {
+      const summary = mapSummaryFromRow(db, applyChanges());
+      db.prepare("ROLLBACK TO cell_write_preview").run();
+      db.prepare("RELEASE cell_write_preview").run();
+      return summary;
+    } catch (error) {
+      db.prepare("ROLLBACK TO cell_write_preview").run();
+      db.prepare("RELEASE cell_write_preview").run();
+      throw error;
+    }
+  }
+  const write = db.transaction(applyChanges);
+  return mapSummaryFromRow(db, write());
+}
+
 export async function updateMapMetadata(id: string, input: MapMetadataUpdate): Promise<MapSummary> {
   const normalizedId = assertSafeMapId(id);
   await ensureMapInDatabase(normalizedId);
@@ -559,18 +731,7 @@ export async function getMapSummary(id: string): Promise<MapSummary> {
   await ensureMapInDatabase(id);
   const db = getDatabase();
   const row = getMapRowOrThrow(db, id);
-  const riverCount = db.prepare("SELECT COUNT(*) AS count FROM features WHERE map_id = ? AND kind = 'river'").get(row.id) as
-    | { count: number }
-    | undefined;
-  return {
-    meta: mapRowToMeta(row),
-    grid: mapRowToGrid(row),
-    bounds: mapRowToBounds(row),
-    designed_cell_count: row.designed_cell_count,
-    feature_counts: {
-      rivers: riverCount?.count ?? 0
-    }
-  };
+  return mapSummaryFromRow(db, row);
 }
 
 export async function recordOperation(mapId: string, input: OperationInput): Promise<StoredOperation> {

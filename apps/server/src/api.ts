@@ -8,6 +8,7 @@ import { EXPORT_STORAGE_DIR, SERVER_PORT, WEB_DIST_DIR } from "./config.js";
 import { badRequest, isServiceError } from "./errors.js";
 import {
   applyCommands,
+  applyCommandsLight,
   createMap,
   deleteMap,
   duplicateMap,
@@ -119,6 +120,21 @@ async function applyCommandRequest(id: string, bodyInput: unknown, dryRun = fals
   const body = assertRecord(bodyInput, "request body is required");
   if (!Array.isArray(body.commands)) {
     throw badRequest("commands must be an array");
+  }
+  if (!includeMap) {
+    const result = await applyCommandsLight(id, body.commands as MapCommand[], { dryRun });
+    return createEnvelope({
+      result: {
+        summary: result.summary,
+        features: result.features,
+        dryRun: result.dryRun,
+        warnings: result.warnings,
+        command_results: result.command_results,
+        changes: result.changes,
+        stats: result.stats
+      },
+      warnings: result.warnings
+    });
   }
   const result = await applyCommands(id, body.commands as MapCommand[], { dryRun });
   return createEnvelope({

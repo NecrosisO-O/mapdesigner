@@ -11,7 +11,9 @@ import {
 } from "@mapdesigner/map-core";
 import {
   applyCommands,
+  applyCommandsLight,
   type ApplyCommandsResult,
+  type LightweightApplyCommandsResult,
   createMap,
   deleteMap,
   duplicateMap,
@@ -121,7 +123,19 @@ function printFailure(message: string): never {
   process.exit(1);
 }
 
-function buildApplySummary(result: ApplyCommandsResult) {
+function buildApplySummary(result: ApplyCommandsResult | LightweightApplyCommandsResult) {
+  if ("summary" in result) {
+    return {
+      map_id: result.mapId,
+      map_name: result.summary.meta.name,
+      revision: result.summary.meta.revision,
+      designed_cell_count: result.summary.designed_cell_count,
+      river_count: result.summary.feature_counts.rivers,
+      dry_run: result.dryRun,
+      warning_count: result.warnings.length,
+      ...result.stats
+    };
+  }
   return {
     map_id: result.map.document.meta.id,
     map_name: result.map.document.meta.name,
@@ -353,8 +367,11 @@ async function main(): Promise<void> {
           printFailure("maps apply requires --map-id");
         }
         const commands = await readCommands(args);
-        const result = await applyCommands(id, commands, { dryRun: hasFlag(args, "--dry-run") });
-        const envelopeResult = hasFlag(args, "--summary") ? buildApplySummary(result) : result;
+        const summaryOnly = hasFlag(args, "--summary");
+        const result = summaryOnly
+          ? await applyCommandsLight(id, commands, { dryRun: hasFlag(args, "--dry-run") })
+          : await applyCommands(id, commands, { dryRun: hasFlag(args, "--dry-run") });
+        const envelopeResult = summaryOnly ? buildApplySummary(result) : result;
         printResult(createEnvelope({ result: envelopeResult, warnings: result.warnings }));
         break;
       }
