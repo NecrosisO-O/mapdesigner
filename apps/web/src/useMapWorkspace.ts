@@ -1,6 +1,6 @@
-import type { MapRuntimeState } from "@mapdesigner/map-core";
+import type { MapCommand, MapRuntimeState } from "@mapdesigner/map-core";
 import { startTransition, useEffect, useRef, useState } from "react";
-import { api, type MapListItem } from "./api.js";
+import { api, type MapHistory, type MapListItem } from "./api.js";
 
 export function formatDateTime(value: string): string {
   const date = new Date(value);
@@ -27,6 +27,7 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
   const [maps, setMaps] = useState<MapListItem[]>([]);
   const [currentMap, setCurrentMap] = useState<MapRuntimeState | null>(null);
   const [currentMapId, setCurrentMapId] = useState<string>("");
+  const [mapHistory, setMapHistory] = useState<MapHistory | null>(null);
   const [isRenaming, setIsRenaming] = useState(false);
   const [renameDraft, setRenameDraft] = useState("");
   const [persistedRevision, setPersistedRevision] = useState<number | null>(null);
@@ -74,6 +75,20 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
     setRenameDraft(map.document.meta.name);
   }
 
+  async function refreshMapHistory(id = currentMap?.document.meta.id): Promise<MapHistory | null> {
+    if (!id) {
+      setMapHistory(null);
+      return null;
+    }
+    const response = await api.getMapHistory(id);
+    if (!response.ok || !response.result) {
+      setMessage(formatStatusMessage(response.errors[0]?.message, "刷新历史失败"));
+      return null;
+    }
+    setMapHistory(response.result);
+    return response.result;
+  }
+
   async function openMap(id: string): Promise<MapRuntimeState | null> {
     setLoading(true);
     const response = await api.getMap(id);
@@ -83,6 +98,7 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
       return null;
     }
     loadMapIntoWorkspace(response.result);
+    await refreshMapHistory(response.result.document.meta.id);
     setMessage(`已打开 ${response.result.document.meta.name}`);
     return response.result;
   }
@@ -106,6 +122,7 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
     }
     await refreshMaps(response.result.document.meta.id);
     loadMapIntoWorkspace(response.result);
+    await refreshMapHistory(response.result.document.meta.id);
     setMessage(`已新建 ${response.result.document.meta.name}`);
     return response.result;
   }
@@ -127,6 +144,7 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
     setIsRenaming(false);
     setRenameDraft(response.result.document.meta.name);
     await refreshMaps(response.result.document.meta.id);
+    await refreshMapHistory(response.result.document.meta.id);
     setMessage("保存成功");
     return response.result;
   }
@@ -181,6 +199,7 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
     }
     await refreshMaps(response.result.document.meta.id);
     loadMapIntoWorkspace(response.result);
+    await refreshMapHistory(response.result.document.meta.id);
     setMessage(`已另存为 ${response.result.document.meta.name}`);
     return response.result;
   }
@@ -201,11 +220,13 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
       }
       await refreshMaps(retryResponse.result.document.meta.id);
       loadMapIntoWorkspace(retryResponse.result);
+      await refreshMapHistory(retryResponse.result.document.meta.id);
       setMessage("导入成功");
       return retryResponse.result;
     }
     await refreshMaps(response.result.document.meta.id);
     loadMapIntoWorkspace(response.result);
+    await refreshMapHistory(response.result.document.meta.id);
     setMessage("导入成功");
     return response.result;
   }
@@ -221,6 +242,7 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
     }
     await refreshMaps(response.result.document.meta.id);
     loadMapIntoWorkspace(response.result);
+    await refreshMapHistory(response.result.document.meta.id);
     setMessage("复制成功");
     return response.result;
   }
@@ -244,8 +266,68 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
     setRenameDraft("");
     suppressAutoOpenRef.current = true;
     await refreshMaps();
+    setMapHistory(null);
     setMessage("地图已删除");
     return true;
+  }
+
+  async function applyCommands(commands: MapCommand[]): Promise<MapRuntimeState | null> {
+    if (!currentMap) {
+      setMessage("请先选择一张地图");
+      return null;
+    }
+    const response = await api.applyCommands(currentMap.document.meta.id, commands);
+    if (!response.ok || !response.result) {
+      setMessage(formatStatusMessage(response.errors[0]?.message, "应用修改失败"));
+      return null;
+    }
+    setCurrentMap(response.result.map);
+    setPersistedRevision(response.result.map.document.meta.revision);
+    await refreshMaps(response.result.map.document.meta.id);
+    await refreshMapHistory(response.result.map.document.meta.id);
+    return response.result.map;
+  }
+
+  async function undoCurrentMap(): Promise<MapRuntimeState | null> {
+    if (!currentMap) {
+      return null;
+    }
+    const response = await api.undoMap(currentMap.document.meta.id);
+    if (!response.ok) {
+      setMessage(formatStatusMessage(response.errors[0]?.message, "撤销失败"));
+      return null;
+    }
+    if (!response.result) {
+      setMessage("没有可撤销的操作");
+      return null;
+    }
+    setCurrentMap(response.result.map);
+    setPersistedRevision(response.result.map.document.meta.revision);
+    await refreshMaps(response.result.map.document.meta.id);
+    await refreshMapHistory(response.result.map.document.meta.id);
+    setMessage(response.result.warnings[0]?.message ?? "已撤销");
+    return response.result.map;
+  }
+
+  async function redoCurrentMap(): Promise<MapRuntimeState | null> {
+    if (!currentMap) {
+      return null;
+    }
+    const response = await api.redoMap(currentMap.document.meta.id);
+    if (!response.ok) {
+      setMessage(formatStatusMessage(response.errors[0]?.message, "重做失败"));
+      return null;
+    }
+    if (!response.result) {
+      setMessage("没有可重做的操作");
+      return null;
+    }
+    setCurrentMap(response.result.map);
+    setPersistedRevision(response.result.map.document.meta.revision);
+    await refreshMaps(response.result.map.document.meta.id);
+    await refreshMapHistory(response.result.map.document.meta.id);
+    setMessage(response.result.warnings[0]?.message ?? "已重做");
+    return response.result.map;
   }
 
   useEffect(() => {
@@ -272,6 +354,7 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
     maps,
     currentMap,
     currentMapId,
+    mapHistory,
     displayMaps,
     isRenaming,
     renameDraft,
@@ -281,6 +364,7 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
     setCurrentMap,
     setRenameDraft,
     refreshMaps,
+    refreshMapHistory,
     openMap,
     ensureCanLeaveMap,
     createMap,
@@ -291,6 +375,9 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
     saveMapAs,
     importFile,
     duplicateMap,
-    deleteCurrentMap
+    deleteCurrentMap,
+    applyCommands,
+    undoCurrentMap,
+    redoCurrentMap
   };
 }

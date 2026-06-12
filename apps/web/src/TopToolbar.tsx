@@ -1,11 +1,12 @@
 import type { MapRuntimeState } from "@mapdesigner/map-core";
 import type { ChangeEvent, RefObject } from "react";
-import type { MapListItem } from "./api.js";
+import type { MapHistory, MapListItem } from "./api.js";
 
 export type InteractionMode = "select" | "river-draw" | "batch-select";
 
 interface TopToolbarProps {
   currentMap: MapRuntimeState | null;
+  mapHistory: MapHistory | null;
   currentMapId: string;
   displayMaps: MapListItem[];
   mapDirty: boolean;
@@ -30,8 +31,8 @@ interface TopToolbarProps {
 }
 
 export function TopToolbar(props: TopToolbarProps) {
-  const canUndo = !!props.currentMap && props.currentMap.history.past.length > 0;
-  const canRedo = !!props.currentMap && props.currentMap.history.future.length > 0;
+  const canUndo = !!props.currentMap && (props.mapHistory?.status.canUndo ?? false);
+  const canRedo = !!props.currentMap && (props.mapHistory?.status.canRedo ?? false);
 
   function handleFileChange(event: ChangeEvent<HTMLInputElement>): void {
     const file = event.target.files?.[0];

@@ -4,7 +4,6 @@ import {
   TAG_ENTRIES,
   TERRAIN_ENTRIES,
   TERRAIN_CATEGORY_ORDER,
-  applyCommand,
   createCellId,
   getAllowedBiomesForTerrain,
   getAllowedTerrainCategoriesForBiome,
@@ -12,6 +11,7 @@ import {
   getFilteredTerrainEntries,
   getTerrainCategoryKey,
   type ActiveCell,
+  type MapCommand,
   type MapRuntimeState
 } from "@mapdesigner/map-core";
 import { useEffect, useState } from "react";
@@ -48,7 +48,7 @@ function resolveTerrainCategory(terrain: string | null | undefined): string {
 
 export function useCellEditor(
   currentMap: MapRuntimeState | null,
-  setCurrentMap: (map: MapRuntimeState | null) => void,
+  applyCommands: (commands: MapCommand[]) => Promise<MapRuntimeState | null>,
   setMessage: (message: string) => void
 ) {
   const [selectedCellId, setSelectedCellId] = useState<string | null>(null);
@@ -182,7 +182,7 @@ export function useCellEditor(
     });
   }
 
-  function applyDraft(): void {
+  async function applyDraft(): Promise<void> {
     if (!currentMap || !selectedCell) {
       return;
     }
@@ -190,7 +190,7 @@ export function useCellEditor(
       setMessage("设置为 designed 时必须选择 terrain");
       return;
     }
-    const result = applyCommand(currentMap, {
+    const result = await applyCommands([{
       action: "set_cell",
       source: "webui",
       target: { row: selectedCell.row, col: selectedCell.col },
@@ -200,41 +200,37 @@ export function useCellEditor(
         tags: draft.tags as Array<keyof typeof TAG_ENTRIES>,
         note: draft.note
       }
-    });
-    if (!result.ok) {
-      setMessage(result.errors[0]?.message ?? "应用修改失败");
+    }]);
+    if (!result) {
       return;
     }
-    setCurrentMap(result.map);
     setSelectedCellId(createCellId(selectedCell.row, selectedCell.col));
     syncDraftFromCell(
-      result.map.activeCells.find((cell) => cell.row === selectedCell.row && cell.col === selectedCell.col) ?? null
+      result.activeCells.find((cell) => cell.row === selectedCell.row && cell.col === selectedCell.col) ?? null
     );
-    setMessage(result.warnings[0]?.message ?? "单元格修改已应用，等待保存到文件");
+    setMessage("单元格修改已保存到服务器");
   }
 
-  function clearSelected(): void {
+  async function clearSelected(): Promise<void> {
     if (!currentMap || !selectedCell) {
       return;
     }
-    const result = applyCommand(currentMap, {
+    const result = await applyCommands([{
       action: "clear_cell",
       source: "webui",
       target: { row: selectedCell.row, col: selectedCell.col }
-    });
-    if (!result.ok) {
-      setMessage(result.errors[0]?.message ?? "清空失败");
+    }]);
+    if (!result) {
       return;
     }
-    setCurrentMap(result.map);
     const updatedCell =
-      result.map.activeCells.find((cell) => cell.row === selectedCell.row && cell.col === selectedCell.col) ?? null;
+      result.activeCells.find((cell) => cell.row === selectedCell.row && cell.col === selectedCell.col) ?? null;
     setSelectedCellId(updatedCell?.id ?? null);
     syncDraftFromCell(updatedCell);
     if (updatedCell?.status !== "designed") {
       setFormatBrushEnabled(false);
     }
-    setMessage("单元格已清空，等待保存到文件");
+    setMessage("单元格已清空并保存到服务器");
   }
 
   function toggleFormatBrush(): void {
@@ -251,7 +247,7 @@ export function useCellEditor(
     setMessage(`已进入格式刷模式：${selectedCell.display_coord}，当前刷入 ${getFormatBrushLabel()}`);
   }
 
-  function applyFormatBrush(targetCell: ActiveCell): void {
+  async function applyFormatBrush(targetCell: ActiveCell): Promise<void> {
     if (!currentMap || !selectedCell || selectedCell.status !== "designed") {
       setFormatBrushEnabled(false);
       return;
@@ -275,7 +271,7 @@ export function useCellEditor(
       return;
     }
 
-    const result = applyCommand(currentMap, {
+    const result = await applyCommands([{
       action: "set_cell",
       source: "webui",
       target: { row: targetCell.row, col: targetCell.col },
@@ -285,27 +281,23 @@ export function useCellEditor(
         tags: (formatBrushScope.tags ? selectedCell.tags : targetCell.tags) as Array<keyof typeof TAG_ENTRIES>,
         note: formatBrushScope.note ? selectedCell.note : targetCell.note
       }
-    });
-
-    if (!result.ok) {
-      setMessage(result.errors[0]?.message ?? "格式刷应用失败");
+    }]);
+    if (!result) {
       return;
     }
 
-    setCurrentMap(result.map);
     setSelectedCellId(createCellId(selectedCell.row, selectedCell.col));
     syncDraftFromCell(
-      result.map.activeCells.find((cell) => cell.row === selectedCell.row && cell.col === selectedCell.col) ?? null
+      result.activeCells.find((cell) => cell.row === selectedCell.row && cell.col === selectedCell.col) ?? null
     );
     setMessage(
-      result.warnings[0]?.message ??
-        `已将 ${selectedCell.display_coord} 的${getFormatBrushLabel()}刷到 ${targetCell.display_coord}，等待保存到文件`
+      `已将 ${selectedCell.display_coord} 的${getFormatBrushLabel()}刷到 ${targetCell.display_coord} 并保存到服务器`
     );
   }
 
   function handleCanvasCellSelect(cell: ActiveCell): void {
     if (formatBrushEnabled) {
-      applyFormatBrush(cell);
+      void applyFormatBrush(cell);
       return;
     }
     if (!ensureCanLeaveSelection()) {

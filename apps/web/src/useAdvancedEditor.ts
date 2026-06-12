@@ -4,13 +4,13 @@ import {
   TAG_ENTRIES,
   TERRAIN_CATEGORY_ORDER,
   TERRAIN_ENTRIES,
-  applyCommand,
   getAllowedBiomesForTerrain,
   getAllowedTerrainCategoriesForBiome,
   getFilteredTerrainEntries,
   getTerrainCategoryKey,
   type ActiveCell,
   type BiomeKey,
+  type MapCommand,
   type MapRuntimeState,
   type TagKey,
   type TerrainCategoryKey,
@@ -63,7 +63,7 @@ export function getNoneBiomeValue(): string {
 
 export function useAdvancedEditor(
   currentMap: MapRuntimeState | null,
-  setCurrentMap: (map: MapRuntimeState | null) => void,
+  applyCommands: (commands: MapCommand[]) => Promise<MapRuntimeState | null>,
   setMessage: (message: string) => void
 ) {
   const [batchSelectedCellIds, setBatchSelectedCellIds] = useState<Set<string>>(() => new Set());
@@ -173,7 +173,7 @@ export function useAdvancedEditor(
     }));
   }
 
-  function applyBatchEdit(): MapRuntimeState | null {
+  async function applyBatchEdit(): Promise<MapRuntimeState | null> {
     if (!currentMap) {
       return null;
     }
@@ -185,7 +185,7 @@ export function useAdvancedEditor(
       setMessage("批量设置必须选择 terrain");
       return null;
     }
-    const result = applyCommand(currentMap, {
+    const result = await applyCommands([{
       action: "set_cells",
       source: "webui",
       targets: batchSelectedCells.map((cell) => ({ row: cell.row, col: cell.col })),
@@ -195,14 +195,12 @@ export function useAdvancedEditor(
         tags: batchDraft.tags,
         note: batchDraft.note
       }
-    });
-    if (!result.ok) {
-      setMessage(result.errors[0]?.message ?? "批量设置失败");
+    }]);
+    if (!result) {
       return null;
     }
-    setCurrentMap(result.map);
-    setMessage(result.warnings[0]?.message ?? `已批量设置 ${result.changed.length} 个单元格，等待保存到文件`);
-    return result.map;
+    setMessage(`已批量设置 ${batchSelectedCells.length} 个单元格并保存到服务器`);
+    return result;
   }
 
   function setReplacementTerrainCategory(nextCategory: string): void {
@@ -226,7 +224,7 @@ export function useAdvancedEditor(
     }));
   }
 
-  function applyTerrainReplacement(): MapRuntimeState | null {
+  async function applyTerrainReplacement(): Promise<MapRuntimeState | null> {
     if (!currentMap) {
       return null;
     }
@@ -245,7 +243,7 @@ export function useAdvancedEditor(
       setMessage("没有匹配的 terrain");
       return null;
     }
-    const result = applyCommand(currentMap, {
+    const result = await applyCommands([{
       action: "replace_terrain",
       source: "webui",
       match: {
@@ -254,17 +252,15 @@ export function useAdvancedEditor(
       changes: {
         terrain: replaceTerrainDraft.replacementTerrain as TerrainKey
       }
-    });
-    if (!result.ok) {
-      setMessage(result.errors[0]?.message ?? "地形替换失败");
+    }]);
+    if (!result) {
       return null;
     }
-    setCurrentMap(result.map);
-    setMessage(result.warnings[0]?.message ?? `已替换 ${result.changed.length} 个地形，等待保存到文件`);
-    return result.map;
+    setMessage(`已替换 ${matchCount} 个地形并保存到服务器`);
+    return result;
   }
 
-  function applyBiomeReplacement(): MapRuntimeState | null {
+  async function applyBiomeReplacement(): Promise<MapRuntimeState | null> {
     if (!currentMap) {
       return null;
     }
@@ -283,7 +279,7 @@ export function useAdvancedEditor(
       setMessage("没有匹配的 biome");
       return null;
     }
-    const result = applyCommand(currentMap, {
+    const result = await applyCommands([{
       action: "replace_biome",
       source: "webui",
       match: {
@@ -292,14 +288,12 @@ export function useAdvancedEditor(
       changes: {
         biome: replacementBiome
       }
-    });
-    if (!result.ok) {
-      setMessage(result.errors[0]?.message ?? "生态替换失败");
+    }]);
+    if (!result) {
       return null;
     }
-    setCurrentMap(result.map);
-    setMessage(result.warnings[0]?.message ?? `已替换 ${result.changed.length} 个生态，等待保存到文件`);
-    return result.map;
+    setMessage(`已替换 ${matchCount} 个生态并保存到服务器`);
+    return result;
   }
 
   useEffect(() => {

@@ -14,6 +14,7 @@ import {
   exportJson,
   exportPng,
   getCellsInRange,
+  getMapHistory,
   getHistoryStatus,
   getMap,
   getMapSummary,
@@ -96,6 +97,23 @@ function readBooleanQuery(value: unknown, fallback: boolean): boolean {
     return false;
   }
   throw badRequest("includeUndesigned must be true or false");
+}
+
+async function applyCommandRequest(id: string, bodyInput: unknown, dryRun = false) {
+  const body = assertRecord(bodyInput, "request body is required");
+  if (!Array.isArray(body.commands)) {
+    throw badRequest("commands must be an array");
+  }
+  const result = await applyCommands(id, body.commands as MapCommand[], { dryRun });
+  return createEnvelope({
+    result: {
+      map: result.map,
+      dryRun: result.dryRun,
+      warnings: result.warnings,
+      stats: result.stats
+    },
+    warnings: result.warnings
+  });
 }
 
 export async function createServer(): Promise<FastifyInstance> {
@@ -299,30 +317,45 @@ export async function createServer(): Promise<FastifyInstance> {
 
   app.post<{ Params: { id: string }; Body: { commands: MapCommand[] } }>("/api/maps/:id/apply", async (request, reply) => {
     try {
-      const body = assertRecord(request.body, "request body is required");
-      if (!Array.isArray(body.commands)) {
-        throw badRequest("commands must be an array");
-      }
-      const result = await applyCommands(request.params.id, body.commands as MapCommand[]);
-      return createEnvelope({
-        result: {
-          map: result.map,
-          dryRun: result.dryRun,
-          warnings: result.warnings,
-          stats: result.stats
-        },
-        warnings: result.warnings
-      });
+      return await applyCommandRequest(request.params.id, request.body);
     } catch (error) {
       return sendError(reply, "apply_failed", error);
     }
   });
+
+  app.post<{ Params: { id: string }; Body: { commands: MapCommand[] } }>("/api/maps/:id/commands", async (request, reply) => {
+    try {
+      return await applyCommandRequest(request.params.id, request.body);
+    } catch (error) {
+      return sendError(reply, "commands_failed", error);
+    }
+  });
+
+  app.post<{ Params: { id: string }; Body: { commands: MapCommand[] } }>(
+    "/api/maps/:id/commands/dry-run",
+    async (request, reply) => {
+      try {
+        return await applyCommandRequest(request.params.id, request.body, true);
+      } catch (error) {
+        return sendError(reply, "commands_dry_run_failed", error);
+      }
+    }
+  );
 
   app.get<{ Params: { id: string } }>("/api/maps/:id/history-status", async (request, reply) => {
     try {
       return createEnvelope({ result: await getHistoryStatus(request.params.id) });
     } catch (error) {
       return sendError(reply, "history_status_failed", error, 404);
+    }
+  });
+
+  app.get<{ Params: { id: string }; Querystring: { limit?: string } }>("/api/maps/:id/history", async (request, reply) => {
+    try {
+      const limit = request.query.limit === undefined ? undefined : readIntegerQuery(request.query.limit, "limit");
+      return createEnvelope({ result: await getMapHistory(request.params.id, limit) });
+    } catch (error) {
+      return sendError(reply, "history_failed", error, 404);
     }
   });
 

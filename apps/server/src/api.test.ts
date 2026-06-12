@@ -258,6 +258,76 @@ describe("server api", () => {
     }
   });
 
+  it("supports command aliases, dry-run, and persistent history reads", async () => {
+    const { createServer } = await loadApi(tempRoot);
+    const app = await createServer();
+    try {
+      const created = await app.inject({
+        method: "POST",
+        url: "/api/maps",
+        payload: { name: "Command Alias API Test" }
+      });
+      const mapId = created.json().result.document.meta.id as string;
+
+      const dryRun = await app.inject({
+        method: "POST",
+        url: `/api/maps/${mapId}/commands/dry-run`,
+        payload: {
+          commands: [
+            {
+              action: "set_cell",
+              source: "webui",
+              target: { row: 1, col: 1 },
+              changes: { terrain: "hill", biome: "grassland" }
+            }
+          ]
+        }
+      });
+      expect(dryRun.statusCode).toBe(200);
+      expect(dryRun.json().result.dryRun).toBe(true);
+
+      const afterDryRun = await app.inject({
+        method: "GET",
+        url: `/api/maps/${mapId}`
+      });
+      expect(afterDryRun.json().result.document.cells).toHaveLength(0);
+
+      const applied = await app.inject({
+        method: "POST",
+        url: `/api/maps/${mapId}/commands`,
+        payload: {
+          commands: [
+            {
+              action: "set_cell",
+              source: "webui",
+              target: { row: 1, col: 1 },
+              changes: { terrain: "hill", biome: "grassland" }
+            }
+          ]
+        }
+      });
+      expect(applied.statusCode).toBe(200);
+      expect(applied.json().result.map.document.cells).toHaveLength(1);
+
+      const history = await app.inject({
+        method: "GET",
+        url: `/api/maps/${mapId}/history?limit=3`
+      });
+      expect(history.statusCode).toBe(200);
+      const historyBody = history.json();
+      expect(historyBody.result.status.cursor).toBe(1);
+      expect(historyBody.result.entries).toEqual([
+        expect.objectContaining({
+          seq: 1,
+          action: "set_cell",
+          source: "webui"
+        })
+      ]);
+    } finally {
+      await app.close();
+    }
+  });
+
   it("validates cell range query parameters", async () => {
     const { createServer } = await loadApi(tempRoot);
     const app = await createServer();

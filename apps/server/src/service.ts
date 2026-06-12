@@ -39,6 +39,7 @@ import {
   createMapDocument,
   deleteMapDocument,
   getCellsInRange as getRepositoryCellsInRange,
+  getMapHistory as getRepositoryMapHistory,
   getHistoryStatus as getRepositoryHistoryStatus,
   getMapDocument,
   getMapSummary as getRepositoryMapSummary,
@@ -50,6 +51,7 @@ import {
   recordOperation,
   saveMapDocument,
   type HistoryStatus,
+  type MapHistory,
   type MapListItem
 } from "./repository.js";
 import { createMapId, slugify } from "./utils.js";
@@ -610,6 +612,10 @@ export async function applyCommands(
 
 export async function getHistoryStatus(id: string): Promise<HistoryStatus> {
   return getRepositoryHistoryStatus(assertSafeMapId(id));
+}
+
+export async function getMapHistory(id: string, limit?: number): Promise<MapHistory> {
+  return getRepositoryMapHistory(assertSafeMapId(id), limit);
 }
 
 export async function undoMap(id: string): Promise<HistoryMoveResult | null> {
