@@ -8,6 +8,11 @@ import {
   findRiversAtCell,
   getNeighborCoords,
   parseDocument,
+  isBiomeKey,
+  isTagKey,
+  isTerrainKey,
+  validateCoordinate,
+  validateTerrainBiomePair,
   type AreaInspectionResult,
   type ActiveCell,
   type CellRange,
@@ -15,15 +20,18 @@ import {
   type CellChangeDetail,
   type CellInspectionResult,
   stringifyDocument,
+  type DesignedCellRecord,
   type GridCoordinate,
   type ExportRenderOptions,
   type HistorySource,
   type MapCommand,
   type MapDocument,
+  type MapFeatures,
   type MapSummary,
   type MapRuntimeState,
   type NeighborInspectionResult,
   type RiverFeature,
+  type TagKey,
   type ValidationIssue
 } from "@mapdesigner/map-core";
 import { buildExportScene, buildMapScene, renderSvgString } from "@mapdesigner/map-render";
@@ -40,7 +48,11 @@ import {
 import {
   createMapDocument,
   deleteMapDocument,
+  applyCellWriteChanges,
   getCellsInRange as getRepositoryCellsInRange,
+  getDesignedCellsAt,
+  getDesignedCellsByBiome,
+  getDesignedCellsByTerrain,
   getMapFeatures as getRepositoryMapFeatures,
   getMapHistory as getRepositoryMapHistory,
   getHistoryStatus as getRepositoryHistoryStatus,
@@ -119,6 +131,17 @@ export interface CommandExecutionReport {
 
 export interface ApplyCommandsResult {
   map: MapRuntimeState;
+  warnings: ValidationIssue[];
+  dryRun: boolean;
+  command_results: CommandExecutionReport[];
+  changes: CellChangeDetail[];
+  stats: ApplyChangeStats;
+}
+
+export interface LightweightApplyCommandsResult {
+  mapId: string;
+  summary: MapSummary;
+  features: MapFeatures;
   warnings: ValidationIssue[];
   dryRun: boolean;
   command_results: CommandExecutionReport[];
@@ -372,6 +395,407 @@ function buildApplyChangeStats(
     },
     terrain_summary: terrainSummary,
     biome_summary: biomeSummary
+  };
+}
+
+function activeCellFromDesignedRecord(cell: DesignedCellRecord): ActiveCell {
+  return {
+    row: cell.row,
+    col: cell.col,
+    id: createCellId(cell.row, cell.col),
+    display_coord: createDisplayCoord(cell.row, cell.col),
+    status: "designed",
+    terrain: cell.terrain,
+    biome: cell.biome,
+    tags: [...cell.tags],
+    note: cell.note,
+    is_seed: false
+  };
+}
+
+function normalizeTags(tags: unknown, target: string): { tags: TagKey[]; errors: ValidationIssue[] } {
+  if (!Array.isArray(tags)) {
+    return {
+      tags: [],
+      errors: [
+        {
+          code: "invalid_tags",
+          message: "tags must be an array",
+          severity: "invalid",
+          target
+        }
+      ]
+    };
+  }
+  const invalid = tags.filter((tag) => !isTagKey(tag));
+  if (invalid.length > 0) {
+    return {
+      tags: [],
+      errors: [
+        {
+          code: "invalid_tag_value",
+          message: `unknown tag values: ${invalid.join(", ")}`,
+          severity: "invalid",
+          target
+        }
+      ]
+    };
+  }
+  return { tags: [...new Set(tags as TagKey[])], errors: [] };
+}
+
+function buildCellChangeDetail(
+  target: GridCoordinate,
+  before: DesignedCellRecord | null,
+  after: DesignedCellRecord | null
+): CellChangeDetail {
+  return {
+    coord: { row: target.row, col: target.col },
+    cell_id: createCellId(target.row, target.col),
+    display_coord: createDisplayCoord(target.row, target.col),
+    before: before ? activeCellFromDesignedRecord(before) : undesignedCell(target),
+    after: after ? activeCellFromDesignedRecord(after) : undesignedCell(target)
+  };
+}
+
+function commandTargets(command: MapCommand): GridCoordinate[] | null {
+  switch (command.action) {
+    case "set_cell":
+    case "clear_cell":
+    case "annotate_cell":
+      return [command.target];
+    case "set_cells":
+      return command.targets;
+    case "replace_terrain":
+    case "replace_biome":
+      return [];
+    default:
+      return null;
+  }
+}
+
+function isSameDesignedCell(left: DesignedCellRecord | null, right: DesignedCellRecord | null): boolean {
+  if (!left || !right) {
+    return left === right;
+  }
+  return (
+    left.row === right.row &&
+    left.col === right.col &&
+    left.terrain === right.terrain &&
+    left.biome === right.biome &&
+    left.note === right.note &&
+    left.tags.length === right.tags.length &&
+    left.tags.every((tag, index) => tag === right.tags[index])
+  );
+}
+
+async function loadCellsForCommand(
+  id: string,
+  command: MapCommand
+): Promise<DesignedCellRecord[] | null> {
+  const targets = commandTargets(command);
+  if (targets === null) {
+    return null;
+  }
+  switch (command.action) {
+    case "replace_terrain":
+      return getDesignedCellsByTerrain(id, command.match.terrain);
+    case "replace_biome":
+      return getDesignedCellsByBiome(id, command.match.biome);
+    default:
+      return getDesignedCellsAt(id, targets);
+  }
+}
+
+function designedCellKey(coord: GridCoordinate): string {
+  return `${coord.row},${coord.col}`;
+}
+
+function getDesignedCell(cells: Map<string, DesignedCellRecord>, coord: GridCoordinate): DesignedCellRecord | null {
+  return cells.get(designedCellKey(coord)) ?? null;
+}
+
+function setDesignedCell(cells: Map<string, DesignedCellRecord>, cell: DesignedCellRecord): void {
+  cells.set(designedCellKey(cell), cell);
+}
+
+function deleteDesignedCell(cells: Map<string, DesignedCellRecord>, coord: GridCoordinate): void {
+  cells.delete(designedCellKey(coord));
+}
+
+function cloneDesignedCell(cell: DesignedCellRecord): DesignedCellRecord {
+  return {
+    row: cell.row,
+    col: cell.col,
+    terrain: cell.terrain,
+    biome: cell.biome,
+    tags: [...cell.tags],
+    note: cell.note
+  };
+}
+
+async function applyLightweightCellCommands(
+  id: string,
+  commands: MapCommand[],
+  options: ApplyCommandsOptions = {}
+): Promise<LightweightApplyCommandsResult | null> {
+  const normalizedId = assertSafeMapId(id);
+  const warnings: ValidationIssue[] = [];
+  const commandResults: CommandExecutionReport[] = [];
+  const changes: CellChangeDetail[] = [];
+  const writeChanges = new Map<string, { row: number; col: number; cell: DesignedCellRecord | null }>();
+  const workingCells = new Map<string, DesignedCellRecord | null>();
+  let revisionIncrement = 0;
+
+  for (const [index, command] of commands.entries()) {
+    const source = command.source ?? "system";
+    const loadedCells = await loadCellsForCommand(normalizedId, command);
+    if (loadedCells === null) {
+      return null;
+    }
+    for (const cell of loadedCells) {
+      const key = designedCellKey(cell);
+      if (!workingCells.has(key)) {
+        workingCells.set(key, cloneDesignedCell(cell));
+      }
+    }
+    const cellsByCoord = new Map(
+      [...workingCells.entries()]
+        .filter((entry): entry is [string, DesignedCellRecord] => entry[1] !== null)
+        .map(([key, cell]) => [key, cloneDesignedCell(cell)])
+    );
+    const commandDetails: CellChangeDetail[] = [];
+    const commandWarnings: ValidationIssue[] = [];
+    const errors: ValidationIssue[] = [];
+
+    switch (command.action) {
+      case "set_cell":
+      case "set_cells": {
+        const targets = command.action === "set_cell" ? [command.target] : command.targets;
+        targets.forEach((target, targetIndex) => {
+          errors.push(...validateCoordinate(target, command.action === "set_cell" ? "target" : `targets[${targetIndex}]`));
+        });
+        if (!isTerrainKey(command.changes.terrain)) {
+          errors.push({
+            code: "invalid_terrain",
+            message: "terrain must be a known terrain key",
+            severity: "invalid",
+            target: "changes.terrain"
+          });
+        }
+        if (
+          command.changes.biome !== undefined &&
+          command.changes.biome !== null &&
+          !isBiomeKey(command.changes.biome)
+        ) {
+          errors.push({
+            code: "invalid_biome",
+            message: "biome must be null or a known biome key",
+            severity: "invalid",
+            target: "changes.biome"
+          });
+        }
+        const tagResult = command.changes.tags === undefined
+          ? { tags: [], errors: [] }
+          : normalizeTags(command.changes.tags, "changes.tags");
+        errors.push(...tagResult.errors);
+        if (errors.length > 0) {
+          throw badRequest(errors.map((entry) => entry.message).join("; "), errors);
+        }
+        const terrain = command.changes.terrain;
+        const biome = command.changes.biome ?? null;
+        commandWarnings.push(...validateTerrainBiomePair(terrain, biome, "changes"));
+        const invalidWarnings = commandWarnings.filter((entry) => entry.severity === "invalid");
+        if (invalidWarnings.length > 0) {
+          throw badRequest(invalidWarnings.map((entry) => entry.message).join("; "), invalidWarnings);
+        }
+        for (const target of targets) {
+          const before = getDesignedCell(cellsByCoord, target);
+          const after: DesignedCellRecord = {
+            row: target.row,
+            col: target.col,
+            terrain,
+            biome,
+            tags: command.changes.tags === undefined ? [] : tagResult.tags,
+            note: command.changes.note ?? ""
+          };
+          setDesignedCell(cellsByCoord, after);
+          if (!isSameDesignedCell(before, after)) {
+            commandDetails.push(buildCellChangeDetail(target, before, after));
+            writeChanges.set(designedCellKey(target), { row: target.row, col: target.col, cell: after });
+            workingCells.set(designedCellKey(target), after);
+          }
+        }
+        break;
+      }
+      case "clear_cell": {
+        errors.push(...validateCoordinate(command.target, "target"));
+        if (errors.length > 0) {
+          throw badRequest(errors.map((entry) => entry.message).join("; "), errors);
+        }
+        const before = getDesignedCell(cellsByCoord, command.target);
+        if (before) {
+          deleteDesignedCell(cellsByCoord, command.target);
+          commandDetails.push(buildCellChangeDetail(command.target, before, null));
+          writeChanges.set(designedCellKey(command.target), { row: command.target.row, col: command.target.col, cell: null });
+          workingCells.set(designedCellKey(command.target), null);
+        }
+        break;
+      }
+      case "annotate_cell": {
+        errors.push(...validateCoordinate(command.target, "target"));
+        const tagResult = command.changes.tags === undefined
+          ? { tags: [], errors: [] }
+          : normalizeTags(command.changes.tags, "changes.tags");
+        errors.push(...tagResult.errors);
+        if (command.changes.note !== undefined && typeof command.changes.note !== "string") {
+          errors.push({
+            code: "invalid_note",
+            message: "note must be a string",
+            severity: "invalid",
+            target: "changes.note"
+          });
+        }
+        if (errors.length > 0) {
+          throw badRequest(errors.map((entry) => entry.message).join("; "), errors);
+        }
+        const before = getDesignedCell(cellsByCoord, command.target);
+        if (!before) {
+          throw badRequest("annotate_cell requires an existing designed cell", [
+            {
+              code: "missing_cell",
+              message: "annotate_cell requires an existing designed cell",
+              severity: "invalid",
+              target: "target"
+            }
+          ]);
+        }
+        const after: DesignedCellRecord = {
+          ...before,
+          tags: command.changes.tags === undefined ? before.tags : tagResult.tags,
+          note: command.changes.note ?? before.note
+        };
+        if (!isSameDesignedCell(before, after)) {
+          commandDetails.push(buildCellChangeDetail(command.target, before, after));
+          writeChanges.set(designedCellKey(command.target), { row: command.target.row, col: command.target.col, cell: after });
+          workingCells.set(designedCellKey(command.target), after);
+        }
+        break;
+      }
+      case "replace_terrain": {
+        if (!isTerrainKey(command.match.terrain) || !isTerrainKey(command.changes.terrain)) {
+          throw badRequest("replace_terrain requires known terrain keys", [
+            {
+              code: "invalid_terrain",
+              message: "replace_terrain requires known terrain keys",
+              severity: "invalid",
+              target: "match/changes"
+            }
+          ]);
+        }
+        for (const before of cellsByCoord.values()) {
+          if (before.terrain !== command.match.terrain) {
+            continue;
+          }
+          const after: DesignedCellRecord = {
+            ...before,
+            terrain: command.changes.terrain
+          };
+          commandWarnings.push(...validateTerrainBiomePair(after.terrain, after.biome, createCellId(after.row, after.col)));
+          if (!isSameDesignedCell(before, after)) {
+            commandDetails.push(buildCellChangeDetail(before, before, after));
+            writeChanges.set(designedCellKey(before), { row: before.row, col: before.col, cell: after });
+            workingCells.set(designedCellKey(before), after);
+          }
+        }
+        const invalidWarnings = commandWarnings.filter((entry) => entry.severity === "invalid");
+        if (invalidWarnings.length > 0) {
+          throw badRequest(invalidWarnings.map((entry) => entry.message).join("; "), invalidWarnings);
+        }
+        break;
+      }
+      case "replace_biome": {
+        if (command.match.biome !== null && !isBiomeKey(command.match.biome)) {
+          throw badRequest("match.biome must be null or a known biome key", [
+            {
+              code: "invalid_biome",
+              message: "match.biome must be null or a known biome key",
+              severity: "invalid",
+              target: "match.biome"
+            }
+          ]);
+        }
+        if (command.changes.biome !== null && !isBiomeKey(command.changes.biome)) {
+          throw badRequest("changes.biome must be null or a known biome key", [
+            {
+              code: "invalid_biome",
+              message: "changes.biome must be null or a known biome key",
+              severity: "invalid",
+              target: "changes.biome"
+            }
+          ]);
+        }
+        for (const before of cellsByCoord.values()) {
+          if (before.biome !== command.match.biome) {
+            continue;
+          }
+          const after: DesignedCellRecord = {
+            ...before,
+            biome: command.changes.biome
+          };
+          commandWarnings.push(...validateTerrainBiomePair(after.terrain, after.biome, createCellId(after.row, after.col)));
+          if (!isSameDesignedCell(before, after)) {
+            commandDetails.push(buildCellChangeDetail(before, before, after));
+            writeChanges.set(designedCellKey(before), { row: before.row, col: before.col, cell: after });
+            workingCells.set(designedCellKey(before), after);
+          }
+        }
+        const invalidWarnings = commandWarnings.filter((entry) => entry.severity === "invalid");
+        if (invalidWarnings.length > 0) {
+          throw badRequest(invalidWarnings.map((entry) => entry.message).join("; "), invalidWarnings);
+        }
+        break;
+      }
+      default:
+        return null;
+    }
+
+    if (commandDetails.length > 0) {
+      revisionIncrement += 1;
+    }
+    warnings.push(...commandWarnings.filter((entry) => entry.severity === "warning"));
+    commandResults.push({
+      index,
+      action: command.action,
+      changed: commandDetails.map((detail) => ({ row: detail.coord.row, col: detail.coord.col })),
+      details: commandDetails,
+      warnings: commandWarnings.filter((entry) => entry.severity === "warning")
+    });
+    changes.push(...commandDetails);
+  }
+
+  const summary = await applyCellWriteChanges(normalizedId, [...writeChanges.values()], {
+    dryRun: options.dryRun,
+    revisionIncrement
+  });
+  if (!options.dryRun && commands.length > 0) {
+    await recordOperation(normalizedId, {
+      source: getCommandSource(commands),
+      action: getOperationAction(commands),
+      commands,
+      inverseCommands: buildInverseCellCommands(changes, "system").reverse(),
+      summary: buildApplyChangeStats(commands, changes)
+    });
+  }
+  return {
+    mapId: normalizedId,
+    summary,
+    features: await getMapFeatures(normalizedId),
+    warnings,
+    dryRun: options.dryRun ?? false,
+    command_results: commandResults,
+    changes,
+    stats: buildApplyChangeStats(commands, changes)
   };
 }
 
@@ -751,6 +1175,28 @@ export async function applyCommands(
     });
   }
   return result;
+}
+
+export async function applyCommandsLight(
+  id: string,
+  commands: MapCommand[],
+  options: ApplyCommandsOptions = {}
+): Promise<LightweightApplyCommandsResult> {
+  const lightweight = await applyLightweightCellCommands(id, commands, options);
+  if (lightweight) {
+    return lightweight;
+  }
+  const result = await applyCommands(id, commands, options);
+  return {
+    mapId: result.map.document.meta.id,
+    summary: summaryFromRuntime(result.map),
+    features: result.map.document.features,
+    warnings: result.warnings,
+    dryRun: result.dryRun,
+    command_results: result.command_results,
+    changes: result.changes,
+    stats: result.stats
+  };
 }
 
 export async function getHistoryStatus(id: string): Promise<HistoryStatus> {
