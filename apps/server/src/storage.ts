@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import crypto from "node:crypto";
-import type { ExportRenderOptions, MapDocument, ValidationIssue } from "@mapdesigner/map-core";
+import type { CellRange, ExportRenderOptions, MapDocument, ValidationIssue } from "@mapdesigner/map-core";
 import { validateMapDocument } from "@mapdesigner/map-core";
 import { badRequest, storageError, validationFailed } from "./errors.js";
 
@@ -11,6 +11,7 @@ const TRANSPARENT_BACKGROUND = "transparent";
 const EXPORT_PRESETS: ExportRenderOptions["preset"][] = ["clean", "reference"];
 const MAX_EXPORT_PADDING = 256;
 const MAX_EXPORT_SCALE = 4;
+const MAX_PNG_EXPORT_RANGE_CELLS = 25_000;
 export const MAX_INSPECT_AREA_RADIUS = 50;
 
 function hasPathSeparator(value: string): boolean {
@@ -118,6 +119,38 @@ function readIntegerOption(
   return value;
 }
 
+function normalizeExportRange(value: unknown): CellRange | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw badRequest("range must be an object with minRow, maxRow, minCol, and maxCol");
+  }
+  const input = value as Partial<CellRange>;
+  const range: CellRange = {
+    minRow: input.minRow as number,
+    maxRow: input.maxRow as number,
+    minCol: input.minCol as number,
+    maxCol: input.maxCol as number
+  };
+  for (const [key, entry] of Object.entries(range)) {
+    if (!Number.isInteger(entry)) {
+      throw badRequest(`range.${key} must be an integer`);
+    }
+  }
+  if (range.minRow > range.maxRow) {
+    throw badRequest("range.minRow must be less than or equal to range.maxRow");
+  }
+  if (range.minCol > range.maxCol) {
+    throw badRequest("range.minCol must be less than or equal to range.maxCol");
+  }
+  const cellCount = (range.maxRow - range.minRow + 1) * (range.maxCol - range.minCol + 1);
+  if (cellCount > MAX_PNG_EXPORT_RANGE_CELLS) {
+    throw badRequest(`range covers too many cells for PNG export; maximum is ${MAX_PNG_EXPORT_RANGE_CELLS}`);
+  }
+  return range;
+}
+
 export function normalizeExportOptions(
   input: Partial<ExportRenderOptions> = {}
 ): Partial<ExportRenderOptions> {
@@ -169,6 +202,11 @@ export function normalizeExportOptions(
   const includeUndesigned = readBooleanOption(input, "includeUndesigned");
   if (includeUndesigned !== undefined) {
     normalized.includeUndesigned = includeUndesigned;
+  }
+
+  const range = normalizeExportRange(input.range);
+  if (range !== undefined) {
+    normalized.range = range;
   }
 
   return normalized;

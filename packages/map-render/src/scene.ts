@@ -14,6 +14,7 @@ import {
   expandRiverPath,
   getRiverEndpointConnections,
   type ActiveCell,
+  type CellRange,
   type MapRuntimeState,
   type RiverFeature
 } from "@mapdesigner/map-core";
@@ -34,6 +35,56 @@ const DEFAULT_OPTIONS: ResolvedMapRenderOptions = {
   previewRivers: []
 };
 
+function isCoordInRange(coord: { row: number; col: number }, range: CellRange): boolean {
+  return coord.row >= range.minRow && coord.row <= range.maxRow && coord.col >= range.minCol && coord.col <= range.maxCol;
+}
+
+function doRangesOverlap(left: CellRange, right: CellRange): boolean {
+  return left.minRow <= right.maxRow && left.maxRow >= right.minRow && left.minCol <= right.maxCol && left.maxCol >= right.minCol;
+}
+
+function coordRangeForRiver(river: RiverFeature): CellRange | null {
+  const samples = expandRiverPath(river);
+  if (samples.length === 0) {
+    return null;
+  }
+  return {
+    minRow: Math.min(...samples.map((sample) => sample.row)),
+    maxRow: Math.max(...samples.map((sample) => sample.row)),
+    minCol: Math.min(...samples.map((sample) => sample.col)),
+    maxCol: Math.max(...samples.map((sample) => sample.col))
+  };
+}
+
+function padRange(range: CellRange, padding: number): CellRange {
+  return {
+    minRow: range.minRow - padding,
+    maxRow: range.maxRow + padding,
+    minCol: range.minCol - padding,
+    maxCol: range.maxCol + padding
+  };
+}
+
+function rangeFromCells(cells: ActiveCell[]): CellRange | null {
+  if (cells.length === 0) {
+    return null;
+  }
+  return {
+    minRow: Math.min(...cells.map((cell) => cell.row)),
+    maxRow: Math.max(...cells.map((cell) => cell.row)),
+    minCol: Math.min(...cells.map((cell) => cell.col)),
+    maxCol: Math.max(...cells.map((cell) => cell.col))
+  };
+}
+
+export function filterRiversForRange(rivers: RiverFeature[], range: CellRange, padding = 1): RiverFeature[] {
+  const padded = padRange(range, padding);
+  return rivers.filter((river) => {
+    const riverRange = coordRangeForRiver(river);
+    return riverRange ? doRangesOverlap(riverRange, padded) : false;
+  });
+}
+
 function escapeXml(value: string): string {
   return value
     .replaceAll("&", "&amp;")
@@ -48,8 +99,10 @@ function buildRiverSegments(
   size: number,
   minX: number,
   minY: number,
-  preview: boolean
+  preview: boolean,
+  clipRange?: CellRange
 ): MapScene["riverSegments"] {
+  const paddedClipRange = clipRange ? padRange(clipRange, 1) : null;
   return rivers.flatMap((river) => {
     const samples = expandRiverPath(river);
     const color = river.color ?? "#2F83B7";
@@ -58,6 +111,9 @@ function buildRiverSegments(
     for (let index = 0; index < samples.length - 1; index += 1) {
       const start = samples[index]!;
       const end = samples[index + 1]!;
+      if (paddedClipRange && !isCoordInRange(start, paddedClipRange) && !isCoordInRange(end, paddedClipRange)) {
+        continue;
+      }
       const startCenter = centerForCoord(start, size);
       const endCenter = centerForCoord(end, size);
       segments.push({
@@ -84,8 +140,10 @@ function buildRiverEndpoints(
   size: number,
   minX: number,
   minY: number,
-  preview: boolean
+  preview: boolean,
+  clipRange?: CellRange
 ): MapScene["riverEndpoints"] {
+  const paddedClipRange = clipRange ? padRange(clipRange, 1) : null;
   return rivers.flatMap((river) => {
     const connections = getRiverEndpointConnections(river, cells);
     const color = river.color ?? "#2F83B7";
@@ -99,6 +157,7 @@ function buildRiverEndpoints(
         : null
     ]
       .filter((entry): entry is { point: RiverFeature["points"][number]; position: "start" | "end" } => Boolean(entry))
+      .filter((entry) => !paddedClipRange || isCoordInRange(entry.point, paddedClipRange))
       .map((entry) => {
         const center = centerForCoord(entry.point, size);
         return {
@@ -123,19 +182,24 @@ function buildRiverControlPoints(
   size: number,
   minX: number,
   minY: number,
-  preview: boolean
+  preview: boolean,
+  clipRange?: CellRange
 ): MapScene["riverControlPoints"] {
   if (!preview) {
     return [];
   }
+  const paddedClipRange = clipRange ? padRange(clipRange, 1) : null;
   return rivers.flatMap((river) => {
     const color = river.color ?? "#2F83B7";
     const opacity = river.opacity ?? 0.88;
-    return river.points.map((point, index) => {
+    return river.points.flatMap((point, index) => {
+      if (paddedClipRange && !isCoordInRange(point, paddedClipRange)) {
+        return [];
+      }
       const center = centerForCoord(point, size);
       const isStart = index === 0;
       const isEnd = index === river.points.length - 1;
-      return {
+      return [{
         id: `${river.id}-control-${index}`,
         riverId: river.id,
         riverName: river.name,
@@ -147,7 +211,7 @@ function buildRiverControlPoints(
         color,
         opacity,
         preview
-      };
+      }];
     });
   });
 }
@@ -157,10 +221,18 @@ export function buildMapScene(map: MapRuntimeState, options: MapRenderOptions = 
   const cells = resolved.includeUndesigned
     ? map.activeCells
     : map.activeCells.filter((cell) => cell.status === "designed");
-  const rivers = map.document.features?.rivers ?? [];
-  const previewRivers = resolved.previewRivers;
+  const renderRange = resolved.riverClipRange ?? rangeFromCells(cells);
+  const rivers = renderRange
+    ? filterRiversForRange(map.document.features?.rivers ?? [], renderRange)
+    : map.document.features?.rivers ?? [];
+  const previewRivers = renderRange
+    ? filterRiversForRange(resolved.previewRivers, renderRange)
+    : resolved.previewRivers;
   const allRivers = [...rivers, ...previewRivers];
-  const riverCoords = allRivers.flatMap((river) => expandRiverPath(river));
+  const riverCoordRange = renderRange ? padRange(renderRange, 1) : null;
+  const riverCoords = allRivers.flatMap((river) =>
+    expandRiverPath(river).filter((sample) => !riverCoordRange || isCoordInRange(sample, riverCoordRange))
+  );
   const layout = buildHexLayout(cells, {
     size: resolved.size,
     padding: resolved.padding,
@@ -175,16 +247,16 @@ export function buildMapScene(map: MapRuntimeState, options: MapRenderOptions = 
     background: resolved.background,
     layout: layout.layout,
     riverSegments: [
-      ...buildRiverSegments(rivers, resolved.size, layout.minX, layout.minY, false),
-      ...buildRiverSegments(previewRivers, resolved.size, layout.minX, layout.minY, true)
+      ...buildRiverSegments(rivers, resolved.size, layout.minX, layout.minY, false, renderRange ?? undefined),
+      ...buildRiverSegments(previewRivers, resolved.size, layout.minX, layout.minY, true, renderRange ?? undefined)
     ],
     riverEndpoints: [
-      ...buildRiverEndpoints(rivers, map.activeCells, resolved.size, layout.minX, layout.minY, false),
-      ...buildRiverEndpoints(previewRivers, map.activeCells, resolved.size, layout.minX, layout.minY, true)
+      ...buildRiverEndpoints(rivers, map.activeCells, resolved.size, layout.minX, layout.minY, false, renderRange ?? undefined),
+      ...buildRiverEndpoints(previewRivers, map.activeCells, resolved.size, layout.minX, layout.minY, true, renderRange ?? undefined)
     ],
     riverControlPoints: [
-      ...buildRiverControlPoints(rivers, resolved.size, layout.minX, layout.minY, false),
-      ...buildRiverControlPoints(previewRivers, resolved.size, layout.minX, layout.minY, true)
+      ...buildRiverControlPoints(rivers, resolved.size, layout.minX, layout.minY, false, renderRange ?? undefined),
+      ...buildRiverControlPoints(previewRivers, resolved.size, layout.minX, layout.minY, true, renderRange ?? undefined)
     ],
     defs: buildSvgDefs(),
     options: resolved
@@ -272,6 +344,14 @@ export function renderSvgString(scene: MapScene): string {
 }
 
 export function buildExportScene(input: ExportSceneInput): MapScene {
+  const boundsCoords = input.options.range
+    ? [
+        { row: input.options.range.minRow, col: input.options.range.minCol },
+        { row: input.options.range.minRow, col: input.options.range.maxCol },
+        { row: input.options.range.maxRow, col: input.options.range.minCol },
+        { row: input.options.range.maxRow, col: input.options.range.maxCol }
+      ]
+    : undefined;
   return buildMapScene(input.map, {
     size: 36 * input.options.scale,
     padding: input.options.padding,
@@ -280,6 +360,8 @@ export function buildExportScene(input: ExportSceneInput): MapScene {
     includeCoordinates: input.options.includeCoordinates,
     includeShorthand: input.options.includeShorthand,
     includeGrid: input.options.includeGrid,
-    includeUndesigned: input.options.includeUndesigned
+    includeUndesigned: input.options.includeUndesigned,
+    riverClipRange: input.options.range ?? undefined,
+    boundsCoords
   });
 }

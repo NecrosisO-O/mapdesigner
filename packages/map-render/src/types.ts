@@ -1,4 +1,4 @@
-import type { ActiveCell, ExportRenderOptions, GridCoordinate, MapRuntimeState, RiverFeature, TagKey } from "@mapdesigner/map-core";
+import type { ActiveCell, CellRange, ExportRenderOptions, GridCoordinate, MapRuntimeState, RiverFeature, TagKey } from "@mapdesigner/map-core";
 
 export interface HexLayoutOptions {
   size: number;
@@ -69,6 +69,7 @@ export interface MapRenderOptions {
   hoveredCellId?: string | null;
   previewRivers?: RiverFeature[];
   boundsCoords?: GridCoordinate[];
+  riverClipRange?: CellRange;
 }
 
 export interface MapScene {
@@ -82,9 +83,10 @@ export interface MapScene {
   riverEndpoints: RiverEndpointLayout[];
   riverControlPoints: RiverControlPointLayout[];
   defs: string[];
-  options: Required<Omit<MapRenderOptions, "previewRivers" | "boundsCoords">> & {
+  options: Required<Omit<MapRenderOptions, "previewRivers" | "boundsCoords" | "riverClipRange">> & {
     previewRivers: RiverFeature[];
     boundsCoords?: GridCoordinate[];
+    riverClipRange?: CellRange;
   };
 }
 

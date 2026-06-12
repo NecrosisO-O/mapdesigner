@@ -330,6 +330,88 @@ describe("server service", () => {
     expect(await fs.stat(pngExport.path)).toBeTruthy();
   });
 
+  it("exports png from a bounded cell range without loading the whole visible map", async () => {
+    const service = await loadService(tempRoot);
+    const created = await service.createMap({ name: "Range Export Test" });
+    await service.applyCommands(created.document.meta.id, [
+      {
+        action: "set_cells",
+        source: "cli",
+        targets: [
+          { row: 0, col: 0 },
+          { row: 0, col: 1 },
+          { row: 20, col: 20 }
+        ],
+        changes: {
+          terrain: "plain",
+          biome: "grassland"
+        }
+      },
+      {
+        action: "create_river",
+        source: "cli",
+        river: {
+          id: "range-export-river",
+          name: "Range Export River",
+          points: [
+            { row: 0, col: 0, width: 2 },
+            { row: 20, col: 20, width: 8 }
+          ]
+        }
+      }
+    ]);
+
+    const pngExport = await service.exportPng(created.document.meta.id, {
+      preset: "reference",
+      includeUndesigned: true,
+      range: {
+        minRow: -1,
+        maxRow: 1,
+        minCol: -1,
+        maxCol: 2
+      }
+    });
+
+    expect(pngExport.fileName).toMatch(/range-export-test-reference-r-1_1-c-1_2\.png$/);
+    await expect(fs.stat(pngExport.path)).resolves.toBeTruthy();
+  });
+
+  it("rejects whole-map png export for large maps and accepts a region export", async () => {
+    const service = await loadService(tempRoot);
+    const created = await service.createMap({ name: "Large Export Test" });
+    const targets = [];
+    for (let row = 0; row < 101; row += 1) {
+      for (let col = 0; col < 100; col += 1) {
+        targets.push({ row, col });
+      }
+    }
+    await service.applyCommands(created.document.meta.id, [
+      {
+        action: "set_cells",
+        source: "cli",
+        targets,
+        changes: {
+          terrain: "plain",
+          biome: "grassland"
+        }
+      }
+    ]);
+
+    await expect(service.exportPng(created.document.meta.id)).rejects.toThrow(/whole-map PNG export is limited/);
+    await expect(
+      service.exportPng(created.document.meta.id, {
+        range: {
+          minRow: 0,
+          maxRow: 4,
+          minCol: 0,
+          maxCol: 4
+        }
+      })
+    ).resolves.toMatchObject({
+      fileName: expect.stringContaining("-r0_4-c0_4.png")
+    });
+  });
+
   it("supports dry-run without writing the map file", async () => {
     const service = await loadService(tempRoot);
     const created = await service.createMap({ name: "Dry Run Test" });

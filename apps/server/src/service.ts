@@ -23,6 +23,7 @@ import {
   type MapSummary,
   type MapRuntimeState,
   type NeighborInspectionResult,
+  type RiverFeature,
   type ValidationIssue
 } from "@mapdesigner/map-core";
 import { buildExportScene, buildMapScene, renderSvgString } from "@mapdesigner/map-render";
@@ -60,6 +61,7 @@ import {
 import { createMapId, slugify } from "./utils.js";
 
 const PNG_EXPORT_TIMEOUT_SECONDS = 20;
+const MAX_WHOLE_MAP_PNG_EXPORT_CELLS = 10_000;
 
 export type { MapListItem } from "./repository.js";
 
@@ -149,6 +151,70 @@ const exportPath = (fileName: string) => exportFilePath(EXPORT_STORAGE_DIR, file
 
 function runtimeFromDocument(document: MapDocument): MapRuntimeState {
   return createRuntimeState(document);
+}
+
+function designedRecordFromActiveCell(cell: ActiveCell): MapDocument["cells"][number] | null {
+  if (cell.status !== "designed" || !cell.terrain) {
+    return null;
+  }
+  return {
+    row: cell.row,
+    col: cell.col,
+    terrain: cell.terrain,
+    biome: cell.biome,
+    tags: [...cell.tags],
+    note: cell.note
+  };
+}
+
+function exportRangeFileSuffix(range: CellRange | null | undefined): string {
+  return range ? `-r${range.minRow}_${range.maxRow}-c${range.minCol}_${range.maxCol}` : "";
+}
+
+function isCoordInRange(coord: GridCoordinate, range: CellRange): boolean {
+  return coord.row >= range.minRow && coord.row <= range.maxRow && coord.col >= range.minCol && coord.col <= range.maxCol;
+}
+
+function padRange(range: CellRange, padding: number): CellRange {
+  return {
+    minRow: range.minRow - padding,
+    maxRow: range.maxRow + padding,
+    minCol: range.minCol - padding,
+    maxCol: range.maxCol + padding
+  };
+}
+
+function filterRiversForRange(rivers: RiverFeature[], range: CellRange): RiverFeature[] {
+  const padded = padRange(range, 1);
+  return rivers.filter((river) => river.points.some((point) => isCoordInRange(point, padded)));
+}
+
+async function buildRangeRuntime(id: string, range: CellRange): Promise<MapRuntimeState> {
+  const [summary, features, rangeResult] = await Promise.all([
+    getMapSummary(id),
+    getMapFeatures(id),
+    getCellsInRange(id, range, { includeUndesigned: true })
+  ]);
+  const document: MapDocument = {
+    schema_version: 1,
+    meta: summary.meta,
+    grid: summary.grid,
+    cells: rangeResult.cells
+      .map(designedRecordFromActiveCell)
+      .filter((cell): cell is MapDocument["cells"][number] => cell !== null),
+    features: {
+      rivers: filterRiversForRange(features.rivers, range)
+    }
+  };
+  return {
+    document,
+    activeCells: rangeResult.cells,
+    history: {
+      past: [],
+      future: [],
+      limit: 0
+    }
+  };
 }
 
 export function summaryFromRuntime(map: MapRuntimeState): MapSummary {
@@ -630,7 +696,6 @@ export async function exportPng(
   id: string,
   options: Partial<ExportRenderOptions> = {}
 ): Promise<{ fileName: string; path: string }> {
-  const runtime = await getMap(assertSafeMapId(id));
   const baseOptions: ExportRenderOptions = {
     preset: "clean",
     includeCoordinates: false,
@@ -639,19 +704,28 @@ export async function exportPng(
     includeUndesigned: false,
     background: "#F4F0E6",
     padding: 32,
-    scale: 2
+    scale: 2,
+    range: null
   };
   const resolved: ExportRenderOptions = { ...baseOptions, ...normalizeExportOptions(options) };
   if (resolved.preset === "reference") {
     resolved.includeCoordinates = true;
     resolved.includeShorthand = true;
   }
+  const normalizedId = assertSafeMapId(id);
+  const summary = await getMapSummary(normalizedId);
+  if (!resolved.range && summary.designed_cell_count > MAX_WHOLE_MAP_PNG_EXPORT_CELLS) {
+    throw badRequest(
+      `whole-map PNG export is limited to ${MAX_WHOLE_MAP_PNG_EXPORT_CELLS} designed cells; use a range for large maps`
+    );
+  }
+  const runtime = resolved.range ? await buildRangeRuntime(normalizedId, resolved.range) : await getMap(normalizedId);
   const scene = buildExportScene({
     map: runtime,
     options: resolved
   });
   const svg = renderSvgString(scene);
-  const fileName = `${slugify(runtime.document.meta.name) || assertSafeMapId(runtime.document.meta.id)}-${resolved.preset}.png`;
+  const fileName = `${slugify(summary.meta.name) || normalizedId}-${resolved.preset}${exportRangeFileSuffix(resolved.range)}.png`;
   const filePath = exportPath(fileName);
   const png = await sharp(Buffer.from(svg))
     .timeout({ seconds: PNG_EXPORT_TIMEOUT_SECONDS })

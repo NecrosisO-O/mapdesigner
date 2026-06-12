@@ -90,6 +90,19 @@ function readOptionalColorFlag(args: string[], name: string): string | undefined
   return readFlag(args, name);
 }
 
+function readOptionalRangeFlags(args: string[]) {
+  const hasAnyRangeFlag = ["--min-row", "--max-row", "--min-col", "--max-col"].some((flag) => hasFlag(args, flag));
+  if (!hasAnyRangeFlag) {
+    return undefined;
+  }
+  return {
+    minRow: readIntegerFlag(args, "--min-row"),
+    maxRow: readIntegerFlag(args, "--max-row"),
+    minCol: readIntegerFlag(args, "--min-col"),
+    maxCol: readIntegerFlag(args, "--max-col")
+  };
+}
+
 function assertKnownFlags(args: string[], allowed: string[]): void {
   const allowedSet = new Set(allowed);
   for (const arg of args.slice(2)) {
@@ -507,7 +520,11 @@ async function main(): Promise<void> {
           "--include-grid",
           "--include-coordinates",
           "--include-shorthand",
-          "--include-undesigned"
+          "--include-undesigned",
+          "--min-row",
+          "--max-row",
+          "--min-col",
+          "--max-col"
         ]);
         const id = readFlag(args, "--map-id");
         if (!id) {
@@ -521,7 +538,8 @@ async function main(): Promise<void> {
           includeGrid: hasFlag(args, "--include-grid") ? true : undefined,
           includeCoordinates: hasFlag(args, "--include-coordinates") ? true : undefined,
           includeShorthand: hasFlag(args, "--include-shorthand") ? true : undefined,
-          includeUndesigned: hasFlag(args, "--include-undesigned") ? true : undefined
+          includeUndesigned: hasFlag(args, "--include-undesigned") ? true : undefined,
+          range: readOptionalRangeFlags(args)
         });
         printResult(createEnvelope({ result: await exportPng(id, options) }));
         break;

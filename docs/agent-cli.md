@@ -150,6 +150,10 @@ pnpm exec tsx apps/server/src/cli.ts maps export-png \
   --scale 2 \
   --padding 32 \
   --background "#F4F0E6" \
+  --min-row -10 \
+  --max-row 10 \
+  --min-col -10 \
+  --max-col 10 \
   --include-grid \
   --include-coordinates \
   --include-shorthand
@@ -165,6 +169,7 @@ pnpm exec tsx apps/server/src/cli.ts maps export-png \
 - `--include-coordinates`
 - `--include-shorthand`
 - `--include-undesigned`
+- `--min-row --max-row --min-col --max-col`：可选，导出指定区域；大地图推荐始终使用区域导出
 
 ### 9. 高级编辑命令
 

@@ -152,12 +152,20 @@ describe("server api", () => {
       const exported = await app.inject({
         method: "POST",
         url: `/api/maps/${mapId}/export-png`,
-        payload: { preset: "reference" }
+        payload: {
+          preset: "reference",
+          range: {
+            minRow: -1,
+            maxRow: 1,
+            minCol: -1,
+            maxCol: 1
+          }
+        }
       });
       expect(exported.statusCode).toBe(200);
       const exportedBody = exported.json();
       expect(exportedBody.ok).toBe(true);
-      expect(exportedBody.result.fileName).toMatch(/download-test-reference\.png$/);
+      expect(exportedBody.result.fileName).toMatch(/download-test-reference-r-1_1-c-1_1\.png$/);
       expect(exportedBody.result.downloadUrl).toBe(`/api/exports/${encodeURIComponent(exportedBody.result.fileName)}`);
 
       const downloaded = await app.inject({

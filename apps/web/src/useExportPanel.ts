@@ -1,4 +1,4 @@
-import type { ExportRenderOptions, MapRuntimeState } from "@mapdesigner/map-core";
+import type { CellRange, ExportRenderOptions, MapRuntimeState } from "@mapdesigner/map-core";
 import { useState } from "react";
 import { api } from "./api.js";
 import { formatStatusMessage } from "./useMapWorkspace.js";
@@ -11,7 +11,8 @@ const DEFAULT_PNG_OPTIONS: ExportRenderOptions = {
   includeUndesigned: false,
   background: "#F4F0E6",
   padding: 32,
-  scale: 2
+  scale: 2,
+  range: null
 };
 
 function triggerDownload(url: string, fileName: string): void {
@@ -27,16 +28,21 @@ function triggerDownload(url: string, fileName: string): void {
 export function useExportPanel(setMessage: (message: string) => void) {
   const [exportPanelOpen, setExportPanelOpen] = useState(false);
   const [pngOptions, setPngOptions] = useState<ExportRenderOptions>(DEFAULT_PNG_OPTIONS);
+  const [pngRangeMode, setPngRangeMode] = useState<"visible" | "full">("visible");
   const [isExportingPng, setIsExportingPng] = useState(false);
 
-  async function handleExportPng(currentMap: MapRuntimeState | null): Promise<void> {
+  async function handleExportPng(currentMap: MapRuntimeState | null, visibleRange?: CellRange | null): Promise<void> {
     if (!currentMap || isExportingPng) {
       return;
     }
+    const exportOptions: ExportRenderOptions = {
+      ...pngOptions,
+      range: pngRangeMode === "visible" ? visibleRange ?? null : null
+    };
     setIsExportingPng(true);
     setMessage("正在导出 PNG...");
     try {
-      const response = await api.exportPng(currentMap.document.meta.id, pngOptions);
+      const response = await api.exportPng(currentMap.document.meta.id, exportOptions);
       if (!response.ok || !response.result) {
         setMessage(formatStatusMessage(response.errors[0]?.message, "导出失败"));
         return;
@@ -55,8 +61,10 @@ export function useExportPanel(setMessage: (message: string) => void) {
     exportPanelOpen,
     isExportingPng,
     pngOptions,
+    pngRangeMode,
     setExportPanelOpen,
     setPngOptions,
+    setPngRangeMode,
     handleExportPng
   };
 }
