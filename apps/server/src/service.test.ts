@@ -26,6 +26,7 @@ describe("server service", () => {
     const service = await loadService(tempRoot);
     const created = await service.createMap({ name: "Service Test" });
     expect(created.document.meta.revision).toBe(1);
+    await expect(fs.stat(path.join(tempRoot, "storage/mapdesigner.db"))).resolves.toBeTruthy();
 
     const listed = await service.listMaps();
     expect(listed).toHaveLength(1);
@@ -47,6 +48,118 @@ describe("server service", () => {
         expectedRevision: 1
       })
     ).rejects.toThrow(/revision conflict/);
+  });
+
+  it("provides map summaries and viewport cell ranges from sqlite storage", async () => {
+    const service = await loadService(tempRoot);
+    const created = await service.createMap({ name: "Range Test" });
+    await service.applyCommands(created.document.meta.id, [
+      {
+        action: "set_cells",
+        source: "cli",
+        targets: [
+          { row: 0, col: 0 },
+          { row: 0, col: 1 }
+        ],
+        changes: {
+          terrain: "plain",
+          biome: "grassland",
+          tags: ["peak"],
+          note: "visible"
+        }
+      },
+      {
+        action: "create_river",
+        source: "cli",
+        river: {
+          id: "range-river",
+          name: "Range River",
+          points: [
+            { row: 0, col: 0, width: 2 },
+            { row: 0, col: 1, width: 4 }
+          ]
+        }
+      }
+    ]);
+
+    const summary = await service.getMapSummary(created.document.meta.id);
+    expect(summary.meta.name).toBe("Range Test");
+    expect(summary.designed_cell_count).toBe(2);
+    expect(summary.bounds).toEqual({
+      min_row: 0,
+      max_row: 0,
+      min_col: 0,
+      max_col: 1
+    });
+    expect(summary.feature_counts.rivers).toBe(1);
+
+    const designedOnly = await service.getCellsInRange(
+      created.document.meta.id,
+      {
+        minRow: 0,
+        maxRow: 0,
+        minCol: 0,
+        maxCol: 1
+      },
+      { includeUndesigned: false }
+    );
+    expect(designedOnly.cells).toHaveLength(2);
+    expect(designedOnly.cells.every((cell) => cell.status === "designed")).toBe(true);
+
+    const withUndesigned = await service.getCellsInRange(created.document.meta.id, {
+      minRow: -1,
+      maxRow: 1,
+      minCol: -1,
+      maxCol: 2
+    });
+    expect(withUndesigned.cells.some((cell) => cell.status === "undesigned")).toBe(true);
+    expect(withUndesigned.cells.some((cell) => cell.display_coord === "R0C0" && cell.status === "designed")).toBe(true);
+  });
+
+  it("migrates existing json maps into sqlite on demand", async () => {
+    const service = await loadService(tempRoot);
+    const mapsDir = path.join(tempRoot, "storage/maps");
+    await fs.mkdir(mapsDir, { recursive: true });
+    const legacy = createEmptyDocument({
+      id: "legacy-map",
+      name: "Legacy Map"
+    });
+    legacy.cells.push({
+      row: 2,
+      col: -1,
+      terrain: "hill",
+      biome: "grassland",
+      tags: [],
+      note: "from json"
+    });
+    await fs.writeFile(path.join(mapsDir, "legacy-map.json"), stringifyDocument(legacy), "utf8");
+
+    const listed = await service.listMaps();
+    expect(listed.map((item) => item.id)).toContain("legacy-map");
+
+    const summary = await service.getMapSummary("legacy-map");
+    expect(summary.designed_cell_count).toBe(1);
+
+    const opened = await service.getMap("legacy-map");
+    expect(opened.document.cells[0]?.note).toBe("from json");
+  });
+
+  it("rejects creating a map over an existing legacy json id", async () => {
+    const service = await loadService(tempRoot);
+    const mapsDir = path.join(tempRoot, "storage/maps");
+    await fs.mkdir(mapsDir, { recursive: true });
+    const legacy = createEmptyDocument({
+      id: "legacy-conflict",
+      name: "Legacy Conflict"
+    });
+    await fs.writeFile(path.join(mapsDir, "legacy-conflict.json"), stringifyDocument(legacy), "utf8");
+
+    await expect(
+      service.createMap({
+        id: "legacy-conflict",
+        name: "Replacement"
+      })
+    ).rejects.toThrow(/already exists/);
   });
 
   it("applies commands and exports json/png", async () => {

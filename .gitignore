@@ -5,6 +5,9 @@ coverage
 *.log
 chrome-capture-*.png
 apps/server/storage/
+storage/mapdesigner.db
+storage/mapdesigner.db-shm
+storage/mapdesigner.db-wal
 storage/maps/*
 !storage/maps/.gitkeep
 storage/maps/*.tmp

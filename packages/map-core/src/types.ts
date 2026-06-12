@@ -54,6 +54,37 @@ export interface MapDocument {
   features: MapFeatures;
 }
 
+export interface MapBounds {
+  min_row: number | null;
+  max_row: number | null;
+  min_col: number | null;
+  max_col: number | null;
+}
+
+export interface MapSummary {
+  meta: MapMeta;
+  grid: GridConfig;
+  bounds: MapBounds;
+  designed_cell_count: number;
+  feature_counts: {
+    rivers: number;
+  };
+}
+
+export interface CellRange {
+  minRow: number;
+  maxRow: number;
+  minCol: number;
+  maxCol: number;
+}
+
+export interface CellRangeResult {
+  map_id: string;
+  revision: number;
+  range: CellRange;
+  cells: ActiveCell[];
+}
+
 export interface ActiveCell extends GridCoordinate {
   id: string;
   display_coord: string;

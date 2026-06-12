@@ -230,6 +230,58 @@ describe("server api", () => {
       expect(appliedBody.result.stats.command_count).toBe(1);
       expect(appliedBody.result.stats.created_count).toBe(1);
       expect(appliedBody.result.stats.terrain_summary.after.plain).toBe(1);
+
+      const summary = await app.inject({
+        method: "GET",
+        url: `/api/maps/${mapId}/summary`
+      });
+      expect(summary.statusCode).toBe(200);
+      const summaryBody = summary.json();
+      expect(summaryBody.result.designed_cell_count).toBe(1);
+      expect(summaryBody.result.bounds).toEqual({
+        min_row: 0,
+        max_row: 0,
+        min_col: 0,
+        max_col: 0
+      });
+
+      const range = await app.inject({
+        method: "GET",
+        url: `/api/maps/${mapId}/cells?minRow=-1&maxRow=1&minCol=-1&maxCol=1`
+      });
+      expect(range.statusCode).toBe(200);
+      const rangeBody = range.json();
+      expect(rangeBody.result.cells.some((cell: { display_coord: string; status: string }) => cell.display_coord === "R0C0" && cell.status === "designed")).toBe(true);
+      expect(rangeBody.result.cells.some((cell: { status: string }) => cell.status === "undesigned")).toBe(true);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("validates cell range query parameters", async () => {
+    const { createServer } = await loadApi(tempRoot);
+    const app = await createServer();
+    try {
+      const created = await app.inject({
+        method: "POST",
+        url: "/api/maps",
+        payload: { name: "Range Validation Test" }
+      });
+      const mapId = created.json().result.document.meta.id as string;
+
+      const invalid = await app.inject({
+        method: "GET",
+        url: `/api/maps/${mapId}/cells?minRow=0&maxRow=bad&minCol=0&maxCol=1`
+      });
+      expect(invalid.statusCode).toBe(400);
+      expect(invalid.json().errors[0].message).toMatch(/maxRow must be an integer/);
+
+      const invalidBoolean = await app.inject({
+        method: "GET",
+        url: `/api/maps/${mapId}/cells?minRow=0&maxRow=1&minCol=0&maxCol=1&includeUndesigned=yes`
+      });
+      expect(invalidBoolean.statusCode).toBe(400);
+      expect(invalidBoolean.json().errors[0].message).toMatch(/includeUndesigned/);
     } finally {
       await app.close();
     }

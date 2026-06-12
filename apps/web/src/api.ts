@@ -1,4 +1,11 @@
-import type { ExportRenderOptions, MapDocument, MapRuntimeState } from "@mapdesigner/map-core";
+import type {
+  CellRange,
+  CellRangeResult,
+  ExportRenderOptions,
+  MapDocument,
+  MapRuntimeState,
+  MapSummary
+} from "@mapdesigner/map-core";
 
 export interface ApiEnvelope<T> {
   ok: boolean;
@@ -34,6 +41,11 @@ async function request<T>(input: RequestInfo, init?: RequestInit): Promise<ApiEn
 export const api = {
   listMaps: () => request<MapListItem[]>("/api/maps"),
   getMap: (id: string) => request<MapRuntimeState>(`/api/maps/${id}`),
+  getMapSummary: (id: string) => request<MapSummary>(`/api/maps/${id}/summary`),
+  getCellsInRange: (id: string, range: CellRange, includeUndesigned = true) =>
+    request<CellRangeResult>(
+      `/api/maps/${id}/cells?minRow=${range.minRow}&maxRow=${range.maxRow}&minCol=${range.minCol}&maxCol=${range.maxCol}&includeUndesigned=${includeUndesigned}`
+    ),
   createMap: (input: { name: string; description?: string }) =>
     request<MapRuntimeState>("/api/maps", {
       method: "POST",

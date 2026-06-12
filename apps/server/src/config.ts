@@ -27,6 +27,8 @@ function resolveProjectRoot(): string {
 
 export const REPO_ROOT = findWorkspaceRoot(path.dirname(fileURLToPath(import.meta.url)));
 export const PROJECT_ROOT = resolveProjectRoot();
+export const STORAGE_DIR = path.join(PROJECT_ROOT, "storage");
 export const MAP_STORAGE_DIR = path.join(PROJECT_ROOT, "storage/maps");
 export const EXPORT_STORAGE_DIR = path.join(PROJECT_ROOT, "storage/exports");
+export const DATABASE_FILE = path.join(STORAGE_DIR, "mapdesigner.db");
 export const WEB_DIST_DIR = path.join(REPO_ROOT, "apps/web/dist");

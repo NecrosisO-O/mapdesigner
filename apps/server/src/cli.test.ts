@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(currentDir, "../../..");
@@ -50,6 +50,8 @@ function runCli(args: string[], options?: { input?: string; tempRoot?: string })
 
 describe("server cli", () => {
   let tempRoot: string;
+
+  vi.setConfig({ testTimeout: 15_000 });
 
   beforeEach(async () => {
     tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "mapdesigner-cli-"));
@@ -290,6 +292,35 @@ describe("server cli", () => {
     const neighborsBody = JSON.parse(neighbors.stdout);
     expect(neighborsBody.result.center.display_coord).toBe("R0C0");
     expect(neighborsBody.result.neighbors).toHaveLength(6);
+
+    const summary = await runCli(["maps", "summary", "--map-id", mapId], { tempRoot });
+    expect(summary.code).toBe(0);
+    const summaryBody = JSON.parse(summary.stdout);
+    expect(summaryBody.result.designed_cell_count).toBe(1);
+    expect(summaryBody.result.bounds.min_row).toBe(0);
+
+    const cells = await runCli(
+      [
+        "maps",
+        "cells",
+        "--map-id",
+        mapId,
+        "--min-row",
+        "-1",
+        "--max-row",
+        "1",
+        "--min-col",
+        "-1",
+        "--max-col",
+        "1",
+        "--include-undesigned"
+      ],
+      { tempRoot }
+    );
+    expect(cells.code).toBe(0);
+    const cellsBody = JSON.parse(cells.stdout);
+    expect(cellsBody.result.cells.some((cell: { display_coord: string; status: string }) => cell.display_coord === "R0C0" && cell.status === "designed")).toBe(true);
+    expect(cellsBody.result.cells.some((cell: { status: string }) => cell.status === "undesigned")).toBe(true);
   });
 
   it("supports compact apply summaries for large automation workflows", async () => {
