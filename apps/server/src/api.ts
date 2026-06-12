@@ -13,7 +13,9 @@ import {
   duplicateMap,
   exportJson,
   exportPng,
+  getCellsInRange,
   getMap,
+  getMapSummary,
   importMap,
   listMaps,
   saveMapAs,
@@ -72,6 +74,27 @@ function readStringField(body: Record<string, unknown>, key: string, required = 
   return value;
 }
 
+function readIntegerQuery(value: unknown, key: string): number {
+  const parsed = typeof value === "string" ? Number(value) : Number.NaN;
+  if (!Number.isInteger(parsed)) {
+    throw badRequest(`${key} must be an integer`);
+  }
+  return parsed;
+}
+
+function readBooleanQuery(value: unknown, fallback: boolean): boolean {
+  if (value === undefined) {
+    return fallback;
+  }
+  if (value === "true") {
+    return true;
+  }
+  if (value === "false") {
+    return false;
+  }
+  throw badRequest("includeUndesigned must be true or false");
+}
+
 export async function createServer(): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
   await app.register(cors, { origin: true });
@@ -95,6 +118,36 @@ export async function createServer(): Promise<FastifyInstance> {
       return createEnvelope({ result: await getMap(request.params.id) });
     } catch (error) {
       return sendError(reply, "map_not_found", error, 404);
+    }
+  });
+
+  app.get<{ Params: { id: string } }>("/api/maps/:id/summary", async (request, reply) => {
+    try {
+      return createEnvelope({ result: await getMapSummary(request.params.id) });
+    } catch (error) {
+      return sendError(reply, "map_summary_failed", error, 404);
+    }
+  });
+
+  app.get<{
+    Params: { id: string };
+    Querystring: { minRow?: string; maxRow?: string; minCol?: string; maxCol?: string; includeUndesigned?: string };
+  }>("/api/maps/:id/cells", async (request, reply) => {
+    try {
+      return createEnvelope({
+        result: await getCellsInRange(
+          request.params.id,
+          {
+            minRow: readIntegerQuery(request.query.minRow, "minRow"),
+            maxRow: readIntegerQuery(request.query.maxRow, "maxRow"),
+            minCol: readIntegerQuery(request.query.minCol, "minCol"),
+            maxCol: readIntegerQuery(request.query.maxCol, "maxCol")
+          },
+          { includeUndesigned: readBooleanQuery(request.query.includeUndesigned, true) }
+        )
+      });
+    } catch (error) {
+      return sendError(reply, "cells_range_failed", error);
     }
   });
 

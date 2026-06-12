@@ -1,16 +1,16 @@
 import fs from "node:fs/promises";
-import path from "node:path";
 import sharp from "sharp";
 import {
   applyCommand,
   createCellId,
   createDisplayCoord,
-  createEmptyDocument,
   createRuntimeState,
   findRiversAtCell,
   getNeighborCoords,
   parseDocument,
   type AreaInspectionResult,
+  type CellRange,
+  type CellRangeResult,
   type CellChangeDetail,
   type CellInspectionResult,
   stringifyDocument,
@@ -18,35 +18,38 @@ import {
   type ExportRenderOptions,
   type MapCommand,
   type MapDocument,
+  type MapSummary,
   type MapRuntimeState,
   type NeighborInspectionResult,
   type ValidationIssue
 } from "@mapdesigner/map-core";
 import { buildExportScene, buildMapScene, renderSvgString } from "@mapdesigner/map-render";
 import { EXPORT_STORAGE_DIR, MAP_STORAGE_DIR } from "./config.js";
-import { badRequest, notFound, revisionConflict, storageError } from "./errors.js";
+import { badRequest, revisionConflict, storageError } from "./errors.js";
 import {
   assertSafeMapId,
   exportFilePath,
-  mapFilePath,
   MAX_INSPECT_AREA_RADIUS,
   normalizeExportOptions,
   validateDocumentForWrite,
   writeFileAtomic
 } from "./storage.js";
+import {
+  createMapDocument,
+  deleteMapDocument,
+  getCellsInRange as getRepositoryCellsInRange,
+  getMapDocument,
+  getMapSummary as getRepositoryMapSummary,
+  listMapRows,
+  mapExists,
+  saveMapDocument,
+  type MapListItem
+} from "./repository.js";
 import { createMapId, slugify } from "./utils.js";
 
 const PNG_EXPORT_TIMEOUT_SECONDS = 20;
-const MAX_LIST_MAP_FILE_BYTES = 32 * 1024 * 1024;
 
-export interface MapListItem {
-  id: string;
-  name: string;
-  fileName: string;
-  updatedAt: string;
-  revision: number;
-  designedCellCount: number;
-}
+export type { MapListItem } from "./repository.js";
 
 export interface SaveMapInput {
   document: MapDocument;
@@ -109,48 +112,7 @@ async function ensureDirectories(): Promise<void> {
   }
 }
 
-const mapPath = (id: string) => mapFilePath(MAP_STORAGE_DIR, id);
 const exportPath = (fileName: string) => exportFilePath(EXPORT_STORAGE_DIR, fileName);
-
-async function fileExists(filePath: string): Promise<boolean> {
-  try {
-    await fs.access(filePath);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function getFileSystemErrorCode(error: unknown): string | undefined {
-  if (error && typeof error === "object" && "code" in error && typeof (error as { code?: unknown }).code === "string") {
-    return (error as { code: string }).code;
-  }
-  return undefined;
-}
-
-function isMissingFileError(error: unknown): boolean {
-  const code = getFileSystemErrorCode(error);
-  return code === "ENOENT" || code === "ENOTDIR";
-}
-
-async function loadMapDocument(id: string): Promise<MapDocument> {
-  await ensureDirectories();
-  const normalizedId = assertSafeMapId(id);
-  let raw: string;
-  try {
-    raw = await fs.readFile(mapPath(normalizedId), "utf8");
-  } catch (error) {
-    if (isMissingFileError(error)) {
-      throw notFound(`map ${normalizedId} was not found`, error);
-    }
-    throw storageError(`failed to read map ${normalizedId}`, error);
-  }
-  const parsed = parseDocument(raw);
-  if (!parsed.document) {
-    throw badRequest(parsed.errors.map((entry) => entry.message).join("; "));
-  }
-  return parsed.document;
-}
 
 function runtimeFromDocument(document: MapDocument): MapRuntimeState {
   return createRuntimeState(document);
@@ -282,40 +244,7 @@ function buildApplyChangeStats(
 
 export async function listMaps(): Promise<MapListItem[]> {
   await ensureDirectories();
-  let files: string[];
-  try {
-    files = (await fs.readdir(MAP_STORAGE_DIR)).filter((file) => file.endsWith(".json"));
-  } catch (error) {
-    throw storageError("failed to list maps", error);
-  }
-  const items = await Promise.all(
-    files.map(async (fileName) => {
-      const filePath = path.join(MAP_STORAGE_DIR, fileName);
-      let raw: string;
-      try {
-        const stat = await fs.stat(filePath);
-        if (!stat.isFile() || stat.size > MAX_LIST_MAP_FILE_BYTES) {
-          return null;
-        }
-        raw = await fs.readFile(filePath, "utf8");
-      } catch {
-        return null;
-      }
-      const parsed = parseDocument(raw);
-      if (!parsed.document) {
-        return null;
-      }
-      return {
-        id: parsed.document.meta.id,
-        name: parsed.document.meta.name,
-        fileName,
-        updatedAt: parsed.document.meta.updated_at,
-        revision: parsed.document.meta.revision,
-        designedCellCount: parsed.document.cells.length
-      } satisfies MapListItem;
-    })
-  );
-  return items.filter((item): item is MapListItem => item !== null).sort((a, b) => a.name.localeCompare(b.name));
+  return listMapRows();
 }
 
 export async function createMap(input: {
@@ -324,23 +253,13 @@ export async function createMap(input: {
   id?: string;
 }): Promise<MapRuntimeState> {
   await ensureDirectories();
-  const id = assertSafeMapId(input.id ?? createMapId(input.name));
-  const filePath = mapPath(id);
-  if (await fileExists(filePath)) {
-    throw badRequest(`map id ${id} already exists`);
-  }
-  const document = createEmptyDocument({
-    id,
-    name: input.name,
-    description: input.description ?? ""
-  });
+  const document = await createMapDocument(input);
   validateDocumentForWrite(document);
-  await writeFileAtomic(filePath, stringifyDocument(document));
   return runtimeFromDocument(document);
 }
 
 export async function getMap(id: string): Promise<MapRuntimeState> {
-  const document = await loadMapDocument(assertSafeMapId(id));
+  const document = await getMapDocument(assertSafeMapId(id));
   return runtimeFromDocument(document);
 }
 
@@ -348,22 +267,21 @@ export async function saveMap(input: SaveMapInput): Promise<MapRuntimeState> {
   await ensureDirectories();
   const normalizedId = assertSafeMapId(input.document.meta.id);
   validateDocumentForWrite(input.document);
-  const current = await loadMapDocument(normalizedId);
+  const current = await getMapDocument(normalizedId);
   if (current.meta.revision !== input.expectedRevision) {
     throw revisionConflict(
       `revision conflict: expected ${input.expectedRevision}, current is ${current.meta.revision}`
     );
   }
-  await writeFileAtomic(mapPath(normalizedId), stringifyDocument(input.document));
-  return runtimeFromDocument(input.document);
+  const document = await saveMapDocument(input.document);
+  return runtimeFromDocument(document);
 }
 
 export async function saveMapAs(input: SaveMapAsInput): Promise<MapRuntimeState> {
   await ensureDirectories();
   const now = new Date().toISOString();
   const nextId = assertSafeMapId(input.id ?? createMapId(input.name));
-  const nextPath = mapPath(nextId);
-  if (await fileExists(nextPath)) {
+  if (await mapExists(nextId)) {
     throw badRequest(`map id ${nextId} already exists`);
   }
 
@@ -380,24 +298,16 @@ export async function saveMapAs(input: SaveMapAsInput): Promise<MapRuntimeState>
   };
 
   validateDocumentForWrite(document);
-  await writeFileAtomic(nextPath, stringifyDocument(document));
-  return runtimeFromDocument(document);
+  return runtimeFromDocument(await saveMapDocument(document));
 }
 
 export async function deleteMap(id: string): Promise<void> {
   const normalizedId = assertSafeMapId(id);
-  try {
-    await fs.unlink(mapPath(normalizedId));
-  } catch (error) {
-    if (isMissingFileError(error)) {
-      throw notFound(`map ${normalizedId} was not found`, error);
-    }
-    throw storageError(`failed to delete map ${normalizedId}`, error);
-  }
+  await deleteMapDocument(normalizedId);
 }
 
 export async function duplicateMap(id: string): Promise<MapRuntimeState> {
-  const existing = await loadMapDocument(assertSafeMapId(id));
+  const existing = await getMapDocument(assertSafeMapId(id));
   const now = new Date().toISOString();
   const duplicateId = assertSafeMapId(createMapId(existing.meta.name));
   const document: MapDocument = {
@@ -412,8 +322,7 @@ export async function duplicateMap(id: string): Promise<MapRuntimeState> {
     }
   };
   validateDocumentForWrite(document);
-  await writeFileAtomic(mapPath(duplicateId), stringifyDocument(document));
-  return runtimeFromDocument(document);
+  return runtimeFromDocument(await saveMapDocument(document));
 }
 
 export async function importMap(input: {
@@ -426,11 +335,11 @@ export async function importMap(input: {
     throw badRequest(parsed.errors.map((entry) => entry.message).join("; "));
   }
   let document = parsed.document;
-  const currentPath = mapPath(document.meta.id);
-  if ((await fileExists(currentPath)) && !input.generateNewId) {
+  const hasConflict = await mapExists(document.meta.id);
+  if (hasConflict && !input.generateNewId) {
     throw badRequest(`meta.id conflict for ${document.meta.id}`);
   }
-  if (await fileExists(currentPath)) {
+  if (hasConflict) {
     const now = new Date().toISOString();
     document = {
       ...document,
@@ -444,7 +353,7 @@ export async function importMap(input: {
     };
   }
   validateDocumentForWrite(document);
-  await writeFileAtomic(mapPath(document.meta.id), stringifyDocument(document));
+  document = await saveMapDocument(document);
   return {
     map: runtimeFromDocument(document),
     warnings: parsed.errors.filter((entry) => entry.severity === "warning")
@@ -452,7 +361,7 @@ export async function importMap(input: {
 }
 
 export async function exportJson(id: string): Promise<{ fileName: string; path: string }> {
-  const document = await loadMapDocument(assertSafeMapId(id));
+  const document = await getMapDocument(assertSafeMapId(id));
   const fileName = `${slugify(document.meta.name) || assertSafeMapId(document.meta.id)}.json`;
   const filePath = exportPath(fileName);
   await writeFileAtomic(filePath, stringifyDocument(document));
@@ -500,7 +409,7 @@ export async function applyCommands(
   options: ApplyCommandsOptions = {}
 ): Promise<ApplyCommandsResult> {
   const normalizedId = assertSafeMapId(id);
-  const document = await loadMapDocument(normalizedId);
+  const document = await getMapDocument(normalizedId);
   let state = createRuntimeState(document);
   const warnings: ValidationIssue[] = [];
   const commandResults: CommandExecutionReport[] = [];
@@ -537,7 +446,7 @@ export async function applyCommands(
 
   if (!options.dryRun) {
     validateDocumentForWrite(state.document);
-    await writeFileAtomic(mapPath(normalizedId), stringifyDocument(state.document));
+    state = runtimeFromDocument(await saveMapDocument(state.document));
   }
   return {
     map: state,
@@ -547,6 +456,18 @@ export async function applyCommands(
     changes,
     stats: buildApplyChangeStats(commands, changes)
   };
+}
+
+export async function getMapSummary(id: string): Promise<MapSummary> {
+  return getRepositoryMapSummary(assertSafeMapId(id));
+}
+
+export async function getCellsInRange(
+  id: string,
+  range: CellRange,
+  options: { includeUndesigned?: boolean } = {}
+): Promise<CellRangeResult> {
+  return getRepositoryCellsInRange(assertSafeMapId(id), range, options);
 }
 
 export async function inspectCell(id: string, target: GridCoordinate): Promise<CellInspectionResult> {

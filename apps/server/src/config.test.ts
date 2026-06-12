@@ -18,8 +18,10 @@ describe("server config", () => {
 
     expect(config.REPO_ROOT).toBe(repoRoot);
     expect(config.PROJECT_ROOT).toBe(repoRoot);
+    expect(config.STORAGE_DIR).toBe(path.join(repoRoot, "storage"));
     expect(config.MAP_STORAGE_DIR).toBe(path.join(repoRoot, "storage/maps"));
     expect(config.EXPORT_STORAGE_DIR).toBe(path.join(repoRoot, "storage/exports"));
+    expect(config.DATABASE_FILE).toBe(path.join(repoRoot, "storage/mapdesigner.db"));
     expect(config.WEB_DIST_DIR).toBe(path.join(repoRoot, "apps/web/dist"));
   });
 
@@ -31,8 +33,10 @@ describe("server config", () => {
 
     expect(config.REPO_ROOT).toBe(repoRoot);
     expect(config.PROJECT_ROOT).toBe("/tmp/mapdesigner-custom-root");
+    expect(config.STORAGE_DIR).toBe("/tmp/mapdesigner-custom-root/storage");
     expect(config.MAP_STORAGE_DIR).toBe("/tmp/mapdesigner-custom-root/storage/maps");
     expect(config.EXPORT_STORAGE_DIR).toBe("/tmp/mapdesigner-custom-root/storage/exports");
+    expect(config.DATABASE_FILE).toBe("/tmp/mapdesigner-custom-root/storage/mapdesigner.db");
     expect(config.WEB_DIST_DIR).toBe(path.join(repoRoot, "apps/web/dist"));
   });
 });

@@ -17,7 +17,9 @@ import {
   duplicateMap,
   exportJson,
   exportPng,
+  getCellsInRange,
   getMap,
+  getMapSummary,
   getNeighbors,
   importMap,
   inspectArea,
@@ -233,7 +235,7 @@ async function main(): Promise<void> {
   const [group, action] = args;
 
   if (group !== "maps" || !action) {
-    printFailure("usage: mapdesigner maps <list|create|inspect|inspect-cell|inspect-area|neighbors|apply|rivers|import|export-json|export-png|duplicate|delete>");
+    printFailure("usage: mapdesigner maps <list|create|summary|cells|inspect|inspect-cell|inspect-area|neighbors|apply|rivers|import|export-json|export-png|duplicate|delete>");
   }
 
   try {
@@ -251,6 +253,37 @@ async function main(): Promise<void> {
         const description = readFlag(args, "--description");
         const id = readFlag(args, "--id");
         printResult(createEnvelope({ result: await createMap({ name, description, id }) }));
+        break;
+      }
+      case "summary": {
+        assertKnownFlags(args, ["--map-id"]);
+        const id = readFlag(args, "--map-id");
+        if (!id) {
+          printFailure("maps summary requires --map-id");
+        }
+        printResult(createEnvelope({ result: await getMapSummary(id) }));
+        break;
+      }
+      case "cells": {
+        assertKnownFlags(args, ["--map-id", "--min-row", "--max-row", "--min-col", "--max-col", "--include-undesigned"]);
+        const id = readFlag(args, "--map-id");
+        if (!id) {
+          printFailure("maps cells requires --map-id");
+        }
+        printResult(
+          createEnvelope({
+            result: await getCellsInRange(
+              id,
+              {
+                minRow: readIntegerFlag(args, "--min-row"),
+                maxRow: readIntegerFlag(args, "--max-row"),
+                minCol: readIntegerFlag(args, "--min-col"),
+                maxCol: readIntegerFlag(args, "--max-col")
+              },
+              { includeUndesigned: hasFlag(args, "--include-undesigned") }
+            )
+          })
+        );
         break;
       }
       case "inspect": {
