@@ -359,6 +359,93 @@ describe("server cli", () => {
     expect(appliedBody.result.terrain_summary.after.plain).toBe(1);
   });
 
+  it("supports summary-first range inspection for larger agent workflows", async () => {
+    const created = await runCli(["maps", "create", "--name", "Large Agent CLI"], { tempRoot });
+    expect(created.code).toBe(0);
+    const mapId = JSON.parse(created.stdout).result.document.meta.id as string;
+    const targets = [];
+    for (let row = -12; row <= 12; row += 1) {
+      for (let col = -12; col <= 12; col += 1) {
+        targets.push({ row, col });
+      }
+    }
+
+    const applied = await runCli(
+      ["maps", "apply", "--map-id", mapId, "--stdin", "--summary"],
+      {
+        tempRoot,
+        input: JSON.stringify({
+          commands: [
+            {
+              action: "set_cells",
+              source: "cli",
+              targets,
+              changes: {
+                terrain: "plain",
+                biome: "grassland"
+              }
+            }
+          ]
+        })
+      }
+    );
+    expect(applied.code).toBe(0);
+    const appliedBody = JSON.parse(applied.stdout);
+    expect(appliedBody.result.designed_cell_count).toBe(625);
+
+    const summary = await runCli(["maps", "summary", "--map-id", mapId], { tempRoot });
+    expect(summary.code).toBe(0);
+    const summaryBody = JSON.parse(summary.stdout);
+    expect(summaryBody.result.designed_cell_count).toBe(625);
+    expect(summaryBody.result.bounds).toEqual({
+      min_row: -12,
+      max_row: 12,
+      min_col: -12,
+      max_col: 12
+    });
+
+    const cells = await runCli(
+      [
+        "maps",
+        "cells",
+        "--map-id",
+        mapId,
+        "--min-row",
+        "10",
+        "--max-row",
+        "12",
+        "--min-col",
+        "10",
+        "--max-col",
+        "12"
+      ],
+      { tempRoot }
+    );
+    expect(cells.code).toBe(0);
+    const cellsBody = JSON.parse(cells.stdout);
+    expect(cellsBody.result.cells).toHaveLength(9);
+    expect(cellsBody.result.cells.every((cell: { status: string }) => cell.status === "designed")).toBe(true);
+
+    const inspected = await runCli(
+      ["maps", "inspect-cell", "--map-id", mapId, "--row", "12", "--col", "12"],
+      { tempRoot }
+    );
+    expect(inspected.code).toBe(0);
+    const inspectedBody = JSON.parse(inspected.stdout);
+    expect(inspectedBody.result.cell.display_coord).toBe("R12C12");
+    expect(inspectedBody.result.cell.status).toBe("designed");
+    expect(inspectedBody.result.neighbors).toHaveLength(6);
+
+    const area = await runCli(
+      ["maps", "inspect-area", "--map-id", mapId, "--row", "11", "--col", "11", "--radius", "2"],
+      { tempRoot }
+    );
+    expect(area.code).toBe(0);
+    const areaBody = JSON.parse(area.stdout);
+    expect(areaBody.result.cells).toHaveLength(19);
+    expect(areaBody.result.cells.some((cell: { display_coord: string }) => cell.display_coord === "R12C12")).toBe(true);
+  });
+
   it("supports undo and redo commands for agent workflows", async () => {
     const created = await runCli(["maps", "create", "--name", "Undo CLI"], { tempRoot });
     expect(created.code).toBe(0);

@@ -9,6 +9,7 @@ import {
   getNeighborCoords,
   parseDocument,
   type AreaInspectionResult,
+  type ActiveCell,
   type CellRange,
   type CellRangeResult,
   type CellChangeDetail,
@@ -179,23 +180,24 @@ function cloneActiveCell(cell: MapRuntimeState["activeCells"][number]) {
   };
 }
 
-function getCellFromRuntime(runtime: MapRuntimeState, target: GridCoordinate) {
-  const found = runtime.activeCells.find((cell) => cell.row === target.row && cell.col === target.col);
-  if (found) {
-    return cloneActiveCell(found);
-  }
+function undesignedCell(target: GridCoordinate): ActiveCell {
   return {
     row: target.row,
     col: target.col,
     id: createCellId(target.row, target.col),
     display_coord: createDisplayCoord(target.row, target.col),
-    status: "undesigned" as const,
+    status: "undesigned",
     terrain: null,
     biome: null,
     tags: [],
     note: "",
     is_seed: false
   };
+}
+
+function getCellFromRange(cellsById: Map<string, ActiveCell>, target: GridCoordinate): ActiveCell {
+  const found = cellsById.get(createCellId(target.row, target.col));
+  return found ? cloneActiveCell(found) : undesignedCell(target);
 }
 
 function hexDistance(left: GridCoordinate, right: GridCoordinate): number {
@@ -211,13 +213,24 @@ function compareCoords(left: GridCoordinate, right: GridCoordinate): number {
   return left.col - right.col;
 }
 
-function buildAreaCells(runtime: MapRuntimeState, center: GridCoordinate, radius: number) {
+async function getRangeCellsById(id: string, range: CellRange): Promise<Map<string, ActiveCell>> {
+  const result = await getCellsInRange(id, range, { includeUndesigned: true });
+  return new Map(result.cells.map((cell) => [cell.id, cell]));
+}
+
+async function buildAreaCellsFromRange(id: string, center: GridCoordinate, radius: number): Promise<ActiveCell[]> {
+  const cellsById = await getRangeCellsById(id, {
+    minRow: center.row - radius,
+    maxRow: center.row + radius,
+    minCol: center.col - radius,
+    maxCol: center.col + radius
+  });
   const cells = [];
   for (let row = center.row - radius; row <= center.row + radius; row += 1) {
     for (let col = center.col - radius; col <= center.col + radius; col += 1) {
       const target = { row, col };
       if (hexDistance(center, target) <= radius) {
-        cells.push(getCellFromRuntime(runtime, target));
+        cells.push(getCellFromRange(cellsById, target));
       }
     }
   }
@@ -733,13 +746,21 @@ export async function getCellsInRange(
 }
 
 export async function inspectCell(id: string, target: GridCoordinate): Promise<CellInspectionResult> {
-  const runtime = await getMap(assertSafeMapId(id));
+  const normalizedId = assertSafeMapId(id);
+  const neighbors = getNeighborCoords(target);
+  const cellsById = await getRangeCellsById(normalizedId, {
+    minRow: Math.min(target.row, ...neighbors.map((coord) => coord.row)),
+    maxRow: Math.max(target.row, ...neighbors.map((coord) => coord.row)),
+    minCol: Math.min(target.col, ...neighbors.map((coord) => coord.col)),
+    maxCol: Math.max(target.col, ...neighbors.map((coord) => coord.col))
+  });
+  const features = await getMapFeatures(normalizedId);
   return {
-    cell: getCellFromRuntime(runtime, target),
-    neighbors: getNeighborCoords(target)
-      .map((coord) => getCellFromRuntime(runtime, coord))
+    cell: getCellFromRange(cellsById, target),
+    neighbors: neighbors
+      .map((coord) => getCellFromRange(cellsById, coord))
       .sort((left, right) => compareCoords(left, right)),
-    rivers: findRiversAtCell(runtime.document.features.rivers, target).map((sample) => ({
+    rivers: findRiversAtCell(features.rivers, target).map((sample) => ({
       river_id: sample.river_id,
       river_name: sample.river_name,
       width: sample.width,
@@ -759,20 +780,26 @@ export async function inspectArea(
   if (radius > MAX_INSPECT_AREA_RADIUS) {
     throw badRequest(`radius must be less than or equal to ${MAX_INSPECT_AREA_RADIUS}`);
   }
-  const runtime = await getMap(assertSafeMapId(id));
   return {
     center: { row: center.row, col: center.col },
     radius,
-    cells: buildAreaCells(runtime, center, radius)
+    cells: await buildAreaCellsFromRange(assertSafeMapId(id), center, radius)
   };
 }
 
 export async function getNeighbors(id: string, center: GridCoordinate): Promise<NeighborInspectionResult> {
-  const runtime = await getMap(assertSafeMapId(id));
+  const normalizedId = assertSafeMapId(id);
+  const neighbors = getNeighborCoords(center);
+  const cellsById = await getRangeCellsById(normalizedId, {
+    minRow: Math.min(center.row, ...neighbors.map((coord) => coord.row)),
+    maxRow: Math.max(center.row, ...neighbors.map((coord) => coord.row)),
+    minCol: Math.min(center.col, ...neighbors.map((coord) => coord.col)),
+    maxCol: Math.max(center.col, ...neighbors.map((coord) => coord.col))
+  });
   return {
-    center: getCellFromRuntime(runtime, center),
-    neighbors: getNeighborCoords(center)
-      .map((coord) => getCellFromRuntime(runtime, coord))
+    center: getCellFromRange(cellsById, center),
+    neighbors: neighbors
+      .map((coord) => getCellFromRange(cellsById, coord))
       .sort((left, right) => compareCoords(left, right))
   };
 }

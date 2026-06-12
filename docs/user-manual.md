@@ -453,11 +453,31 @@ pnpm exec tsx apps/server/src/cli.ts maps list
 pnpm exec tsx apps/server/src/cli.ts maps create --name "Demo Map"
 ```
 
-查看地图：
+查看地图摘要：
+
+```bash
+pnpm exec tsx apps/server/src/cli.ts maps summary --map-id demo-map
+```
+
+查看局部单元格范围：
+
+```bash
+pnpm exec tsx apps/server/src/cli.ts maps cells \
+  --map-id demo-map \
+  --min-row -10 \
+  --max-row 10 \
+  --min-col -10 \
+  --max-col 10 \
+  --include-undesigned
+```
+
+查看整张地图：
 
 ```bash
 pnpm exec tsx apps/server/src/cli.ts maps inspect --map-id demo-map
 ```
+
+`inspect` 会返回完整 runtime，适合小地图、调试和兼容旧脚本。大地图或 AI agent 工作流建议优先使用 `summary`、`cells`、`inspect-cell`、`inspect-area`。
 
 查看单格：
 
@@ -519,7 +539,20 @@ echo '{
 }' | pnpm exec tsx apps/server/src/cli.ts maps apply --map-id demo-map --stdin --dry-run
 ```
 
-`--dry-run` 会返回完整执行结果，但不会写回地图文件。
+`--dry-run` 会返回执行结果，但不会写回地图文件。大批量操作建议配合 `--summary` 使用：
+
+```bash
+echo '{
+  "commands": [
+    {
+      "action": "set_cell",
+      "source": "cli",
+      "target": { "row": 0, "col": 0 },
+      "changes": { "terrain": "plain", "biome": "grassland" }
+    }
+  ]
+}' | pnpm exec tsx apps/server/src/cli.ts maps apply --map-id demo-map --stdin --dry-run --summary
+```
 
 ### 15.5 河流覆盖层
 
@@ -566,11 +599,11 @@ pnpm exec tsx apps/server/src/cli.ts maps rivers create \
 
 如果你计划让 AI agent 调用本项目，推荐使用固定顺序：
 
-1. `inspect`
-2. `inspect-cell` 或 `inspect-area`
-3. `dry-run`
-4. `apply`
-5. `inspect`
+1. `summary`
+2. `cells`、`inspect-cell` 或 `inspect-area`
+3. `apply --dry-run --summary`
+4. `apply --summary`
+5. `summary`、`cells` 或 `inspect-area`
 6. `export-png`
 
 更完整的 agent 使用说明请参考：
