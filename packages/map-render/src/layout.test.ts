@@ -90,6 +90,28 @@ describe("river rendering", () => {
     expect(svg).toContain('stroke="#2F83B7"');
   });
 
+  it("reduces river segment density in low-detail render mode", () => {
+    const runtime = createRuntimeState(createEmptyDocument({ id: "river-lod", name: "River LOD" }));
+    const result = applyCommand(runtime, {
+      action: "create_river",
+      source: "cli",
+      river: {
+        id: "long-river",
+        name: "Long River",
+        points: [
+          { row: 0, col: 0, width: 4 },
+          { row: 0, col: 8, width: 4 }
+        ]
+      }
+    });
+
+    expect(result.ok).toBe(true);
+    const highDetail = buildMapScene(result.map, { riverDetail: "high" });
+    const lowDetail = buildMapScene(result.map, { riverDetail: "low" });
+    expect(highDetail.riverSegments.length).toBeGreaterThan(lowDetail.riverSegments.length);
+    expect(lowDetail.riverSegments).toHaveLength(1);
+  });
+
   it("renders water endpoint markers and preview river segments", () => {
     const runtime = createRuntimeState(createEmptyDocument({ id: "river-preview", name: "River Preview" }));
     const withLake = applyCommand(runtime, {

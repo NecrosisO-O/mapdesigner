@@ -70,6 +70,7 @@ export interface MapRenderOptions {
   previewRivers?: RiverFeature[];
   boundsCoords?: GridCoordinate[];
   riverClipRange?: CellRange;
+  riverDetail?: "high" | "low";
 }
 
 export interface MapScene {

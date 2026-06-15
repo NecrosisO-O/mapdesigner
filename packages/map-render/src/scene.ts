@@ -32,7 +32,8 @@ const DEFAULT_OPTIONS: ResolvedMapRenderOptions = {
   includeUndesigned: true,
   selectedCellId: null,
   hoveredCellId: null,
-  previewRivers: []
+  previewRivers: [],
+  riverDetail: "high"
 };
 
 function isCoordInRange(coord: { row: number; col: number }, range: CellRange): boolean {
@@ -100,7 +101,8 @@ function buildRiverSegments(
   minX: number,
   minY: number,
   preview: boolean,
-  clipRange?: CellRange
+  clipRange?: CellRange,
+  detail: "high" | "low" = "high"
 ): MapScene["riverSegments"] {
   const paddedClipRange = clipRange ? padRange(clipRange, 1) : null;
   return rivers.flatMap((river) => {
@@ -108,10 +110,28 @@ function buildRiverSegments(
     const color = river.color ?? "#2F83B7";
     const opacity = river.opacity ?? 0.88;
     const segments: MapScene["riverSegments"] = [];
-    for (let index = 0; index < samples.length - 1; index += 1) {
+    let index = 0;
+    while (index < samples.length - 1) {
       const start = samples[index]!;
-      const end = samples[index + 1]!;
+      let endIndex = index + 1;
+      let end = samples[endIndex]!;
+      if (detail === "low") {
+        const direction = { row: end.row - start.row, col: end.col - start.col };
+        const width = (start.width + end.width) / 2;
+        while (endIndex < samples.length - 1) {
+          const current = samples[endIndex]!;
+          const next = samples[endIndex + 1]!;
+          const nextDirection = { row: next.row - current.row, col: next.col - current.col };
+          const nextWidth = (current.width + next.width) / 2;
+          if (nextDirection.row !== direction.row || nextDirection.col !== direction.col || Math.abs(nextWidth - width) > 0.75) {
+            break;
+          }
+          endIndex += 1;
+          end = samples[endIndex]!;
+        }
+      }
       if (paddedClipRange && !isCoordInRange(start, paddedClipRange) && !isCoordInRange(end, paddedClipRange)) {
+        index = endIndex;
         continue;
       }
       const startCenter = centerForCoord(start, size);
@@ -129,6 +149,7 @@ function buildRiverSegments(
         opacity,
         preview
       });
+      index = endIndex;
     }
     return segments;
   });
@@ -247,8 +268,8 @@ export function buildMapScene(map: MapRuntimeState, options: MapRenderOptions = 
     background: resolved.background,
     layout: layout.layout,
     riverSegments: [
-      ...buildRiverSegments(rivers, resolved.size, layout.minX, layout.minY, false, renderRange ?? undefined),
-      ...buildRiverSegments(previewRivers, resolved.size, layout.minX, layout.minY, true, renderRange ?? undefined)
+      ...buildRiverSegments(rivers, resolved.size, layout.minX, layout.minY, false, renderRange ?? undefined, resolved.riverDetail),
+      ...buildRiverSegments(previewRivers, resolved.size, layout.minX, layout.minY, true, renderRange ?? undefined, "high")
     ],
     riverEndpoints: [
       ...buildRiverEndpoints(rivers, map.activeCells, resolved.size, layout.minX, layout.minY, false, renderRange ?? undefined),
