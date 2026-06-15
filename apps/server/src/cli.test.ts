@@ -568,6 +568,41 @@ describe("server cli", () => {
     expect(created.code).toBe(0);
     const mapId = JSON.parse(created.stdout).result.document.meta.id as string;
 
+    const mixedApply = await runCli(["maps", "apply", "--map-id", mapId, "--stdin", "--summary"], {
+      tempRoot,
+      input: JSON.stringify({
+        commands: [
+          {
+            action: "set_cell",
+            source: "cli",
+            target: { row: -1, col: 0 },
+            changes: {
+              terrain: "plain",
+              biome: "grassland"
+            }
+          },
+          {
+            action: "create_river",
+            source: "cli",
+            river: {
+              id: "mixed-river",
+              name: "Mixed River",
+              points: [
+                { row: -1, col: 0, width: 2 },
+                { row: -1, col: 2, width: 5 }
+              ]
+            }
+          }
+        ]
+      })
+    });
+    expect(mixedApply.code).toBe(0);
+    const mixedApplyBody = JSON.parse(mixedApply.stdout);
+    expect(mixedApplyBody.result.designed_cell_count).toBe(1);
+    expect(mixedApplyBody.result.river_count).toBe(1);
+    expect(mixedApplyBody.result.changed_count).toBe(1);
+    expect(mixedApplyBody.result.feature_stats.river_created_count).toBe(1);
+
     const createdRiver = await runCli(
       [
         "maps",
@@ -589,7 +624,7 @@ describe("server cli", () => {
     );
     expect(createdRiver.code).toBe(0);
     const createdRiverBody = JSON.parse(createdRiver.stdout);
-    expect(createdRiverBody.result.river_count).toBe(1);
+    expect(createdRiverBody.result.river_count).toBe(2);
     expect(createdRiverBody.result.feature_stats).toEqual({
       river_created_count: 1,
       river_updated_count: 0,
@@ -612,15 +647,15 @@ describe("server cli", () => {
     });
     expect(widenedRiver.code).toBe(0);
     const widenedRiverBody = JSON.parse(widenedRiver.stdout);
-    expect(widenedRiverBody.result.river_count).toBe(1);
+    expect(widenedRiverBody.result.river_count).toBe(2);
     expect(widenedRiverBody.result.feature_stats.river_updated_count).toBe(1);
 
     const listed = await runCli(["maps", "rivers", "list", "--map-id", mapId], { tempRoot });
     expect(listed.code).toBe(0);
     const listedBody = JSON.parse(listed.stdout);
-    expect(listedBody.result[0].id).toBe("main-river");
-    expect(listedBody.result[0].points[0].width).toBe(2);
-    expect(listedBody.result[0].points[1]).toEqual({ row: 0, col: 1, width: 6 });
+    const mainRiver = listedBody.result.find((river: { id: string }) => river.id === "main-river");
+    expect(mainRiver.points[0].width).toBe(2);
+    expect(mainRiver.points[1]).toEqual({ row: 0, col: 1, width: 6 });
 
     const farRiver = await runCli(
       [
@@ -660,7 +695,7 @@ describe("server cli", () => {
       { tempRoot }
     );
     expect(rangedList.code).toBe(0);
-    expect(JSON.parse(rangedList.stdout).result.map((river: { id: string }) => river.id)).toEqual(["main-river"]);
+    expect(JSON.parse(rangedList.stdout).result.map((river: { id: string }) => river.id)).toEqual(["main-river", "mixed-river"]);
 
     const inspected = await runCli(
       ["maps", "rivers", "inspect", "--map-id", mapId, "--river-id", "main-river"],
@@ -674,7 +709,7 @@ describe("server cli", () => {
       { tempRoot }
     );
     expect(deleted.code).toBe(0);
-    expect(JSON.parse(deleted.stdout).result.river_count).toBe(1);
+    expect(JSON.parse(deleted.stdout).result.river_count).toBe(2);
   });
 
   it("reports missing flag values and unknown flags as structured errors", async () => {
