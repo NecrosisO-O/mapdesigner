@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { createEmptyDocument, stringifyDocument } from "@mapdesigner/map-core";
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(currentDir, "../../..");
@@ -169,6 +170,37 @@ describe("server cli", () => {
     expect(appliedBody.ok).toBe(true);
     expect(appliedBody.result.map.document.cells).toHaveLength(1);
     expect(appliedBody.result.map.document.cells[0].terrain).toBe("plain");
+  });
+
+  it("imports maps with a compact summary response for agent workflows", async () => {
+    const document = createEmptyDocument({
+      id: "cli-light-import",
+      name: "CLI Light Import"
+    });
+    document.cells = [
+      {
+        row: 0,
+        col: 0,
+        terrain: "plain",
+        biome: "grassland",
+        tags: [],
+        note: ""
+      }
+    ];
+    const importPath = path.join(tempRoot, "import-map.json");
+    await fs.writeFile(importPath, stringifyDocument(document), "utf8");
+
+    const imported = await runCli(["maps", "import", "--file", importPath, "--summary"], { tempRoot });
+    expect(imported.code).toBe(0);
+    const importedBody = JSON.parse(imported.stdout);
+    expect(importedBody.ok).toBe(true);
+    expect(importedBody.result.map).toBeUndefined();
+    expect(importedBody.result.summary.meta.id).toBe("cli-light-import");
+    expect(importedBody.result.summary.designed_cell_count).toBe(1);
+
+    const summary = await runCli(["maps", "summary", "--map-id", "cli-light-import"], { tempRoot });
+    expect(summary.code).toBe(0);
+    expect(JSON.parse(summary.stdout).result.designed_cell_count).toBe(1);
   });
 
   it("reports river feature stats for agent-created rivers", async () => {
