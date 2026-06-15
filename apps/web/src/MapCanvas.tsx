@@ -349,9 +349,11 @@ export function MapCanvas(props: MapCanvasProps) {
         includeGrid: props.showGrid,
         includeUndesigned: props.showUndesigned,
         previewRivers: props.riverPreview ? [props.riverPreview] : [],
-        boundsCoords: boundsCoordsFromSummary(props.mapSummary)
+        boundsCoords: boundsCoordsFromSummary(props.mapSummary),
+        riverDetail: camera.zoom >= 0.8 ? "high" : "low"
       }),
     [
+      camera.zoom,
       props.map,
       props.mapSummary,
       props.riverPreview,
