@@ -53,6 +53,7 @@ import {
 import {
   createMapDocument,
   deleteMapDocument,
+  applyCellAndFeatureWriteChanges,
   applyCellWriteChanges,
   applyFeatureWriteChanges,
   getCellsInRange as getRepositoryCellsInRange,
@@ -540,6 +541,10 @@ function isRiverCommand(command: MapCommand): boolean {
   return ["create_river", "update_river", "delete_river", "set_river_path", "set_river_width"].includes(command.action);
 }
 
+function isCellCommand(command: MapCommand): boolean {
+  return ["set_cell", "set_cells", "clear_cell", "annotate_cell", "replace_terrain", "replace_biome"].includes(command.action);
+}
+
 function createRiverIdFromFeatures(name: string, existing: RiverFeature[]): string {
   const slug = name
     .trim()
@@ -629,11 +634,21 @@ interface LightweightRiverCommandOptions extends ApplyCommandsOptions {
   recordHistory?: boolean;
 }
 
+interface LightweightMixedCommandOptions extends ApplyCommandsOptions {
+  recordHistory?: boolean;
+}
+
+interface LightweightRiverApplyResult extends LightweightApplyCommandsResult {
+  featureWriteChanges: Array<{ kind: "river"; featureId: string; river: RiverFeature | null }>;
+  inverseCommands: MapCommand[];
+  revisionIncrement: number;
+}
+
 async function applyLightweightRiverCommands(
   id: string,
   commands: MapCommand[],
   options: LightweightRiverCommandOptions = {}
-): Promise<LightweightApplyCommandsResult | null> {
+): Promise<LightweightRiverApplyResult | null> {
   if (commands.length === 0 || !commands.every(isRiverCommand)) {
     return null;
   }
@@ -817,12 +832,13 @@ async function applyLightweightRiverCommands(
     [...writeChanges.entries()].map(([featureId, river]) => ({ kind: "river", featureId, river })),
     { dryRun: options.dryRun, revisionIncrement }
   );
+  const orderedInverseCommands = inverseCommands.reverse();
   if (!options.dryRun && options.recordHistory !== false && commands.length > 0) {
     await recordOperation(normalizedId, {
       source: getCommandSource(commands),
       action: getOperationAction(commands),
       commands,
-      inverseCommands: inverseCommands.reverse(),
+      inverseCommands: orderedInverseCommands,
       summary: buildApplyChangeStats(commands, [])
     });
   }
@@ -834,15 +850,24 @@ async function applyLightweightRiverCommands(
     dryRun: options.dryRun ?? false,
     command_results: commandResults,
     changes: [],
-    stats: buildApplyChangeStats(commands, [])
+    stats: buildApplyChangeStats(commands, []),
+    featureWriteChanges: [...writeChanges.entries()].map(([featureId, river]) => ({ kind: "river", featureId, river })),
+    inverseCommands: orderedInverseCommands,
+    revisionIncrement
   };
+}
+
+interface LightweightCellApplyResult extends LightweightApplyCommandsResult {
+  cellWriteChanges: Array<{ row: number; col: number; cell: DesignedCellRecord | null }>;
+  inverseCommands: MapCommand[];
+  revisionIncrement: number;
 }
 
 async function applyLightweightCellCommands(
   id: string,
   commands: MapCommand[],
   options: ApplyCommandsOptions = {}
-): Promise<LightweightApplyCommandsResult | null> {
+): Promise<LightweightCellApplyResult | null> {
   const normalizedId = assertSafeMapId(id);
   const warnings: ValidationIssue[] = [];
   const commandResults: CommandExecutionReport[] = [];
@@ -1082,12 +1107,13 @@ async function applyLightweightCellCommands(
     dryRun: options.dryRun,
     revisionIncrement
   });
+  const inverseCommands = buildInverseCellCommands(changes, "system").reverse();
   if (!options.dryRun && commands.length > 0) {
     await recordOperation(normalizedId, {
       source: getCommandSource(commands),
       action: getOperationAction(commands),
       commands,
-      inverseCommands: buildInverseCellCommands(changes, "system").reverse(),
+      inverseCommands,
       summary: buildApplyChangeStats(commands, changes)
     });
   }
@@ -1098,7 +1124,87 @@ async function applyLightweightCellCommands(
     dryRun: options.dryRun ?? false,
     command_results: commandResults,
     changes,
-    stats: buildApplyChangeStats(commands, changes)
+    stats: buildApplyChangeStats(commands, changes),
+    cellWriteChanges: [...writeChanges.values()],
+    inverseCommands,
+    revisionIncrement
+  };
+}
+
+async function applyLightweightMixedCommands(
+  id: string,
+  commands: MapCommand[],
+  options: LightweightMixedCommandOptions = {}
+): Promise<LightweightApplyCommandsResult | null> {
+  if (
+    commands.length === 0 ||
+    !commands.some(isCellCommand) ||
+    !commands.some(isRiverCommand) ||
+    !commands.every((command) => isCellCommand(command) || isRiverCommand(command))
+  ) {
+    return null;
+  }
+  const normalizedId = assertSafeMapId(id);
+  const cellEntries = commands
+    .map((command, index) => ({ command, index }))
+    .filter((entry) => isCellCommand(entry.command));
+  const riverEntries = commands
+    .map((command, index) => ({ command, index }))
+    .filter((entry) => isRiverCommand(entry.command));
+  const cellCommands = cellEntries.map((entry) => entry.command);
+  const riverCommands = riverEntries.map((entry) => entry.command);
+  const cellPreview = await applyLightweightCellCommands(normalizedId, cellCommands, { dryRun: true });
+  const riverPreview = await applyLightweightRiverCommands(normalizedId, riverCommands, {
+    dryRun: true,
+    recordHistory: false
+  });
+  if (!cellPreview || !riverPreview) {
+    return null;
+  }
+  const stats = buildApplyChangeStats(commands, cellPreview.changes);
+  const commandResults = [
+    ...cellPreview.command_results.map((report) => ({
+      ...report,
+      index: cellEntries[report.index]?.index ?? report.index
+    })),
+    ...riverPreview.command_results.map((report) => ({
+      ...report,
+      index: riverEntries[report.index]?.index ?? report.index
+    }))
+  ]
+    .sort((left, right) => {
+      return left.index - right.index;
+    });
+  const warnings = [...cellPreview.warnings, ...riverPreview.warnings];
+
+  const summary = await applyCellAndFeatureWriteChanges(
+    normalizedId,
+    cellPreview.cellWriteChanges,
+    riverPreview.featureWriteChanges,
+    {
+      dryRun: options.dryRun,
+      cellRevisionIncrement: cellPreview.revisionIncrement,
+      featureRevisionIncrement: riverPreview.revisionIncrement
+    }
+  );
+  if (!options.dryRun && options.recordHistory !== false) {
+    await recordOperation(normalizedId, {
+      source: getCommandSource(commands),
+      action: getOperationAction(commands),
+      commands,
+      inverseCommands: [...riverPreview.inverseCommands, ...cellPreview.inverseCommands],
+      summary: stats
+    });
+  }
+  return {
+    mapId: normalizedId,
+    summary,
+    features: riverPreview.features,
+    warnings,
+    dryRun: options.dryRun ?? false,
+    command_results: commandResults,
+    changes: cellPreview.changes,
+    stats
   };
 }
 
@@ -1511,6 +1617,10 @@ export async function applyCommandsLight(
   if (lightweightRivers) {
     return lightweightRivers;
   }
+  const lightweightMixed = await applyLightweightMixedCommands(id, commands, options);
+  if (lightweightMixed) {
+    return lightweightMixed;
+  }
   const result = await applyCommands(id, commands, options);
   return {
     mapId: result.map.document.meta.id,
@@ -1575,6 +1685,29 @@ export async function undoMapLight(id: string): Promise<LightweightHistoryMoveRe
         summary: appliedRivers?.summary ?? await getMapSummary(normalizedId),
         features: appliedRivers?.features,
         warnings: appliedRivers?.warnings ?? [],
+        operation: {
+          seq: operation.seq,
+          action: operation.action,
+          source: operation.source,
+          timestamp: operation.timestamp
+        },
+        status: await getHistoryStatus(normalizedId)
+      };
+    }
+    const lightweightMixed = await applyLightweightMixedCommands(normalizedId, operation.inverseCommands, {
+      dryRun: true,
+      recordHistory: false
+    });
+    if (lightweightMixed) {
+      const appliedMixed = await applyLightweightMixedCommands(normalizedId, operation.inverseCommands, {
+        recordHistory: false
+      });
+      await moveHistoryCursor(normalizedId, operation.seq - 1);
+      return {
+        mapId: normalizedId,
+        summary: appliedMixed?.summary ?? await getMapSummary(normalizedId),
+        features: appliedMixed?.features,
+        warnings: appliedMixed?.warnings ?? [],
         operation: {
           seq: operation.seq,
           action: operation.action,
@@ -1663,6 +1796,29 @@ export async function redoMapLight(id: string): Promise<LightweightHistoryMoveRe
         summary: appliedRivers?.summary ?? await getMapSummary(normalizedId),
         features: appliedRivers?.features,
         warnings: appliedRivers?.warnings ?? [],
+        operation: {
+          seq: operation.seq,
+          action: operation.action,
+          source: operation.source,
+          timestamp: operation.timestamp
+        },
+        status: await getHistoryStatus(normalizedId)
+      };
+    }
+    const lightweightMixed = await applyLightweightMixedCommands(normalizedId, operation.commands, {
+      dryRun: true,
+      recordHistory: false
+    });
+    if (lightweightMixed) {
+      const appliedMixed = await applyLightweightMixedCommands(normalizedId, operation.commands, {
+        recordHistory: false
+      });
+      await moveHistoryCursor(normalizedId, operation.seq);
+      return {
+        mapId: normalizedId,
+        summary: appliedMixed?.summary ?? await getMapSummary(normalizedId),
+        features: appliedMixed?.features,
+        warnings: appliedMixed?.warnings ?? [],
         operation: {
           seq: operation.seq,
           action: operation.action,

@@ -146,6 +146,27 @@ export interface FeatureWriteChange {
 
 const MAX_LEGACY_IMPORT_FILE_BYTES = 32 * 1024 * 1024;
 
+async function runWithSavepoint<T>(
+  name: string,
+  callback: () => Promise<T>,
+  options: { rollback?: boolean } = {}
+): Promise<T> {
+  const db = getDatabase();
+  db.prepare(`SAVEPOINT ${name}`).run();
+  try {
+    const result = await callback();
+    if (options.rollback) {
+      db.prepare(`ROLLBACK TO ${name}`).run();
+    }
+    db.prepare(`RELEASE ${name}`).run();
+    return result;
+  } catch (error) {
+    db.prepare(`ROLLBACK TO ${name}`).run();
+    db.prepare(`RELEASE ${name}`).run();
+    throw error;
+  }
+}
+
 function safeJsonArray(value: string): string[] {
   try {
     const parsed = JSON.parse(value) as unknown;
@@ -815,6 +836,28 @@ export async function applyFeatureWriteChanges(
   }
   const write = db.transaction(applyChanges);
   return mapSummaryFromRow(db, write());
+}
+
+export async function applyCellAndFeatureWriteChanges(
+  id: string,
+  cellChanges: CellWriteChange[],
+  featureChanges: FeatureWriteChange[],
+  options: { dryRun?: boolean; cellRevisionIncrement?: number; featureRevisionIncrement?: number } = {}
+): Promise<MapSummary> {
+  const normalizedId = assertSafeMapId(id);
+  return runWithSavepoint(
+    "mixed_write",
+    async () => {
+      await applyCellWriteChanges(normalizedId, cellChanges, {
+        revisionIncrement: options.cellRevisionIncrement ?? 0
+      });
+      const summary = await applyFeatureWriteChanges(normalizedId, featureChanges, {
+        revisionIncrement: options.featureRevisionIncrement ?? 0
+      });
+      return options.dryRun ? summary : getMapSummary(normalizedId);
+    },
+    { rollback: options.dryRun }
+  );
 }
 
 export async function getDesignedCellsAt(

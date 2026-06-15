@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createEmptyDocument, stringifyDocument } from "@mapdesigner/map-core";
+import { createEmptyDocument, stringifyDocument, type MapCommand } from "@mapdesigner/map-core";
 
 async function loadService(tempRoot: string) {
   process.env.MAPDESIGNER_ROOT = tempRoot;
@@ -674,6 +674,84 @@ describe("server service", () => {
 
     const redone = await service.redoMapLight(mapId);
     expect(redone?.features?.rivers[0]?.points).toEqual(createdRiver.features?.rivers[0]?.points);
+    expect(redone?.status).toEqual({
+      canUndo: true,
+      canRedo: false,
+      cursor: 1,
+      latest: 1
+    });
+  });
+
+  it("applies mixed lightweight cell and river commands as one history operation", async () => {
+    const service = await loadService(tempRoot);
+    const created = await service.createMap({ name: "Light Mixed Test" });
+    const mapId = created.document.meta.id;
+    const commands: MapCommand[] = [
+      {
+        action: "set_cell",
+        source: "cli",
+        target: { row: 0, col: 0 },
+        changes: {
+          terrain: "plain",
+          biome: "grassland"
+        }
+      },
+      {
+        action: "create_river",
+        source: "cli",
+        river: {
+          id: "mixed-river",
+          name: "Mixed River",
+          points: [
+            { row: 0, col: 0, width: 2 },
+            { row: 0, col: 2, width: 6 }
+          ]
+        }
+      }
+    ];
+
+    const preview = await service.applyCommandsLight(mapId, commands, { dryRun: true });
+    expect(preview.dryRun).toBe(true);
+    expect(preview.summary.designed_cell_count).toBe(1);
+    expect(preview.summary.feature_counts.rivers).toBe(1);
+    expect(preview.features?.rivers.map((river) => river.id)).toEqual(["mixed-river"]);
+    expect((await service.getMap(mapId)).document.cells).toHaveLength(0);
+    expect((await service.getMap(mapId)).document.features.rivers).toHaveLength(0);
+    expect(await service.getHistoryStatus(mapId)).toEqual({
+      canUndo: false,
+      canRedo: false,
+      cursor: 0,
+      latest: 0
+    });
+
+    const applied = await service.applyCommandsLight(mapId, commands);
+    expect(applied.summary.designed_cell_count).toBe(1);
+    expect(applied.summary.feature_counts.rivers).toBe(1);
+    expect(applied.summary.meta.revision).toBe(3);
+    expect(applied.changes).toHaveLength(1);
+    expect(applied.features?.rivers[0]?.id).toBe("mixed-river");
+    expect(applied.command_results.map((entry) => entry.index)).toEqual([0, 1]);
+    expect(applied.stats.feature_stats.river_created_count).toBe(1);
+    expect(await service.getHistoryStatus(mapId)).toEqual({
+      canUndo: true,
+      canRedo: false,
+      cursor: 1,
+      latest: 1
+    });
+
+    const undone = await service.undoMapLight(mapId);
+    expect(undone?.summary.designed_cell_count).toBe(0);
+    expect(undone?.features?.rivers).toHaveLength(0);
+    expect(undone?.status).toEqual({
+      canUndo: false,
+      canRedo: true,
+      cursor: 0,
+      latest: 1
+    });
+
+    const redone = await service.redoMapLight(mapId);
+    expect(redone?.summary.designed_cell_count).toBe(1);
+    expect(redone?.features?.rivers[0]?.id).toBe("mixed-river");
     expect(redone?.status).toEqual({
       canUndo: true,
       canRedo: false,

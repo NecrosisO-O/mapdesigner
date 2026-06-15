@@ -411,6 +411,41 @@ describe("server api", () => {
       expect(undoRiverLightBody.result.map).toBeUndefined();
       expect(undoRiverLightBody.result.features.rivers).toHaveLength(0);
       expect(undoRiverLightBody.result.status.canRedo).toBe(true);
+
+      const mixedLight = await app.inject({
+        method: "POST",
+        url: `/api/maps/${mapId}/commands?includeMap=false`,
+        payload: {
+          commands: [
+            {
+              action: "set_cell",
+              source: "webui",
+              target: { row: 2, col: 0 },
+              changes: { terrain: "plain", biome: "grassland" }
+            },
+            {
+              action: "create_river",
+              source: "webui",
+              river: {
+                id: "mixed-api-river",
+                name: "Mixed API River",
+                points: [
+                  { row: 2, col: 0, width: 2 },
+                  { row: 2, col: 2, width: 6 }
+                ]
+              }
+            }
+          ]
+        }
+      });
+      expect(mixedLight.statusCode).toBe(200);
+      const mixedLightBody = mixedLight.json();
+      expect(mixedLightBody.result.map).toBeUndefined();
+      expect(mixedLightBody.result.summary.designed_cell_count).toBe(2);
+      expect(mixedLightBody.result.summary.feature_counts.rivers).toBe(1);
+      expect(mixedLightBody.result.features.rivers.map((river: { id: string }) => river.id)).toEqual(["mixed-api-river"]);
+      expect(mixedLightBody.result.command_results.map((entry: { index: number }) => entry.index)).toEqual([0, 1]);
+      expect(mixedLightBody.result.changes).toHaveLength(1);
     } finally {
       await app.close();
     }
