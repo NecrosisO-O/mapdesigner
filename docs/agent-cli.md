@@ -118,7 +118,7 @@ echo '{
 - `terrain_summary`
 - `biome_summary`
 
-对于 `set_cell`、`set_cells`、`clear_cell`、`annotate_cell`、`replace_terrain`、`replace_biome` 这类单元格命令，`--summary` 会走轻量数据库路径，不需要返回完整地图。Web/API 的 `includeMap=false` 撤销、重做对纯单元格历史也会走轻量路径。河流命令仍保持兼容执行路径。
+对于 `set_cell`、`set_cells`、`clear_cell`、`annotate_cell`、`replace_terrain`、`replace_biome` 这类单元格命令，`--summary` 会走轻量数据库路径，不需要返回完整地图。Web/API 的 `includeMap=false` 撤销、重做对纯单元格、纯河流、混合历史都会走轻量路径；河流命令和混合命令的 `--summary` 也会直接走数据库增量执行路径。
 
 不加 `--summary` 时会返回完整执行结果，包含 `map`、`command_results` 和 `changes`。`command_results` 按命令顺序给出逐条执行摘要；`changes` 给出聚合后的变更明细。每条变更都包含：
 
