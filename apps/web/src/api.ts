@@ -173,7 +173,7 @@ export const api = {
       method: "POST"
     }),
   importMap: (content: string, generateNewId = false) =>
-    request<MapRuntimeState>("/api/maps/import", {
+    request<{ map?: MapRuntimeState; summary: MapSummary }>(`/api/maps/import?includeMap=false`, {
       method: "POST",
       body: JSON.stringify({ content, generateNewId })
     }),
