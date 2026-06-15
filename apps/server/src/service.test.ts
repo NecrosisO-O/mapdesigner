@@ -939,6 +939,51 @@ describe("server service", () => {
     expect(imported.map?.document.meta.id).not.toBe(created.document.meta.id);
   });
 
+  it("imports larger documents through the dedicated storage-backed path", async () => {
+    const service = await loadService(tempRoot);
+    const document = createEmptyDocument({
+      id: "large-import-test",
+      name: "Large Import Test"
+    });
+    document.cells = Array.from({ length: 2200 }, (_, index) => ({
+      row: Math.floor(index / 44),
+      col: index % 44,
+      terrain: "plain",
+      biome: "grassland",
+      tags: [],
+      note: index === 0 ? "seed" : ""
+    }));
+    document.features.rivers = [
+      {
+        id: "import-river",
+        name: "Import River",
+        points: [
+          { row: 0, col: 0, width: 2 },
+          { row: 20, col: 20, width: 6 }
+        ]
+      }
+    ];
+
+    const imported = await service.importMap({
+      content: stringifyDocument(document),
+      includeMap: false
+    });
+
+    expect(imported.map).toBeUndefined();
+    expect(imported.summary.meta.id).toBe("large-import-test");
+    expect(imported.summary.designed_cell_count).toBe(2200);
+    expect(imported.summary.feature_counts.rivers).toBe(1);
+
+    const reopened = await service.getMapSummary("large-import-test");
+    expect(reopened.designed_cell_count).toBe(2200);
+    expect((await service.getMapFeaturesInRange("large-import-test", {
+      minRow: 0,
+      maxRow: 20,
+      minCol: 0,
+      maxCol: 20
+    })).rivers).toHaveLength(1);
+  });
+
   it("can save a runtime document as a new map", async () => {
     const service = await loadService(tempRoot);
     const created = await service.createMap({ name: "Save As Source" });

@@ -480,7 +480,9 @@ describe("App", () => {
     });
     apiMock.importMap.mockResolvedValue({
       ok: true,
-      result: sampleMap,
+      result: {
+        summary: createMockSummary(sampleMap)
+      },
       warnings: [],
       errors: []
     });
@@ -508,6 +510,103 @@ describe("App", () => {
     expect(statusBar.textContent).toContain("版本");
     expect(screen.queryByRole("list", { name: "地图列表" })).toBeNull();
     expect(screen.queryByRole("heading", { name: "悬停信息" })).toBeNull();
+  });
+
+  it("reopens imported maps through the summary-first large-map workflow", async () => {
+    render(<App />);
+    await screen.findByText("已打开 Sample Map");
+
+    const file = {
+      name: "imported-map.json",
+      type: "application/json",
+      text: vi.fn().mockResolvedValue(
+        JSON.stringify({
+          meta: { id: "imported-map" }
+        })
+      )
+    } as unknown as File;
+
+    apiMock.importMap.mockResolvedValueOnce({
+      ok: true,
+      result: {
+        summary: {
+          ...createMockSummary(sampleMap),
+          meta: {
+            ...sampleMap.document.meta,
+            id: "imported-map",
+            name: "Imported Map"
+          }
+        }
+      },
+      warnings: [],
+      errors: []
+    });
+    apiMock.listMaps.mockResolvedValueOnce({
+      ok: true,
+      result: [
+        {
+          id: "imported-map",
+          name: "Imported Map",
+          fileName: "imported-map.json",
+          updatedAt: "2026-01-01T00:00:00.000Z",
+          revision: 1,
+          designedCellCount: 1
+        }
+      ],
+      warnings: [],
+      errors: []
+    });
+    apiMock.getMapSummary.mockResolvedValueOnce({
+      ok: true,
+      result: {
+        ...createMockSummary(sampleMap),
+        meta: {
+          ...sampleMap.document.meta,
+          id: "imported-map",
+          name: "Imported Map"
+        }
+      },
+      warnings: [],
+      errors: []
+    });
+    apiMock.getCellsInRange.mockResolvedValueOnce({
+      ok: true,
+      result: {
+        map_id: "imported-map",
+        revision: 1,
+        range: { minRow: -24, maxRow: 23, minCol: -24, maxCol: 23 },
+        cells: sampleMap.activeCells
+      },
+      warnings: [],
+      errors: []
+    });
+    apiMock.getMapFeaturesInRange.mockResolvedValueOnce({
+      ok: true,
+      result: {
+        rivers: [],
+        page: {
+          total: 0,
+          limit: 1000,
+          offset: 0,
+          returned: 0,
+          has_more: false
+        }
+      },
+      warnings: [],
+      errors: []
+    });
+
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [file] } });
+
+    await waitFor(() => expect(apiMock.importMap).toHaveBeenCalled());
+    await waitFor(() => expect(apiMock.getMapSummary).toHaveBeenCalledWith("imported-map"));
+    await waitFor(() => expect(apiMock.getMapFeaturesInRange).toHaveBeenCalledWith(
+      "imported-map",
+      expect.any(Object),
+      { limit: 1000 }
+    ));
+    expect(await screen.findByText("导入成功")).toBeTruthy();
   });
 
   it("refreshes the current loaded range after edits without expanding it repeatedly", async () => {

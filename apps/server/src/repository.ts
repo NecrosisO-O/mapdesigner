@@ -153,6 +153,7 @@ export interface FeaturePageOptions {
 const MAX_LEGACY_IMPORT_FILE_BYTES = 32 * 1024 * 1024;
 const DEFAULT_FEATURE_PAGE_LIMIT = 500;
 const MAX_FEATURE_PAGE_LIMIT = 2_000;
+const SQLITE_IMPORT_BATCH_SIZE = 1_000;
 
 async function runWithSavepoint<T>(
   name: string,
@@ -674,6 +675,95 @@ function writeDocument(db: Database.Database, document: MapDocument): void {
   write();
 }
 
+function upsertMapRow(db: Database.Database, document: MapDocument, bounds: MapBounds): void {
+  db.prepare(
+    `INSERT INTO maps (
+      id, name, description, tags_json, layout, schema_version, created_at, updated_at, revision,
+      bounds_min_row, bounds_max_row, bounds_min_col, bounds_max_col, designed_cell_count
+    ) VALUES (
+      @id, @name, @description, @tags_json, @layout, @schema_version, @created_at, @updated_at, @revision,
+      @bounds_min_row, @bounds_max_row, @bounds_min_col, @bounds_max_col, @designed_cell_count
+    )
+    ON CONFLICT(id) DO UPDATE SET
+      name = excluded.name,
+      description = excluded.description,
+      tags_json = excluded.tags_json,
+      layout = excluded.layout,
+      schema_version = excluded.schema_version,
+      updated_at = excluded.updated_at,
+      revision = excluded.revision,
+      bounds_min_row = excluded.bounds_min_row,
+      bounds_max_row = excluded.bounds_max_row,
+      bounds_min_col = excluded.bounds_min_col,
+      bounds_max_col = excluded.bounds_max_col,
+      designed_cell_count = excluded.designed_cell_count`
+  ).run({
+    id: document.meta.id,
+    name: document.meta.name,
+    description: document.meta.description,
+    tags_json: serializeStringArray(document.meta.tags),
+    layout: document.grid.layout,
+    schema_version: document.schema_version,
+    created_at: document.meta.created_at,
+    updated_at: document.meta.updated_at,
+    revision: document.meta.revision,
+    bounds_min_row: bounds.min_row,
+    bounds_max_row: bounds.max_row,
+    bounds_min_col: bounds.min_col,
+    bounds_max_col: bounds.max_col,
+    designed_cell_count: document.cells.length
+  });
+}
+
+function writeDocumentBatched(db: Database.Database, document: MapDocument): void {
+  const bounds = normalizeBounds(document.cells);
+  const insertCell = db.prepare(
+    `INSERT INTO cells (map_id, row, col, terrain, biome, tags_json, note)
+     VALUES (@map_id, @row, @col, @terrain, @biome, @tags_json, @note)`
+  );
+  const insertFeature = db.prepare(
+    `INSERT INTO features (
+      map_id, kind, feature_id, json, bounds_min_row, bounds_max_row, bounds_min_col, bounds_max_col
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+  );
+  const write = db.transaction(() => {
+    upsertMapRow(db, document, bounds);
+    db.prepare("DELETE FROM cells WHERE map_id = ?").run(document.meta.id);
+    db.prepare("DELETE FROM features WHERE map_id = ?").run(document.meta.id);
+
+    for (let start = 0; start < document.cells.length; start += SQLITE_IMPORT_BATCH_SIZE) {
+      for (const cell of document.cells.slice(start, start + SQLITE_IMPORT_BATCH_SIZE)) {
+        insertCell.run({
+          map_id: document.meta.id,
+          row: cell.row,
+          col: cell.col,
+          terrain: cell.terrain,
+          biome: cell.biome,
+          tags_json: serializeStringArray(cell.tags),
+          note: cell.note
+        });
+      }
+    }
+
+    for (let start = 0; start < document.features.rivers.length; start += SQLITE_IMPORT_BATCH_SIZE) {
+      for (const river of document.features.rivers.slice(start, start + SQLITE_IMPORT_BATCH_SIZE)) {
+        const range = coordRangeForRiver(river);
+        insertFeature.run(
+          document.meta.id,
+          "river",
+          river.id,
+          JSON.stringify(river),
+          range?.minRow ?? null,
+          range?.maxRow ?? null,
+          range?.minCol ?? null,
+          range?.maxCol ?? null
+        );
+      }
+    }
+  });
+  write();
+}
+
 function rowToStoredOperation(row: OperationRow): StoredOperation {
   return {
     mapId: row.map_id,
@@ -1114,6 +1204,12 @@ export async function updateMapMetadata(id: string, input: MapMetadataUpdate): P
 export async function saveMapDocument(document: MapDocument): Promise<MapDocument> {
   const normalized = normalizeDocument(document);
   writeDocument(getDatabase(), normalized);
+  return normalized;
+}
+
+export async function importMapDocument(document: MapDocument): Promise<MapDocument> {
+  const normalized = normalizeDocument(document);
+  writeDocumentBatched(getDatabase(), normalized);
   return normalized;
 }
 

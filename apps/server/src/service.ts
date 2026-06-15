@@ -73,6 +73,7 @@ import {
   mapExists,
   moveHistoryCursor,
   recordOperation,
+  importMapDocument,
   saveMapDocument,
   updateMapMetadata,
   writeMapDocumentJsonExport,
@@ -1531,7 +1532,7 @@ export async function importMap(input: {
     };
   }
   validateDocumentForWrite(document);
-  document = await saveMapDocument(document);
+  document = await importMapDocument(document);
   const summary = await getMapSummary(document.meta.id);
   return {
     ...(input.includeMap === false ? {} : { map: runtimeFromDocument(document) }),

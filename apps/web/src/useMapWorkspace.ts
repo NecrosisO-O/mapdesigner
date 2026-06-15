@@ -455,17 +455,21 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
         setMessage(formatStatusMessage(retryResponse.errors[0]?.message, "导入失败"));
         return null;
       }
-      await refreshMaps(retryResponse.result.document.meta.id);
-      loadMapIntoWorkspace(retryResponse.result);
-      await refreshMapHistory(retryResponse.result.document.meta.id);
+      const opened = await openMap(retryResponse.result.summary.meta.id);
+      if (!opened) {
+        return null;
+      }
+      await refreshMaps(retryResponse.result.summary.meta.id);
       setMessage("导入成功");
-      return retryResponse.result;
+      return opened;
     }
-    await refreshMaps(response.result.document.meta.id);
-    loadMapIntoWorkspace(response.result);
-    await refreshMapHistory(response.result.document.meta.id);
+    const opened = await openMap(response.result.summary.meta.id);
+    if (!opened) {
+      return null;
+    }
+    await refreshMaps(response.result.summary.meta.id);
     setMessage("导入成功");
-    return response.result;
+    return opened;
   }
 
   async function duplicateMap(): Promise<MapRuntimeState | null> {
