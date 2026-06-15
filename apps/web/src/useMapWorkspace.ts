@@ -14,6 +14,7 @@ import { api, type MapHistory, type MapListItem } from "./api.js";
 const RANGE_CHUNK_SIZE = 24;
 const RANGE_OVERSCAN = 6;
 const MAX_RANGE_SPAN = 160;
+const FEATURE_RANGE_LIMIT = 1_000;
 
 export function formatDateTime(value: string): string {
   const date = new Date(value);
@@ -279,7 +280,9 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
       setMapFeatures(createEmptyFeatures());
       return null;
     }
-    const response = await api.getMapFeatures(id);
+    const response = lastVisibleRangeRef.current
+      ? await api.getMapFeaturesInRange(id, lastVisibleRangeRef.current, { limit: FEATURE_RANGE_LIMIT })
+      : await api.getMapFeatures(id);
     if (!response.ok || !response.result) {
       setMessage(formatStatusMessage(response.errors[0]?.message, "刷新地图要素失败"));
       return null;
@@ -313,7 +316,7 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
     const initialRange = normalizeVisibleRange(initialVisibleRangeFromSummary(summaryResponse.result));
     const [cellsResponse, featuresResponse] = await Promise.all([
       api.getCellsInRange(summaryResponse.result.meta.id, initialRange, true),
-      api.getMapFeaturesInRange(summaryResponse.result.meta.id, initialRange)
+      api.getMapFeaturesInRange(summaryResponse.result.meta.id, initialRange, { limit: FEATURE_RANGE_LIMIT })
     ]);
     if (!cellsResponse.ok || !cellsResponse.result) {
       setMessage(formatStatusMessage(cellsResponse.errors[0]?.message, "加载可视单元格失败"));
@@ -638,7 +641,7 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
     visibleRangeRequestSeqRef.current = requestSeq;
     const [response, featuresResponse] = await Promise.all([
       api.getCellsInRange(mapId, normalizedRange, true),
-      featuresOverride ? Promise.resolve(null) : api.getMapFeaturesInRange(mapId, normalizedRange)
+      featuresOverride ? Promise.resolve(null) : api.getMapFeaturesInRange(mapId, normalizedRange, { limit: FEATURE_RANGE_LIMIT })
     ]);
     if (requestSeq !== visibleRangeRequestSeqRef.current) {
       return null;

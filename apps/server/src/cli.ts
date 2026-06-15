@@ -412,14 +412,18 @@ async function main(): Promise<void> {
         }
         switch (riverAction) {
           case "list": {
-            assertKnownFlags(args, ["--map-id", "--min-row", "--max-row", "--min-col", "--max-col"]);
+            assertKnownFlags(args, ["--map-id", "--min-row", "--max-row", "--min-col", "--max-col", "--limit", "--offset", "--page"]);
             const id = readFlag(args, "--map-id");
             if (!id) {
               printFailure("maps rivers list requires --map-id");
             }
             const range = readOptionalRangeFlags(args);
-            const features = range ? await getMapFeaturesInRange(id, range) : await getMapFeatures(id);
-            printResult(createEnvelope({ result: features.rivers }));
+            const options = {
+              limit: readOptionalIntegerFlag(args, "--limit"),
+              offset: readOptionalIntegerFlag(args, "--offset")
+            };
+            const features = range ? await getMapFeaturesInRange(id, range, options) : await getMapFeatures(id);
+            printResult(createEnvelope({ result: hasFlag(args, "--page") ? features : features.rivers }));
             break;
           }
           case "inspect": {

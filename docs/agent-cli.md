@@ -254,6 +254,15 @@ pnpm exec tsx apps/server/src/cli.ts maps rivers list \
   --min-row -10 --max-row 10 --min-col -10 --max-col 10
 ```
 
+范围内河流很多时，使用分页参数并加 `--page` 获取 `page.has_more`：
+
+```bash
+pnpm exec tsx apps/server/src/cli.ts maps rivers list \
+  --map-id demo-map \
+  --min-row -10 --max-row 10 --min-col -10 --max-col 10 \
+  --limit 100 --offset 0 --page
+```
+
 创建河流：
 
 ```bash

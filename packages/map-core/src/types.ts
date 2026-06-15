@@ -46,6 +46,18 @@ export interface MapFeatures {
   rivers: RiverFeature[];
 }
 
+export interface FeaturePageInfo {
+  total: number;
+  limit: number;
+  offset: number;
+  returned: number;
+  has_more: boolean;
+}
+
+export interface MapFeaturePage extends MapFeatures {
+  page: FeaturePageInfo;
+}
+
 export interface MapDocument {
   schema_version: 1;
   meta: MapMeta;

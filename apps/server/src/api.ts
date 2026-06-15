@@ -232,16 +232,23 @@ export async function createServer(): Promise<FastifyInstance> {
 
   app.get<{
     Params: { id: string };
-    Querystring: { minRow?: string; maxRow?: string; minCol?: string; maxCol?: string };
+    Querystring: { minRow?: string; maxRow?: string; minCol?: string; maxCol?: string; limit?: string; offset?: string };
   }>("/api/maps/:id/features/range", async (request, reply) => {
     try {
       return createEnvelope({
-        result: await getMapFeaturesInRange(request.params.id, {
-          minRow: readIntegerQuery(request.query.minRow, "minRow"),
-          maxRow: readIntegerQuery(request.query.maxRow, "maxRow"),
-          minCol: readIntegerQuery(request.query.minCol, "minCol"),
-          maxCol: readIntegerQuery(request.query.maxCol, "maxCol")
-        })
+        result: await getMapFeaturesInRange(
+          request.params.id,
+          {
+            minRow: readIntegerQuery(request.query.minRow, "minRow"),
+            maxRow: readIntegerQuery(request.query.maxRow, "maxRow"),
+            minCol: readIntegerQuery(request.query.minCol, "minCol"),
+            maxCol: readIntegerQuery(request.query.maxCol, "maxCol")
+          },
+          {
+            limit: request.query.limit === undefined ? undefined : readIntegerQuery(request.query.limit, "limit"),
+            offset: request.query.offset === undefined ? undefined : readIntegerQuery(request.query.offset, "offset")
+          }
+        )
       });
     } catch (error) {
       return sendError(reply, "map_features_range_failed", error, 404);

@@ -29,6 +29,7 @@ import {
   type ExportRenderOptions,
   type HistorySource,
   type MapCommand,
+  type MapFeaturePage,
   type MapDocument,
   type MapFeatures,
   type MapSummary,
@@ -75,6 +76,7 @@ import {
   saveMapDocument,
   updateMapMetadata,
   writeMapDocumentJsonExport,
+  type FeaturePageOptions,
   type HistoryStatus,
   type MapHistory,
   type MapListItem
@@ -1876,8 +1878,12 @@ export async function getMapFeatures(id: string) {
   return getRepositoryMapFeatures(assertSafeMapId(id));
 }
 
-export async function getMapFeaturesInRange(id: string, range: CellRange) {
-  return getRepositoryMapFeaturesInRange(assertSafeMapId(id), range);
+export async function getMapFeaturesInRange(
+  id: string,
+  range: CellRange,
+  options: FeaturePageOptions = {}
+): Promise<MapFeaturePage> {
+  return getRepositoryMapFeaturesInRange(assertSafeMapId(id), range, options);
 }
 
 export async function getCellsInRange(

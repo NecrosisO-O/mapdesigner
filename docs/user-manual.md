@@ -598,7 +598,7 @@ pnpm exec tsx apps/server/src/cli.ts maps rivers create \
 
 `points` 是河流控制点。第一个点通常表示源头、入图点或上游控制点，最后一个点通常表示河口、汇入水域或出图点。系统会在相邻控制点之间自动补齐连续六角格路径。`width` 是可选宽度锚点，相邻宽度锚点之间会渐变；锚点可以落在自动补齐路径的中间格上。河流起点或终点接入湖泊、海洋、河口、潮滩等水域地貌时，渲染结果会显示端点衔接提示。
 
-大地图中查看河流时可以为 `maps rivers list` 添加 `--min-row --max-row --min-col --max-col`，只返回与指定范围重叠的河流，避免把所有线性要素一次性读出。
+大地图中查看河流时可以为 `maps rivers list` 添加 `--min-row --max-row --min-col --max-col`，只返回与指定范围重叠的河流，避免把所有线性要素一次性读出。范围内河流很多时再加 `--limit --offset --page`，返回结果会包含 `page.has_more`，便于继续分页读取。
 
 ## 16. AI agent 使用建议
 
