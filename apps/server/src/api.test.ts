@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { createEmptyDocument, stringifyDocument } from "@mapdesigner/map-core";
 
 async function loadApi(tempRoot: string) {
   process.env.MAPDESIGNER_ROOT = tempRoot;
@@ -197,6 +198,44 @@ describe("server api", () => {
       expect(downloadedJson.headers["content-type"]).toContain("application/json");
       expect(downloadedJson.headers["content-disposition"]).toContain(exportedJsonBody.result.fileName);
       expect(JSON.parse(downloadedJson.body).meta.id).toBe(mapId);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("imports maps with a lightweight summary response when includeMap is false", async () => {
+    const { createServer } = await loadApi(tempRoot);
+    const app = await createServer();
+    try {
+      const document = createEmptyDocument({
+        id: "api-light-import",
+        name: "API Light Import"
+      });
+      document.cells = [
+        {
+          row: 0,
+          col: 0,
+          terrain: "plain",
+          biome: "grassland",
+          tags: [],
+          note: ""
+        }
+      ];
+
+      const imported = await app.inject({
+        method: "POST",
+        url: "/api/maps/import?includeMap=false",
+        payload: {
+          content: stringifyDocument(document)
+        }
+      });
+
+      expect(imported.statusCode).toBe(200);
+      const importedBody = imported.json();
+      expect(importedBody.ok).toBe(true);
+      expect(importedBody.result.map).toBeUndefined();
+      expect(importedBody.result.summary.meta.id).toBe("api-light-import");
+      expect(importedBody.result.summary.designed_cell_count).toBe(1);
     } finally {
       await app.close();
     }

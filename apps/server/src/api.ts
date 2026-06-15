@@ -381,22 +381,27 @@ export async function createServer(): Promise<FastifyInstance> {
     }
   });
 
-  app.post<{ Body: { content: string; generateNewId?: boolean } }>("/api/maps/import", async (request, reply) => {
+  app.post<{ Querystring: { includeMap?: string }; Body: { content: string; generateNewId?: boolean } }>(
+    "/api/maps/import",
+    async (request, reply) => {
     try {
       const body = assertRecord(request.body, "request body is required");
       const content = readStringField(body, "content")!;
+      const includeMap = readIncludeMapQuery(request.query.includeMap);
       if (body.generateNewId !== undefined && typeof body.generateNewId !== "boolean") {
         throw badRequest("generateNewId must be a boolean");
       }
       const result = await importMap({
         content,
-        generateNewId: body.generateNewId as boolean | undefined
+        generateNewId: body.generateNewId as boolean | undefined,
+        includeMap
       });
-      return createEnvelope({ result: result.map, warnings: result.warnings });
+      return createEnvelope({ result: includeMap ? result.map : { summary: result.summary }, warnings: result.warnings });
     } catch (error) {
       return sendError(reply, "import_failed", error);
     }
-  });
+    }
+  );
 
   app.post<{ Params: { id: string } }>("/api/maps/:id/export-json", async (request, reply) => {
     try {

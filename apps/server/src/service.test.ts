@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createEmptyDocument, stringifyDocument, type MapCommand } from "@mapdesigner/map-core";
+import { createEmptyDocument, parseDocument, stringifyDocument, type MapCommand } from "@mapdesigner/map-core";
 
 async function loadService(tempRoot: string) {
   process.env.MAPDESIGNER_ROOT = tempRoot;
@@ -453,6 +453,72 @@ describe("server service", () => {
     });
   });
 
+  it("exports json from sqlite rows as a normalized archive document", async () => {
+    const service = await loadService(tempRoot);
+    const created = await service.createMap({ name: "SQLite JSON Export Test" });
+    const targets = Array.from({ length: 360 }, (_, index) => ({
+      row: Math.floor(index / 30),
+      col: index % 30
+    }));
+
+    await service.applyCommands(created.document.meta.id, [
+      {
+        action: "set_cells",
+        source: "cli",
+        targets,
+        changes: {
+          terrain: "plain",
+          biome: "grassland",
+          tags: ["waterfall", "peak", "peak"],
+          note: "exported from storage"
+        }
+      },
+      {
+        action: "create_river",
+        source: "cli",
+        river: {
+          id: "json-export-river",
+          name: "JSON Export River",
+          points: [
+            { row: 0, col: 0, width: 2 },
+            { row: 11, col: 29, width: 6 }
+          ],
+          opacity: 0.8
+        }
+      }
+    ]);
+
+    const jsonExport = await service.exportJson(created.document.meta.id);
+    const parsed = parseDocument(await fs.readFile(jsonExport.path, "utf8"));
+
+    expect(parsed.document).toBeTruthy();
+    expect(parsed.errors.filter((entry) => entry.severity === "invalid")).toHaveLength(0);
+    expect(parsed.document?.meta.name).toBe("SQLite JSON Export Test");
+    expect(parsed.document?.cells).toHaveLength(targets.length);
+    expect(parsed.document?.cells[0]).toEqual(
+      expect.objectContaining({
+        row: 0,
+        col: 0,
+        terrain: "plain",
+        biome: "grassland",
+        tags: ["peak", "waterfall"],
+        note: "exported from storage"
+      })
+    );
+    expect(parsed.document?.cells.at(-1)).toEqual(expect.objectContaining({ row: 11, col: 29 }));
+    expect(parsed.document?.features.rivers).toEqual([
+      expect.objectContaining({
+        id: "json-export-river",
+        name: "JSON Export River",
+        points: [
+          { row: 0, col: 0, width: 2 },
+          { row: 11, col: 29, width: 6 }
+        ],
+        opacity: 0.8
+      })
+    ]);
+  });
+
   it("supports dry-run without writing the map file", async () => {
     const service = await loadService(tempRoot);
     const created = await service.createMap({ name: "Dry Run Test" });
@@ -827,7 +893,8 @@ describe("server service", () => {
     await expect(service.importMap({ content })).rejects.toThrow(/meta.id conflict/);
 
     const imported = await service.importMap({ content, generateNewId: true });
-    expect(imported.map.document.meta.id).not.toBe(created.document.meta.id);
+    expect(imported.map).toBeTruthy();
+    expect(imported.map?.document.meta.id).not.toBe(created.document.meta.id);
   });
 
   it("can save a runtime document as a new map", async () => {

@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import { createWriteStream } from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import type { CellRange, ExportRenderOptions, MapDocument, ValidationIssue } from "@mapdesigner/map-core";
@@ -75,6 +76,51 @@ export async function writeFileAtomic(filePath: string, content: string | Buffer
     await fs.writeFile(temporaryPath, content);
     await fs.rename(temporaryPath, filePath);
   } catch (error) {
+    await fs.rm(temporaryPath, { force: true }).catch(() => undefined);
+    throw storageError("failed to write file", error);
+  }
+}
+
+export async function writeFileAtomicStream(
+  filePath: string,
+  writeContent: (write: (chunk: string | Buffer) => Promise<void>) => Promise<void>
+): Promise<void> {
+  const directory = path.dirname(filePath);
+  const temporaryPath = path.join(
+    directory,
+    `.${path.basename(filePath)}.${process.pid}.${crypto.randomBytes(6).toString("hex")}.tmp`
+  );
+  const stream = createWriteStream(temporaryPath);
+  let closed = false;
+  const closeStream = async (): Promise<void> => {
+    if (closed) {
+      return;
+    }
+    await new Promise<void>((resolve, reject) => {
+      stream.once("error", reject);
+      stream.end(() => resolve());
+    });
+    closed = true;
+  };
+
+  try {
+    await writeContent(
+      (chunk) =>
+        new Promise<void>((resolve, reject) => {
+          stream.write(chunk, (error) => {
+            if (error) {
+              reject(error);
+              return;
+            }
+            resolve();
+          });
+        })
+    );
+    await closeStream();
+    await fs.rename(temporaryPath, filePath);
+  } catch (error) {
+    stream.destroy();
+    closed = true;
     await fs.rm(temporaryPath, { force: true }).catch(() => undefined);
     throw storageError("failed to write file", error);
   }

@@ -513,17 +513,19 @@ async function main(): Promise<void> {
         break;
       }
       case "import": {
-        assertKnownFlags(args, ["--file", "--generate-new-id"]);
+        assertKnownFlags(args, ["--file", "--generate-new-id", "--summary"]);
         const filePath = readFlag(args, "--file");
         if (!filePath) {
           printFailure("maps import requires --file");
         }
+        const summaryOnly = hasFlag(args, "--summary");
         const content = await fs.readFile(path.resolve(filePath), "utf8");
         const result = await importMap({
           content,
-          generateNewId: hasFlag(args, "--generate-new-id")
+          generateNewId: hasFlag(args, "--generate-new-id"),
+          includeMap: !summaryOnly
         });
-        printResult(createEnvelope({ result: result.map, warnings: result.warnings }));
+        printResult(createEnvelope({ result: summaryOnly ? { summary: result.summary } : result.map, warnings: result.warnings }));
         break;
       }
       case "export-json": {

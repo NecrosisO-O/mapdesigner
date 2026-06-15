@@ -25,7 +25,7 @@ import {
 import type Database from "better-sqlite3";
 import { MAP_STORAGE_DIR } from "./config.js";
 import { badRequest, notFound, storageError } from "./errors.js";
-import { assertSafeMapId, mapFilePath } from "./storage.js";
+import { assertSafeMapId, mapFilePath, writeFileAtomicStream } from "./storage.js";
 import { getDatabase } from "./db.js";
 import { createMapId } from "./utils.js";
 
@@ -180,6 +180,10 @@ function serializeStringArray(value: string[]): string {
   return JSON.stringify(value);
 }
 
+function normalizeStringArray(value: string[]): string[] {
+  return [...new Set(value)].sort();
+}
+
 function normalizeBounds(cells: DesignedCellRecord[]): MapBounds {
   if (cells.length === 0) {
     return {
@@ -233,6 +237,31 @@ function cellRowToDesignedCell(row: CellRow): DesignedCellRecord {
     biome: row.biome ?? null,
     tags: safeJsonArray(row.tags_json) as DesignedCellRecord["tags"],
     note: row.note
+  };
+}
+
+function normalizeCellForExport(row: CellRow): DesignedCellRecord {
+  return {
+    row: row.row,
+    col: row.col,
+    terrain: row.terrain,
+    biome: row.biome ?? null,
+    tags: normalizeStringArray(safeJsonArray(row.tags_json)) as DesignedCellRecord["tags"],
+    note: row.note ?? ""
+  };
+}
+
+function normalizeRiverForExport(river: RiverFeature): RiverFeature {
+  return {
+    id: river.id,
+    name: river.name,
+    points: river.points.map((point) => ({
+      row: point.row,
+      col: point.col,
+      ...(typeof point.width === "number" ? { width: point.width } : {})
+    })),
+    ...(river.color ? { color: river.color } : {}),
+    ...(typeof river.opacity === "number" ? { opacity: river.opacity } : {})
   };
 }
 
@@ -753,6 +782,62 @@ export async function getMapDocument(id: string): Promise<MapDocument> {
     grid: mapRowToGrid(row),
     cells: readCells(db, row.id),
     features: featureRowsToFeatures(readFeatureRows(db, row.id))
+  });
+}
+
+function indentJson(value: unknown, spaces: number): string {
+  const prefix = " ".repeat(spaces);
+  return JSON.stringify(value, null, 2)
+    .split("\n")
+    .map((line) => `${prefix}${line}`)
+    .join("\n");
+}
+
+export async function writeMapDocumentJsonExport(id: string, filePath: string): Promise<void> {
+  await ensureMapInDatabase(id);
+  const db = getDatabase();
+  const row = getMapRowOrThrow(db, id);
+  const meta: MapMeta = {
+    ...mapRowToMeta(row),
+    tags: normalizeStringArray(mapRowToMeta(row).tags)
+  };
+  const grid = mapRowToGrid(row);
+  const cellRows = db
+    .prepare("SELECT map_id, row, col, terrain, biome, tags_json, note FROM cells WHERE map_id = ? ORDER BY row, col")
+    .iterate(row.id) as Iterable<CellRow>;
+  const riverRows = db
+    .prepare(
+      `SELECT map_id, kind, feature_id, json,
+              bounds_min_row, bounds_max_row, bounds_min_col, bounds_max_col
+       FROM features
+       WHERE map_id = ? AND kind = 'river'
+       ORDER BY feature_id`
+    )
+    .iterate(row.id) as Iterable<FeatureRow>;
+
+  await writeFileAtomicStream(filePath, async (write) => {
+    await write("{\n");
+    await write('  "schema_version": 1,\n');
+    await write(`  "meta": ${JSON.stringify(meta, null, 2).replace(/\n/g, "\n  ")},\n`);
+    await write(`  "grid": ${JSON.stringify(grid, null, 2).replace(/\n/g, "\n  ")},\n`);
+    await write('  "cells": [');
+    let hasCell = false;
+    for (const cellRow of cellRows) {
+      await write(`${hasCell ? "," : ""}\n${indentJson(normalizeCellForExport(cellRow), 4)}`);
+      hasCell = true;
+    }
+    await write(hasCell ? "\n  ],\n" : "],\n");
+    await write('  "features": {\n');
+    await write('    "rivers": [');
+    let hasRiver = false;
+    for (const featureRow of riverRows) {
+      const river = normalizeRiverForExport(JSON.parse(featureRow.json) as RiverFeature);
+      await write(`${hasRiver ? "," : ""}\n${indentJson(river, 6)}`);
+      hasRiver = true;
+    }
+    await write(hasRiver ? "\n    ]\n" : "]\n");
+    await write("  }\n");
+    await write("}");
   });
 }
 

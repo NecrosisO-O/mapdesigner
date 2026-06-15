@@ -24,7 +24,6 @@ import {
   type CellRangeResult,
   type CellChangeDetail,
   type CellInspectionResult,
-  stringifyDocument,
   type DesignedCellRecord,
   type GridCoordinate,
   type ExportRenderOptions,
@@ -75,6 +74,7 @@ import {
   recordOperation,
   saveMapDocument,
   updateMapMetadata,
+  writeMapDocumentJsonExport,
   type HistoryStatus,
   type MapHistory,
   type MapListItem
@@ -1503,7 +1503,8 @@ export async function duplicateMap(id: string): Promise<MapRuntimeState> {
 export async function importMap(input: {
   content: string;
   generateNewId?: boolean;
-}): Promise<{ map: MapRuntimeState; warnings: ValidationIssue[] }> {
+  includeMap?: boolean;
+}): Promise<{ map?: MapRuntimeState; summary: MapSummary; warnings: ValidationIssue[] }> {
   await ensureDirectories();
   const parsed = parseDocument(input.content);
   if (!parsed.document) {
@@ -1529,17 +1530,20 @@ export async function importMap(input: {
   }
   validateDocumentForWrite(document);
   document = await saveMapDocument(document);
+  const summary = await getMapSummary(document.meta.id);
   return {
-    map: runtimeFromDocument(document),
+    ...(input.includeMap === false ? {} : { map: runtimeFromDocument(document) }),
+    summary,
     warnings: parsed.errors.filter((entry) => entry.severity === "warning")
   };
 }
 
 export async function exportJson(id: string): Promise<{ fileName: string; path: string }> {
-  const document = await getMapDocument(assertSafeMapId(id));
-  const fileName = `${slugify(document.meta.name) || assertSafeMapId(document.meta.id)}.json`;
+  const normalizedId = assertSafeMapId(id);
+  const summary = await getMapSummary(normalizedId);
+  const fileName = `${slugify(summary.meta.name) || normalizedId}.json`;
   const filePath = exportPath(fileName);
-  await writeFileAtomic(filePath, stringifyDocument(document));
+  await writeMapDocumentJsonExport(normalizedId, filePath);
   return { fileName, path: filePath };
 }
 
