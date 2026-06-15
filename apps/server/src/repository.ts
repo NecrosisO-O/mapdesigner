@@ -17,6 +17,7 @@ import {
   type MapCommand,
   type MapBounds,
   type MapDocument,
+  type MapFeaturePage,
   type MapFeatures,
   type MapMeta,
   type MapSummary,
@@ -144,7 +145,14 @@ export interface FeatureWriteChange {
   river: RiverFeature | null;
 }
 
+export interface FeaturePageOptions {
+  limit?: number;
+  offset?: number;
+}
+
 const MAX_LEGACY_IMPORT_FILE_BYTES = 32 * 1024 * 1024;
+const DEFAULT_FEATURE_PAGE_LIMIT = 500;
+const MAX_FEATURE_PAGE_LIMIT = 2_000;
 
 async function runWithSavepoint<T>(
   name: string,
@@ -320,6 +328,18 @@ function assertRange(range: CellRange): CellRange {
   return range;
 }
 
+function normalizeFeaturePageOptions(options: FeaturePageOptions = {}): Required<FeaturePageOptions> {
+  const limit = options.limit ?? DEFAULT_FEATURE_PAGE_LIMIT;
+  const offset = options.offset ?? 0;
+  if (!Number.isInteger(limit) || limit < 1 || limit > MAX_FEATURE_PAGE_LIMIT) {
+    throw badRequest(`feature limit must be an integer between 1 and ${MAX_FEATURE_PAGE_LIMIT}`);
+  }
+  if (!Number.isInteger(offset) || offset < 0) {
+    throw badRequest("feature offset must be a non-negative integer");
+  }
+  return { limit, offset };
+}
+
 function isWithinRange(coord: { row: number; col: number }, range: CellRange): boolean {
   return coord.row >= range.minRow && coord.row <= range.maxRow && coord.col >= range.minCol && coord.col <= range.maxCol;
 }
@@ -428,17 +448,30 @@ function featureRowsToFeatures(rows: FeatureRow[]): MapFeatures {
   };
 }
 
-function featureRowsToFeaturesInRange(rows: FeatureRow[], range: CellRange): MapFeatures {
+function featureRowsToFeaturesInRange(
+  rows: FeatureRow[],
+  range: CellRange,
+  options: Required<FeaturePageOptions>
+): MapFeaturePage {
+  const rivers = rows
+    .filter((row) => row.kind === "river")
+    .flatMap((row) => {
+      const river = JSON.parse(row.json) as RiverFeature;
+      const rowRange = rangeFromFeatureRow(row);
+      const riverRange = rowRange ?? coordRangeForRiver(river);
+      return riverRange && doRangesOverlap(riverRange, range) ? [river] : [];
+    })
+    .sort((left, right) => left.id.localeCompare(right.id));
+  const paged = rivers.slice(options.offset, options.offset + options.limit);
   return {
-    rivers: rows
-      .filter((row) => row.kind === "river")
-      .flatMap((row) => {
-        const river = JSON.parse(row.json) as RiverFeature;
-        const rowRange = rangeFromFeatureRow(row);
-        const riverRange = rowRange ?? coordRangeForRiver(river);
-        return riverRange && doRangesOverlap(riverRange, range) ? [river] : [];
-      })
-      .sort((left, right) => left.id.localeCompare(right.id))
+    rivers: paged,
+    page: {
+      total: rivers.length,
+      limit: options.limit,
+      offset: options.offset,
+      returned: paged.length,
+      has_more: options.offset + paged.length < rivers.length
+    }
   };
 }
 
@@ -849,13 +882,18 @@ export async function getMapFeatures(id: string): Promise<MapFeatures> {
   return featureRowsToFeatures(readFeatureRows(db, row.id));
 }
 
-export async function getMapFeaturesInRange(id: string, inputRange: CellRange): Promise<MapFeatures> {
+export async function getMapFeaturesInRange(
+  id: string,
+  inputRange: CellRange,
+  options: FeaturePageOptions = {}
+): Promise<MapFeaturePage> {
   const range = assertRange(inputRange);
+  const pageOptions = normalizeFeaturePageOptions(options);
   await ensureMapInDatabase(id);
   const db = getDatabase();
   const row = getMapRowOrThrow(db, id);
   backfillMissingFeatureBounds(db, row.id);
-  return featureRowsToFeaturesInRange(readFeatureRowsInRange(db, row.id, range), range);
+  return featureRowsToFeaturesInRange(readFeatureRowsInRange(db, row.id, range), range, pageOptions);
 }
 
 export async function getRiverFeatures(id: string): Promise<RiverFeature[]> {

@@ -3,6 +3,7 @@ import type {
   CellRangeResult,
   CellChangeDetail,
   ExportRenderOptions,
+  MapFeaturePage,
   MapCommand,
   MapDocument,
   MapFeatures,
@@ -109,10 +110,21 @@ export const api = {
   getMap: (id: string) => request<MapRuntimeState>(`/api/maps/${id}`),
   getMapSummary: (id: string) => request<MapSummary>(`/api/maps/${id}/summary`),
   getMapFeatures: (id: string) => request<MapFeatures>(`/api/maps/${id}/features`),
-  getMapFeaturesInRange: (id: string, range: CellRange) =>
-    request<MapFeatures>(
-      `/api/maps/${id}/features/range?minRow=${range.minRow}&maxRow=${range.maxRow}&minCol=${range.minCol}&maxCol=${range.maxCol}`
-    ),
+  getMapFeaturesInRange: (id: string, range: CellRange, options: { limit?: number; offset?: number } = {}) => {
+    const params = new URLSearchParams({
+      minRow: String(range.minRow),
+      maxRow: String(range.maxRow),
+      minCol: String(range.minCol),
+      maxCol: String(range.maxCol)
+    });
+    if (options.limit !== undefined) {
+      params.set("limit", String(options.limit));
+    }
+    if (options.offset !== undefined) {
+      params.set("offset", String(options.offset));
+    }
+    return request<MapFeaturePage>(`/api/maps/${id}/features/range?${params.toString()}`);
+  },
   getMapHistory: (id: string, limit = 5) => request<MapHistory>(`/api/maps/${id}/history?limit=${limit}`),
   getHistoryStatus: (id: string) => request<HistoryStatus>(`/api/maps/${id}/history-status`),
   getCellsInRange: (id: string, range: CellRange, includeUndesigned = true) =>

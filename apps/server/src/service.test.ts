@@ -157,6 +157,48 @@ describe("server service", () => {
     expect(features.rivers.map((river) => river.id)).toEqual(["crossing-river"]);
   });
 
+  it("paginates river feature range results for dense visible areas", async () => {
+    const service = await loadService(tempRoot);
+    const created = await service.createMap({ name: "Feature Page Test" });
+    const mapId = created.document.meta.id;
+
+    await service.applyCommands(
+      mapId,
+      Array.from({ length: 5 }, (_, index) => ({
+        action: "create_river" as const,
+        source: "cli" as const,
+        river: {
+          id: `page-river-${index}`,
+          name: `Page River ${index}`,
+          points: [
+            { row: 0, col: index, width: 2 },
+            { row: 1, col: index, width: 2 }
+          ]
+        }
+      }))
+    );
+
+    const firstPage = await service.getMapFeaturesInRange(
+      mapId,
+      {
+        minRow: -1,
+        maxRow: 2,
+        minCol: -1,
+        maxCol: 6
+      },
+      { limit: 2, offset: 1 }
+    );
+
+    expect(firstPage.rivers.map((river) => river.id)).toEqual(["page-river-1", "page-river-2"]);
+    expect(firstPage.page).toEqual({
+      total: 5,
+      limit: 2,
+      offset: 1,
+      returned: 2,
+      has_more: true
+    });
+  });
+
   it("records command history and supports undo/redo for cell edits", async () => {
     const service = await loadService(tempRoot);
     const created = await service.createMap({ name: "History Test" });

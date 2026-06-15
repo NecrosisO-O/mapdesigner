@@ -551,6 +551,18 @@ describe("server api", () => {
               action: "create_river",
               source: "webui",
               river: {
+                id: "near-river-b",
+                name: "Near River B",
+                points: [
+                  { row: 0, col: 3, width: 2 },
+                  { row: 0, col: 4, width: 2 }
+                ]
+              }
+            },
+            {
+              action: "create_river",
+              source: "webui",
+              river: {
                 id: "far-river",
                 name: "Far River",
                 points: [
@@ -565,10 +577,18 @@ describe("server api", () => {
 
       const features = await app.inject({
         method: "GET",
-        url: `/api/maps/${mapId}/features/range?minRow=-1&maxRow=1&minCol=3&maxCol=4`
+        url: `/api/maps/${mapId}/features/range?minRow=-1&maxRow=1&minCol=3&maxCol=4&limit=1&offset=1`
       });
       expect(features.statusCode).toBe(200);
-      expect(features.json().result.rivers.map((river: { id: string }) => river.id)).toEqual(["near-river"]);
+      const featuresBody = features.json();
+      expect(featuresBody.result.rivers.map((river: { id: string }) => river.id)).toEqual(["near-river-b"]);
+      expect(featuresBody.result.page).toEqual({
+        total: 2,
+        limit: 1,
+        offset: 1,
+        returned: 1,
+        has_more: false
+      });
     } finally {
       await app.close();
     }

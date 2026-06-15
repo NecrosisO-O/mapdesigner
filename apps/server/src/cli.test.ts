@@ -729,6 +729,41 @@ describe("server cli", () => {
     expect(rangedList.code).toBe(0);
     expect(JSON.parse(rangedList.stdout).result.map((river: { id: string }) => river.id)).toEqual(["main-river", "mixed-river"]);
 
+    const pagedList = await runCli(
+      [
+        "maps",
+        "rivers",
+        "list",
+        "--map-id",
+        mapId,
+        "--min-row",
+        "-1",
+        "--max-row",
+        "1",
+        "--min-col",
+        "1",
+        "--max-col",
+        "1",
+        "--limit",
+        "1",
+        "--offset",
+        "1",
+        "--page"
+      ],
+      { tempRoot }
+    );
+    expect(pagedList.code).toBe(0);
+    expect(JSON.parse(pagedList.stdout).result).toEqual({
+      rivers: [expect.objectContaining({ id: "mixed-river" })],
+      page: {
+        total: 2,
+        limit: 1,
+        offset: 1,
+        returned: 1,
+        has_more: false
+      }
+    });
+
     const inspected = await runCli(
       ["maps", "rivers", "inspect", "--map-id", mapId, "--river-id", "main-river"],
       { tempRoot }
