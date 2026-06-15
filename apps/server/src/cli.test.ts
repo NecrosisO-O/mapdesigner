@@ -590,13 +590,37 @@ describe("server cli", () => {
     expect(createdRiver.code).toBe(0);
     const createdRiverBody = JSON.parse(createdRiver.stdout);
     expect(createdRiverBody.result.river_count).toBe(1);
+    expect(createdRiverBody.result.feature_stats).toEqual({
+      river_created_count: 1,
+      river_updated_count: 0,
+      river_deleted_count: 0
+    });
+
+    const widenedRiver = await runCli(["maps", "apply", "--map-id", mapId, "--stdin", "--summary"], {
+      tempRoot,
+      input: JSON.stringify({
+        commands: [
+          {
+            action: "set_river_width",
+            source: "cli",
+            river_id: "main-river",
+            target: { row: 0, col: 1 },
+            width: 6
+          }
+        ]
+      })
+    });
+    expect(widenedRiver.code).toBe(0);
+    const widenedRiverBody = JSON.parse(widenedRiver.stdout);
+    expect(widenedRiverBody.result.river_count).toBe(1);
+    expect(widenedRiverBody.result.feature_stats.river_updated_count).toBe(1);
 
     const listed = await runCli(["maps", "rivers", "list", "--map-id", mapId], { tempRoot });
     expect(listed.code).toBe(0);
     const listedBody = JSON.parse(listed.stdout);
     expect(listedBody.result[0].id).toBe("main-river");
     expect(listedBody.result[0].points[0].width).toBe(2);
-    expect(listedBody.result[0].points[1]).toEqual({ row: 0, col: 1, width: 5 });
+    expect(listedBody.result[0].points[1]).toEqual({ row: 0, col: 1, width: 6 });
 
     const farRiver = await runCli(
       [

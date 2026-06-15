@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import sharp from "sharp";
 import {
   applyCommand,
+  buildHexLine,
   createCellId,
   createDisplayCoord,
   createRuntimeState,
@@ -9,9 +10,13 @@ import {
   getNeighborCoords,
   parseDocument,
   isBiomeKey,
+  isRiverId,
   isTagKey,
   isTerrainKey,
+  sameCoord,
   validateCoordinate,
+  validateRiverFeature,
+  validateRiverPoint,
   validateTerrainBiomePair,
   type AreaInspectionResult,
   type ActiveCell,
@@ -30,6 +35,7 @@ import {
   type MapSummary,
   type MapRuntimeState,
   type NeighborInspectionResult,
+  type RiverFeature,
   type TagKey,
   type ValidationIssue
 } from "@mapdesigner/map-core";
@@ -48,12 +54,14 @@ import {
   createMapDocument,
   deleteMapDocument,
   applyCellWriteChanges,
+  applyFeatureWriteChanges,
   getCellsInRange as getRepositoryCellsInRange,
   getDesignedCellsAt,
   getDesignedCellsByBiome,
   getDesignedCellsByTerrain,
   getMapFeatures as getRepositoryMapFeatures,
   getMapFeaturesInRange as getRepositoryMapFeaturesInRange,
+  getRiverFeatures,
   getMapHistory as getRepositoryMapHistory,
   getHistoryStatus as getRepositoryHistoryStatus,
   getMapDocument,
@@ -525,6 +533,308 @@ function cloneDesignedCell(cell: DesignedCellRecord): DesignedCellRecord {
     biome: cell.biome,
     tags: [...cell.tags],
     note: cell.note
+  };
+}
+
+function isRiverCommand(command: MapCommand): boolean {
+  return ["create_river", "update_river", "delete_river", "set_river_path", "set_river_width"].includes(command.action);
+}
+
+function createRiverIdFromFeatures(name: string, existing: RiverFeature[]): string {
+  const slug = name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 48) || "river";
+  const existingIds = new Set(existing.map((river) => river.id));
+  if (!existingIds.has(slug)) {
+    return slug;
+  }
+  let suffix = 2;
+  while (existingIds.has(`${slug}-${suffix}`)) {
+    suffix += 1;
+  }
+  return `${slug}-${suffix}`;
+}
+
+function normalizeRiverPoint(point: RiverFeature["points"][number]): RiverFeature["points"][number] {
+  return {
+    row: point.row,
+    col: point.col,
+    ...(typeof point.width === "number" ? { width: point.width } : {})
+  };
+}
+
+function normalizeRiverFeature(river: RiverFeature): RiverFeature {
+  return {
+    id: river.id,
+    name: river.name.trim(),
+    points: river.points.map(normalizeRiverPoint),
+    ...(river.color ? { color: river.color } : {}),
+    ...(typeof river.opacity === "number" ? { opacity: river.opacity } : {})
+  };
+}
+
+function cloneRiverFeature(river: RiverFeature): RiverFeature {
+  return {
+    id: river.id,
+    name: river.name,
+    points: river.points.map((point) => ({
+      row: point.row,
+      col: point.col,
+      ...(typeof point.width === "number" ? { width: point.width } : {})
+    })),
+    ...(river.color ? { color: river.color } : {}),
+    ...(typeof river.opacity === "number" ? { opacity: river.opacity } : {})
+  };
+}
+
+function insertRiverWidthAnchor(river: RiverFeature, target: GridCoordinate, width: number): boolean {
+  for (let index = 0; index < river.points.length - 1; index += 1) {
+    const line = buildHexLine(river.points[index]!, river.points[index + 1]!);
+    const lineIndex = line.findIndex((coord) => sameCoord(coord, target));
+    if (lineIndex > 0 && lineIndex < line.length - 1) {
+      river.points.splice(index + 1, 0, {
+        row: target.row,
+        col: target.col,
+        width
+      });
+      return true;
+    }
+  }
+  return false;
+}
+
+function riverCommandReport(index: number, action: MapCommand["action"]): CommandExecutionReport {
+  return {
+    index,
+    action,
+    changed: [],
+    details: [],
+    warnings: []
+  };
+}
+
+function featuresFromWorkingRivers(rivers: Map<string, RiverFeature | null>): MapFeatures {
+  return {
+    rivers: [...rivers.values()]
+      .filter((river): river is RiverFeature => river !== null)
+      .map(cloneRiverFeature)
+      .sort((left, right) => left.id.localeCompare(right.id))
+  };
+}
+
+interface LightweightRiverCommandOptions extends ApplyCommandsOptions {
+  recordHistory?: boolean;
+}
+
+async function applyLightweightRiverCommands(
+  id: string,
+  commands: MapCommand[],
+  options: LightweightRiverCommandOptions = {}
+): Promise<LightweightApplyCommandsResult | null> {
+  if (commands.length === 0 || !commands.every(isRiverCommand)) {
+    return null;
+  }
+  const normalizedId = assertSafeMapId(id);
+  const commandResults: CommandExecutionReport[] = [];
+  const writeChanges = new Map<string, RiverFeature | null>();
+  const workingRivers = new Map<string, RiverFeature | null>();
+  const inverseCommands: MapCommand[] = [];
+  for (const river of await getRiverFeatures(normalizedId)) {
+    workingRivers.set(river.id, cloneRiverFeature(river));
+  }
+  let revisionIncrement = 0;
+
+  for (const [index, command] of commands.entries()) {
+    switch (command.action) {
+      case "create_river": {
+        const existing = [...workingRivers.values()].filter((river): river is RiverFeature => river !== null);
+        const river = normalizeRiverFeature({
+          id: command.river.id ?? createRiverIdFromFeatures(command.river.name, existing),
+          name: command.river.name,
+          points: command.river.points,
+          color: command.river.color,
+          opacity: command.river.opacity
+        });
+        const errors: ValidationIssue[] = [];
+        if (workingRivers.get(river.id) !== null && workingRivers.has(river.id)) {
+          errors.push({
+            code: "duplicate_river",
+            message: `river ${river.id} already exists`,
+            severity: "invalid",
+            target: "river.id"
+          });
+        }
+        errors.push(...validateRiverFeature(river));
+        if (errors.length > 0) {
+          throw badRequest(errors.map((entry) => entry.message).join("; "), errors);
+        }
+        workingRivers.set(river.id, river);
+        writeChanges.set(river.id, river);
+        inverseCommands.push({ action: "delete_river", source: "system", river_id: river.id });
+        revisionIncrement += 1;
+        break;
+      }
+      case "update_river": {
+        if (!isRiverId(command.river_id)) {
+          throw badRequest("river_id must be a valid river id", [{ code: "invalid_river_id", message: "river_id must be a valid river id", severity: "invalid", target: "river_id" }]);
+        }
+        const existing = workingRivers.get(command.river_id) ?? null;
+        if (!existing) {
+          throw badRequest(`river ${command.river_id} was not found`, [{ code: "missing_river", message: `river ${command.river_id} was not found`, severity: "invalid", target: "river_id" }]);
+        }
+        const previous = cloneRiverFeature(existing);
+        const next = normalizeRiverFeature({
+          ...existing,
+          name: command.changes.name ?? existing.name,
+          points: command.changes.points ?? existing.points,
+          color: command.changes.color === undefined ? existing.color : command.changes.color,
+          opacity: command.changes.opacity === undefined ? existing.opacity : command.changes.opacity
+        });
+        const errors = validateRiverFeature(next);
+        if (errors.length > 0) {
+          throw badRequest(errors.map((entry) => entry.message).join("; "), errors);
+        }
+        workingRivers.set(command.river_id, next);
+        writeChanges.set(command.river_id, next);
+        inverseCommands.push({
+          action: "update_river",
+          source: "system",
+          river_id: command.river_id,
+          changes: {
+            name: previous.name,
+            points: previous.points,
+            color: previous.color ?? null,
+            opacity: previous.opacity ?? null
+          }
+        });
+        revisionIncrement += 1;
+        break;
+      }
+      case "delete_river": {
+        if (!isRiverId(command.river_id)) {
+          throw badRequest("river_id must be a valid river id", [{ code: "invalid_river_id", message: "river_id must be a valid river id", severity: "invalid", target: "river_id" }]);
+        }
+        const existing = workingRivers.get(command.river_id) ?? null;
+        if (!existing) {
+          throw badRequest(`river ${command.river_id} was not found`, [{ code: "missing_river", message: `river ${command.river_id} was not found`, severity: "invalid", target: "river_id" }]);
+        }
+        workingRivers.set(command.river_id, null);
+        writeChanges.set(command.river_id, null);
+        inverseCommands.push({ action: "create_river", source: "system", river: cloneRiverFeature(existing) });
+        revisionIncrement += 1;
+        break;
+      }
+      case "set_river_path": {
+        if (!isRiverId(command.river_id)) {
+          throw badRequest("river_id must be a valid river id", [{ code: "invalid_river_id", message: "river_id must be a valid river id", severity: "invalid", target: "river_id" }]);
+        }
+        const existing = workingRivers.get(command.river_id) ?? null;
+        if (!existing) {
+          throw badRequest(`river ${command.river_id} was not found`, [{ code: "missing_river", message: `river ${command.river_id} was not found`, severity: "invalid", target: "river_id" }]);
+        }
+        const errors = command.points.flatMap((point, pointIndex) => validateRiverPoint(point, `points[${pointIndex}]`));
+        if (command.points.length < 2) {
+          errors.push({ code: "invalid_river_points", message: "river requires at least two points", severity: "invalid", target: "points" });
+        }
+        if (errors.length > 0) {
+          throw badRequest(errors.map((entry) => entry.message).join("; "), errors);
+        }
+        const previous = cloneRiverFeature(existing);
+        const next = normalizeRiverFeature({ ...existing, points: command.points });
+        const featureErrors = validateRiverFeature(next);
+        if (featureErrors.length > 0) {
+          throw badRequest(featureErrors.map((entry) => entry.message).join("; "), featureErrors);
+        }
+        workingRivers.set(command.river_id, next);
+        writeChanges.set(command.river_id, next);
+        inverseCommands.push({
+          action: "update_river",
+          source: "system",
+          river_id: command.river_id,
+          changes: {
+            name: previous.name,
+            points: previous.points,
+            color: previous.color ?? null,
+            opacity: previous.opacity ?? null
+          }
+        });
+        revisionIncrement += 1;
+        break;
+      }
+      case "set_river_width": {
+        if (!isRiverId(command.river_id)) {
+          throw badRequest("river_id must be a valid river id", [{ code: "invalid_river_id", message: "river_id must be a valid river id", severity: "invalid", target: "river_id" }]);
+        }
+        const errors = [
+          ...validateCoordinate(command.target, "target"),
+          ...validateRiverPoint({ ...command.target, width: command.width }, "target")
+        ];
+        if (errors.length > 0) {
+          throw badRequest(errors.map((entry) => entry.message).join("; "), errors);
+        }
+        const existing = workingRivers.get(command.river_id) ?? null;
+        if (!existing) {
+          throw badRequest(`river ${command.river_id} was not found`, [{ code: "missing_river", message: `river ${command.river_id} was not found`, severity: "invalid", target: "river_id" }]);
+        }
+        const previous = cloneRiverFeature(existing);
+        const next = cloneRiverFeature(existing);
+        const pointIndex = next.points.findIndex((point) => point.row === command.target.row && point.col === command.target.col);
+        if (pointIndex === -1) {
+          if (!insertRiverWidthAnchor(next, command.target, command.width)) {
+            throw badRequest("set_river_width target must be on the river path", [{ code: "missing_river_point", message: "set_river_width target must be on the river path", severity: "invalid", target: "target" }]);
+          }
+        } else {
+          next.points[pointIndex] = { ...next.points[pointIndex]!, width: command.width };
+        }
+        const normalized = normalizeRiverFeature(next);
+        workingRivers.set(command.river_id, normalized);
+        writeChanges.set(command.river_id, normalized);
+        inverseCommands.push({
+          action: "update_river",
+          source: "system",
+          river_id: command.river_id,
+          changes: {
+            name: previous.name,
+            points: previous.points,
+            color: previous.color ?? null,
+            opacity: previous.opacity ?? null
+          }
+        });
+        revisionIncrement += 1;
+        break;
+      }
+      default:
+        return null;
+    }
+    commandResults.push(riverCommandReport(index, command.action));
+  }
+
+  const summary = await applyFeatureWriteChanges(
+    normalizedId,
+    [...writeChanges.entries()].map(([featureId, river]) => ({ kind: "river", featureId, river })),
+    { dryRun: options.dryRun, revisionIncrement }
+  );
+  if (!options.dryRun && options.recordHistory !== false && commands.length > 0) {
+    await recordOperation(normalizedId, {
+      source: getCommandSource(commands),
+      action: getOperationAction(commands),
+      commands,
+      inverseCommands: inverseCommands.reverse(),
+      summary: buildApplyChangeStats(commands, [])
+    });
+  }
+  return {
+    mapId: normalizedId,
+    summary,
+    features: featuresFromWorkingRivers(workingRivers),
+    warnings: [],
+    dryRun: options.dryRun ?? false,
+    command_results: commandResults,
+    changes: [],
+    stats: buildApplyChangeStats(commands, [])
   };
 }
 
@@ -1193,9 +1503,13 @@ export async function applyCommandsLight(
   commands: MapCommand[],
   options: ApplyCommandsOptions = {}
 ): Promise<LightweightApplyCommandsResult> {
-  const lightweight = await applyLightweightCellCommands(id, commands, options);
-  if (lightweight) {
-    return lightweight;
+  const lightweightCells = await applyLightweightCellCommands(id, commands, options);
+  if (lightweightCells) {
+    return lightweightCells;
+  }
+  const lightweightRivers = await applyLightweightRiverCommands(id, commands, options);
+  if (lightweightRivers) {
+    return lightweightRivers;
   }
   const result = await applyCommands(id, commands, options);
   return {
@@ -1247,6 +1561,29 @@ export async function undoMapLight(id: string): Promise<LightweightHistoryMoveRe
   }
   const lightweight = await applyLightweightCellCommands(normalizedId, operation.inverseCommands, { dryRun: true });
   if (!lightweight) {
+    const lightweightRivers = await applyLightweightRiverCommands(normalizedId, operation.inverseCommands, {
+      dryRun: true,
+      recordHistory: false
+    });
+    if (lightweightRivers) {
+      const appliedRivers = await applyLightweightRiverCommands(normalizedId, operation.inverseCommands, {
+        recordHistory: false
+      });
+      await moveHistoryCursor(normalizedId, operation.seq - 1);
+      return {
+        mapId: normalizedId,
+        summary: appliedRivers?.summary ?? await getMapSummary(normalizedId),
+        features: appliedRivers?.features,
+        warnings: appliedRivers?.warnings ?? [],
+        operation: {
+          seq: operation.seq,
+          action: operation.action,
+          source: operation.source,
+          timestamp: operation.timestamp
+        },
+        status: await getHistoryStatus(normalizedId)
+      };
+    }
     const full = await undoMap(normalizedId);
     return full
       ? {
@@ -1312,6 +1649,29 @@ export async function redoMapLight(id: string): Promise<LightweightHistoryMoveRe
   }
   const lightweight = await applyLightweightCellCommands(normalizedId, operation.commands, { dryRun: true });
   if (!lightweight) {
+    const lightweightRivers = await applyLightweightRiverCommands(normalizedId, operation.commands, {
+      dryRun: true,
+      recordHistory: false
+    });
+    if (lightweightRivers) {
+      const appliedRivers = await applyLightweightRiverCommands(normalizedId, operation.commands, {
+        recordHistory: false
+      });
+      await moveHistoryCursor(normalizedId, operation.seq);
+      return {
+        mapId: normalizedId,
+        summary: appliedRivers?.summary ?? await getMapSummary(normalizedId),
+        features: appliedRivers?.features,
+        warnings: appliedRivers?.warnings ?? [],
+        operation: {
+          seq: operation.seq,
+          action: operation.action,
+          source: operation.source,
+          timestamp: operation.timestamp
+        },
+        status: await getHistoryStatus(normalizedId)
+      };
+    }
     const full = await redoMap(normalizedId);
     return full
       ? {

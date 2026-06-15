@@ -582,6 +582,106 @@ describe("server service", () => {
     });
   });
 
+  it("applies lightweight river commands and returns feature state without full map data", async () => {
+    const service = await loadService(tempRoot);
+    const created = await service.createMap({ name: "Light River Test" });
+    const mapId = created.document.meta.id;
+
+    const preview = await service.applyCommandsLight(
+      mapId,
+      [
+        {
+          action: "create_river",
+          source: "cli",
+          river: {
+            id: "preview-river",
+            name: "Preview River",
+            points: [
+              { row: 0, col: 0, width: 2 },
+              { row: 0, col: 2, width: 6 }
+            ]
+          }
+        }
+      ],
+      { dryRun: true }
+    );
+
+    expect(preview.dryRun).toBe(true);
+    expect(preview.features?.rivers.map((river) => river.id)).toEqual(["preview-river"]);
+    expect(preview.summary.feature_counts.rivers).toBe(1);
+    expect((await service.getMap(mapId)).document.features.rivers).toHaveLength(0);
+    expect(await service.getHistoryStatus(mapId)).toEqual({
+      canUndo: false,
+      canRedo: false,
+      cursor: 0,
+      latest: 0
+    });
+
+    const createdRiver = await service.applyCommandsLight(mapId, [
+      {
+        action: "create_river",
+        source: "cli",
+        river: {
+          id: "light-river",
+          name: "Light River",
+          points: [
+            { row: 0, col: 0, width: 2 },
+            { row: 0, col: 2, width: 6 }
+          ]
+        }
+      },
+      {
+        action: "set_river_width",
+        source: "cli",
+        river_id: "light-river",
+        target: { row: 0, col: 1 },
+        width: 4
+      }
+    ]);
+
+    expect(createdRiver.mapId).toBe(mapId);
+    expect(createdRiver.changes).toHaveLength(0);
+    expect(createdRiver.summary.meta.revision).toBe(3);
+    expect(createdRiver.stats.feature_stats).toEqual({
+      river_created_count: 1,
+      river_updated_count: 1,
+      river_deleted_count: 0
+    });
+    expect(createdRiver.features?.rivers[0]?.points).toEqual([
+      { row: 0, col: 0, width: 2 },
+      { row: 0, col: 1, width: 4 },
+      { row: 0, col: 2, width: 6 }
+    ]);
+
+    const persisted = await service.getMap(mapId);
+    expect(persisted.document.features.rivers[0]?.points).toEqual(createdRiver.features?.rivers[0]?.points);
+    expect(await service.getHistoryStatus(mapId)).toEqual({
+      canUndo: true,
+      canRedo: false,
+      cursor: 1,
+      latest: 1
+    });
+
+    const undone = await service.undoMapLight(mapId);
+    expect(undone?.features?.rivers).toHaveLength(0);
+    expect(undone?.status).toEqual({
+      canUndo: false,
+      canRedo: true,
+      cursor: 0,
+      latest: 1
+    });
+    expect((await service.getMap(mapId)).document.features.rivers).toHaveLength(0);
+
+    const redone = await service.redoMapLight(mapId);
+    expect(redone?.features?.rivers[0]?.points).toEqual(createdRiver.features?.rivers[0]?.points);
+    expect(redone?.status).toEqual({
+      canUndo: true,
+      canRedo: false,
+      cursor: 1,
+      latest: 1
+    });
+  });
+
   it("provides inspect-cell, inspect-area, and neighbors queries", async () => {
     const service = await loadService(tempRoot);
     const created = await service.createMap({ name: "Inspect Test" });
