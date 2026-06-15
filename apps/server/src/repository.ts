@@ -138,6 +138,12 @@ export interface CellWriteChange {
   cell: DesignedCellRecord | null;
 }
 
+export interface FeatureWriteChange {
+  kind: "river";
+  featureId: string;
+  river: RiverFeature | null;
+}
+
 const MAX_LEGACY_IMPORT_FILE_BYTES = 32 * 1024 * 1024;
 
 function safeJsonArray(value: string): string[] {
@@ -485,6 +491,24 @@ function updateMapCellAggregate(db: Database.Database, id: string, revisionIncre
   return getMapRowOrThrow(db, id);
 }
 
+function updateMapRevision(db: Database.Database, id: string, revisionIncrement: number): MapRow {
+  const row = getMapRowOrThrow(db, id);
+  if (revisionIncrement <= 0) {
+    return row;
+  }
+  db.prepare(
+    `UPDATE maps
+     SET updated_at = @updated_at,
+         revision = @revision
+     WHERE id = @id`
+  ).run({
+    id,
+    updated_at: new Date().toISOString(),
+    revision: row.revision + revisionIncrement
+  });
+  return getMapRowOrThrow(db, id);
+}
+
 function writeDocument(db: Database.Database, document: MapDocument): void {
   const normalized = normalizeDocument(document);
   const bounds = normalizeBounds(normalized.cells);
@@ -726,6 +750,71 @@ export async function getMapFeaturesInRange(id: string, inputRange: CellRange): 
   const row = getMapRowOrThrow(db, id);
   backfillMissingFeatureBounds(db, row.id);
   return featureRowsToFeaturesInRange(readFeatureRowsInRange(db, row.id, range), range);
+}
+
+export async function getRiverFeatures(id: string): Promise<RiverFeature[]> {
+  return (await getMapFeatures(id)).rivers;
+}
+
+export async function applyFeatureWriteChanges(
+  id: string,
+  changes: FeatureWriteChange[],
+  options: { dryRun?: boolean; revisionIncrement?: number } = {}
+): Promise<MapSummary> {
+  const normalizedId = assertSafeMapId(id);
+  await ensureMapInDatabase(normalizedId);
+  const db = getDatabase();
+  const applyChanges = () => {
+    const row = getMapRowOrThrow(db, normalizedId);
+    if (changes.length === 0) {
+      return row;
+    }
+    const deleteFeature = db.prepare("DELETE FROM features WHERE map_id = ? AND kind = ? AND feature_id = ?");
+    const upsertFeature = db.prepare(
+      `INSERT INTO features (
+        map_id, kind, feature_id, json, bounds_min_row, bounds_max_row, bounds_min_col, bounds_max_col
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(map_id, kind, feature_id) DO UPDATE SET
+        json = excluded.json,
+        bounds_min_row = excluded.bounds_min_row,
+        bounds_max_row = excluded.bounds_max_row,
+        bounds_min_col = excluded.bounds_min_col,
+        bounds_max_col = excluded.bounds_max_col`
+    );
+    for (const change of changes) {
+      if (!change.river) {
+        deleteFeature.run(row.id, change.kind, change.featureId);
+        continue;
+      }
+      const range = coordRangeForRiver(change.river);
+      upsertFeature.run(
+        row.id,
+        change.kind,
+        change.river.id,
+        JSON.stringify(change.river),
+        range?.minRow ?? null,
+        range?.maxRow ?? null,
+        range?.minCol ?? null,
+        range?.maxCol ?? null
+      );
+    }
+    return updateMapRevision(db, row.id, options.revisionIncrement ?? 1);
+  };
+  if (options.dryRun) {
+    db.prepare("SAVEPOINT feature_write_preview").run();
+    try {
+      const summary = mapSummaryFromRow(db, applyChanges());
+      db.prepare("ROLLBACK TO feature_write_preview").run();
+      db.prepare("RELEASE feature_write_preview").run();
+      return summary;
+    } catch (error) {
+      db.prepare("ROLLBACK TO feature_write_preview").run();
+      db.prepare("RELEASE feature_write_preview").run();
+      throw error;
+    }
+  }
+  const write = db.transaction(applyChanges);
+  return mapSummaryFromRow(db, write());
 }
 
 export async function getDesignedCellsAt(

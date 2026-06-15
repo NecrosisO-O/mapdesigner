@@ -370,6 +370,47 @@ describe("server api", () => {
           source: "webui"
         })
       ]);
+
+      const riverLight = await app.inject({
+        method: "POST",
+        url: `/api/maps/${mapId}/commands?includeMap=false`,
+        payload: {
+          commands: [
+            {
+              action: "create_river",
+              source: "webui",
+              river: {
+                id: "light-api-river",
+                name: "Light API River",
+                points: [
+                  { row: 0, col: 0, width: 2 },
+                  { row: 0, col: 2, width: 6 }
+                ]
+              }
+            }
+          ]
+        }
+      });
+      expect(riverLight.statusCode).toBe(200);
+      const riverLightBody = riverLight.json();
+      expect(riverLightBody.result.map).toBeUndefined();
+      expect(riverLightBody.result.features.rivers.map((river: { id: string }) => river.id)).toEqual(["light-api-river"]);
+      expect(riverLightBody.result.summary.feature_counts.rivers).toBe(1);
+      expect(riverLightBody.result.stats.feature_stats).toEqual({
+        river_created_count: 1,
+        river_updated_count: 0,
+        river_deleted_count: 0
+      });
+
+      const undoRiverLight = await app.inject({
+        method: "POST",
+        url: `/api/maps/${mapId}/undo?includeMap=false`
+      });
+      expect(undoRiverLight.statusCode).toBe(200);
+      const undoRiverLightBody = undoRiverLight.json();
+      expect(undoRiverLightBody.result.map).toBeUndefined();
+      expect(undoRiverLightBody.result.features.rivers).toHaveLength(0);
+      expect(undoRiverLightBody.result.status.canRedo).toBe(true);
     } finally {
       await app.close();
     }

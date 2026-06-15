@@ -444,7 +444,8 @@ async function main(): Promise<void> {
             if (!id || !name) {
               printFailure("maps rivers create requires --map-id and --name");
             }
-            const result = await applyCommands(id, [
+            const summaryOnly = hasFlag(args, "--summary");
+            const commands: MapCommand[] = [
               {
                 action: "create_river",
                 source: "cli",
@@ -456,8 +457,9 @@ async function main(): Promise<void> {
                   opacity: readOptionalNumberFlag(args, "--opacity")
                 }
               }
-            ]);
-            printResult(createEnvelope({ result: hasFlag(args, "--summary") ? buildApplySummary(result) : result, warnings: result.warnings }));
+            ];
+            const result = summaryOnly ? await applyCommandsLight(id, commands) : await applyCommands(id, commands);
+            printResult(createEnvelope({ result: summaryOnly ? buildApplySummary(result) : result, warnings: result.warnings }));
             break;
           }
           case "update": {
@@ -468,7 +470,8 @@ async function main(): Promise<void> {
               printFailure("maps rivers update requires --map-id and --river-id");
             }
             const pointsRaw = readFlag(args, "--points");
-            const result = await applyCommands(id, [
+            const summaryOnly = hasFlag(args, "--summary");
+            const commands: MapCommand[] = [
               {
                 action: "update_river",
                 source: "cli",
@@ -480,8 +483,9 @@ async function main(): Promise<void> {
                   ...(readFlag(args, "--opacity") ? { opacity: readOptionalNumberFlag(args, "--opacity") } : {})
                 }
               }
-            ]);
-            printResult(createEnvelope({ result: hasFlag(args, "--summary") ? buildApplySummary(result) : result, warnings: result.warnings }));
+            ];
+            const result = summaryOnly ? await applyCommandsLight(id, commands) : await applyCommands(id, commands);
+            printResult(createEnvelope({ result: summaryOnly ? buildApplySummary(result) : result, warnings: result.warnings }));
             break;
           }
           case "delete": {
@@ -491,14 +495,16 @@ async function main(): Promise<void> {
             if (!id || !riverId) {
               printFailure("maps rivers delete requires --map-id and --river-id");
             }
-            const result = await applyCommands(id, [
+            const summaryOnly = hasFlag(args, "--summary");
+            const commands: MapCommand[] = [
               {
                 action: "delete_river",
                 source: "cli",
                 river_id: riverId
               }
-            ]);
-            printResult(createEnvelope({ result: hasFlag(args, "--summary") ? buildApplySummary(result) : result, warnings: result.warnings }));
+            ];
+            const result = summaryOnly ? await applyCommandsLight(id, commands) : await applyCommands(id, commands);
+            printResult(createEnvelope({ result: summaryOnly ? buildApplySummary(result) : result, warnings: result.warnings }));
             break;
           }
           default:
