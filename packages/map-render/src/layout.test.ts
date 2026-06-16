@@ -66,7 +66,7 @@ describe("buildHexLayout", () => {
 });
 
 describe("river rendering", () => {
-  it("renders river overlay segments and includes river coordinates in scene bounds", () => {
+  it("renders river overlay bodies and includes river coordinates in scene bounds", () => {
     const runtime = createRuntimeState(createEmptyDocument({ id: "river-render", name: "River Render" }));
     const result = applyCommand(runtime, {
       action: "create_river",
@@ -83,14 +83,16 @@ describe("river rendering", () => {
 
     expect(result.ok).toBe(true);
     const scene = buildMapScene(result.map);
-    expect(scene.riverSegments).toHaveLength(3);
-    expect(scene.riverSegments[0]?.width).toBeGreaterThan(2);
+    expect(scene.riverBodies).toHaveLength(1);
+    expect(scene.riverBodies[0]?.bodyPath).toContain("M ");
+    expect(scene.riverBodies[0]?.widthRange.max).toBeGreaterThan(scene.riverBodies[0]?.widthRange.min ?? 0);
+    expect(scene.riverBodies[0]?.pointCount).toBeGreaterThan(3);
     const svg = renderSvgString(scene);
     expect(svg).toContain('data-river-id="main-river"');
-    expect(svg).toContain('stroke="#2F83B7"');
+    expect(svg).toContain('fill="#2F83B7"');
   });
 
-  it("reduces river segment density in low-detail render mode", () => {
+  it("reduces river body density in low-detail render mode", () => {
     const runtime = createRuntimeState(createEmptyDocument({ id: "river-lod", name: "River LOD" }));
     const result = applyCommand(runtime, {
       action: "create_river",
@@ -108,11 +110,12 @@ describe("river rendering", () => {
     expect(result.ok).toBe(true);
     const highDetail = buildMapScene(result.map, { riverDetail: "high" });
     const lowDetail = buildMapScene(result.map, { riverDetail: "low" });
-    expect(highDetail.riverSegments.length).toBeGreaterThan(lowDetail.riverSegments.length);
-    expect(lowDetail.riverSegments).toHaveLength(1);
+    expect(highDetail.riverBodies).toHaveLength(1);
+    expect(lowDetail.riverBodies).toHaveLength(1);
+    expect(highDetail.riverBodies[0]?.pointCount).toBeGreaterThan(lowDetail.riverBodies[0]?.pointCount ?? 0);
   });
 
-  it("renders water endpoint markers and preview river segments", () => {
+  it("renders water endpoint connections and preview river bodies", () => {
     const runtime = createRuntimeState(createEmptyDocument({ id: "river-preview", name: "River Preview" }));
     const withLake = applyCommand(runtime, {
       action: "set_cell",
@@ -138,12 +141,12 @@ describe("river rendering", () => {
     });
     const svg = renderSvgString(scene);
 
-    expect(scene.riverSegments).toHaveLength(2);
-    expect(scene.riverSegments.every((segment) => segment.preview)).toBe(true);
-    expect(scene.riverEndpoints).toHaveLength(1);
+    expect(scene.riverBodies).toHaveLength(1);
+    expect(scene.riverBodies.every((body) => body.preview)).toBe(true);
+    expect(scene.riverBodies[0]?.connectedEnd).toBe(true);
     expect(scene.riverControlPoints.map((point) => point.position)).toEqual(["start", "end"]);
     expect(svg).toContain('data-river-preview="true"');
-    expect(svg).toContain('data-river-endpoint="water"');
+    expect(svg).toContain('data-river-connected-end="true"');
     expect(svg).toContain('data-river-control-point="start"');
   });
 });

@@ -14,32 +14,28 @@ export interface HexCellLayout {
   points: string;
 }
 
-export interface RiverSegmentLayout {
+export interface RiverBodyLayout {
   id: string;
   riverId: string;
   riverName: string;
-  x1: number;
-  y1: number;
-  x2: number;
-  y2: number;
-  width: number;
+  bankPath: string | null;
+  bodyPath: string;
+  highlightPath: string | null;
+  centerPath: string;
   color: string;
+  bankColor: string;
+  highlightColor: string;
   opacity: number;
   preview: boolean;
-}
-
-export interface RiverEndpointLayout {
-  id: string;
-  riverId: string;
-  riverName: string;
-  x: number;
-  y: number;
-  radius: number;
-  color: string;
-  opacity: number;
-  position: "start" | "end";
-  kind: "water";
-  preview: boolean;
+  pointCount: number;
+  outlineWidth: number;
+  highlightWidth: number;
+  widthRange: {
+    min: number;
+    max: number;
+  };
+  connectedStart: boolean;
+  connectedEnd: boolean;
 }
 
 export interface RiverControlPointLayout {
@@ -80,8 +76,7 @@ export interface MapScene {
   minY: number;
   background: string;
   layout: HexCellLayout[];
-  riverSegments: RiverSegmentLayout[];
-  riverEndpoints: RiverEndpointLayout[];
+  riverBodies: RiverBodyLayout[];
   riverControlPoints: RiverControlPointLayout[];
   defs: string[];
   options: Required<Omit<MapRenderOptions, "previewRivers" | "boundsCoords" | "riverClipRange">> & {

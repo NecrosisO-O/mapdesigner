@@ -734,52 +734,74 @@ export function MapCanvas(props: MapCanvasProps) {
               />
             </g>
           ))}
-          {scene.riverSegments.length > 0 ? (
+          {scene.riverBodies.length > 0 || scene.riverControlPoints.length > 0 ? (
             <g className="river-layer" pointerEvents="none" aria-hidden="true">
-              {scene.riverSegments.map((segment) => (
-                <g
-                  key={segment.id}
-                  data-river-id={segment.riverId}
-                  data-river-preview={segment.preview ? "true" : undefined}
-                >
-                  <line
-                    x1={segment.x1}
-                    y1={segment.y1}
-                    x2={segment.x2}
-                    y2={segment.y2}
-                    stroke="#EAF8FC"
-                    strokeWidth={segment.width + 2.2}
-                    strokeLinecap="round"
-                    opacity={Math.min(0.9, segment.opacity)}
-                    strokeDasharray={segment.preview ? "7 5" : undefined}
+              {scene.riverBodies.map((body) => (
+                body.bankPath ? (
+                  <path
+                    key={`${body.id}-bank`}
+                    data-river-layer="bank"
+                    data-river-id={body.riverId}
+                    data-river-preview={body.preview ? "true" : undefined}
+                    data-river-connected-start={body.connectedStart ? "true" : undefined}
+                    data-river-connected-end={body.connectedEnd ? "true" : undefined}
+                    d={body.bankPath}
+                    fill={body.bankColor}
+                    opacity={Math.min(0.5, body.opacity * 0.42)}
                   />
-                  <line
-                    x1={segment.x1}
-                    y1={segment.y1}
-                    x2={segment.x2}
-                    y2={segment.y2}
-                    stroke={segment.color}
-                    strokeWidth={segment.width}
-                    strokeLinecap="round"
-                    opacity={segment.opacity}
-                    strokeDasharray={segment.preview ? "7 5" : undefined}
-                  />
-                </g>
+                ) : null
               ))}
-              {scene.riverEndpoints.map((endpoint) => (
-                <circle
-                  key={endpoint.id}
-                  data-river-endpoint={endpoint.kind}
-                  data-river-id={endpoint.riverId}
-                  data-river-preview={endpoint.preview ? "true" : undefined}
-                  cx={endpoint.x}
-                  cy={endpoint.y}
-                  r={endpoint.radius}
-                  fill={endpoint.color}
-                  stroke="#EAF8FC"
-                  strokeWidth="2"
-                  opacity={Math.min(1, endpoint.opacity + 0.08)}
+              {scene.riverBodies.map((body) => (
+                <path
+                  key={`${body.id}-body`}
+                  data-river-layer="body"
+                  data-river-id={body.riverId}
+                  data-river-preview={body.preview ? "true" : undefined}
+                  data-river-connected-start={body.connectedStart ? "true" : undefined}
+                  data-river-connected-end={body.connectedEnd ? "true" : undefined}
+                  d={body.bodyPath}
+                  fill={body.color}
+                  opacity={body.preview ? Math.min(0.52, body.opacity * 0.66) : body.opacity}
                 />
+              ))}
+              {scene.riverBodies.map((body) => (
+                body.highlightPath ? (
+                  <path
+                    key={`${body.id}-highlight`}
+                    data-river-layer="highlight"
+                    data-river-id={body.riverId}
+                    data-river-preview={body.preview ? "true" : undefined}
+                    data-river-connected-start={body.connectedStart ? "true" : undefined}
+                    data-river-connected-end={body.connectedEnd ? "true" : undefined}
+                    d={body.highlightPath}
+                    fill="none"
+                    stroke={body.highlightColor}
+                    strokeWidth={body.highlightWidth}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    opacity={Math.min(0.28, body.opacity * 0.3)}
+                  />
+                ) : null
+              ))}
+              {scene.riverBodies.map((body) => (
+                body.preview ? (
+                  <path
+                    key={`${body.id}-preview-center`}
+                    data-river-layer="preview-center"
+                    data-river-id={body.riverId}
+                    data-river-preview="true"
+                    data-river-connected-start={body.connectedStart ? "true" : undefined}
+                    data-river-connected-end={body.connectedEnd ? "true" : undefined}
+                    d={body.centerPath}
+                    fill="none"
+                    stroke={body.color}
+                    strokeWidth={Math.max(1.4, body.widthRange.max * 0.32)}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeDasharray="7 5"
+                    opacity={Math.min(0.82, body.opacity)}
+                  />
+                ) : null
               ))}
               {scene.riverControlPoints.map((point) => (
                 <g
