@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>MapDesigner · 编辑器设计原型</title>
+  <link rel="stylesheet" href="editor.css">
+</head>
+<body>
+<a class="skip-link" href="#mapCanvas">跳到地图画布</a>
+<div class="editor" id="editor">
+  <header class="app-header">
+    <a class="wordmark" href="#" aria-label="MapDesigner 编辑器"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 2 28 9v14l-12 7L4 23V9Z"/><path d="m4 9 12 7 12-7M16 16v14M10 6l12 7v7"/></svg><span>MapDesigner</span></a>
+    <span class="header-divider"></span>
+    <div class="document-title"><button id="fileMenuButton" aria-expanded="false" aria-controls="fileMenu"><span id="mapName">北境群岛</span><i data-icon="chevron"></i></button><span class="prototype-label">交互原型</span></div>
+    <div class="document-status" role="status"><span class="status-dot"></span><span id="saveStatus">示例已载入</span></div>
+    <div class="header-actions">
+      <div class="history-actions"><button class="icon-button" id="undo" aria-label="撤销" title="撤销 ⌘/Ctrl Z" disabled><i data-icon="undo"></i></button><button class="icon-button" id="redo" aria-label="重做" title="重做 ⌘/Ctrl Shift Z" disabled><i data-icon="redo"></i></button></div>
+      <button class="icon-button" id="themeButton" aria-label="切换深色界面" title="切换界面主题"><i data-icon="moon"></i></button>
+      <button class="icon-button focus-toggle" id="focusButton" aria-label="专注画布" aria-pressed="false" title="专注画布"><i data-icon="maximize"></i></button>
+      <button class="primary export-trigger" id="exportButton"><i data-icon="export"></i><span>导出</span></button>
+    </div>
+    <div id="fileMenu" class="file-menu popover" hidden><p>当前示例</p><button id="renameButton"><i data-icon="edit"></i>重命名地图</button><button id="resetButton"><i data-icon="refresh"></i>重新载入示例</button><div class="menu-note">修改仅保留在本次预览中。</div></div>
+  </header>
+  <div class="workspace">
+    <nav class="tool-rail" aria-label="地图工具">
+      <div class="tool-stack" role="toolbar" aria-label="编辑工具" aria-orientation="vertical">
+        <button class="tool active" data-tool="select" aria-pressed="true" aria-label="选择工具" title="选择 V"><i data-icon="cursor"></i><span>选择</span></button>
+        <button class="tool" data-tool="pan" aria-pressed="false" aria-label="平移工具" title="平移 H · 按住空格临时平移"><i data-icon="hand"></i><span>平移</span></button>
+        <span class="rail-divider"></span>
+        <button class="tool" data-tool="paint" aria-pressed="false" aria-label="笔刷工具" title="笔刷 B"><i data-icon="brush"></i><span>笔刷</span></button>
+        <button class="tool" data-tool="river" aria-pressed="false" aria-label="河流工具" title="河流 R"><i data-icon="river"></i><span>河流</span></button>
+        <button class="tool" data-tool="batch" aria-pressed="false" aria-label="多选工具" title="多选 M"><i data-icon="selection"></i><span>多选</span></button>
+      </div>
+      <div class="tool-stack rail-bottom"><button class="tool" id="layersButton" aria-expanded="true" aria-controls="contentPanel" title="内容与图层"><i data-icon="layers"></i><span>内容</span></button><button class="tool" id="historyButton" title="编辑历史" aria-label="查看编辑历史"><i data-icon="history"></i><span>历史</span></button><button class="tool" id="helpButton" aria-label="快捷键与原型说明" title="快捷键与说明 ?"><i data-icon="help"></i><span>帮助</span></button></div>
+    </nav>
+    <aside class="content-panel" id="contentPanel" aria-label="地图内容">
+      <div class="panel-heading"><h2>内容</h2><button class="icon-button subtle" id="closeLayers" aria-label="收起内容栏"><i data-icon="panelLeft"></i></button></div>
+      <div class="content-scroll">
+        <div class="map-entry"><div class="map-thumb"><i data-icon="map"></i></div><div><strong>北境群岛</strong><span>世界地图 · 示例</span></div></div>
+        <div class="section-caption"><span>显示图层</span><span>04</span></div>
+        <label class="layer-row"><i data-icon="mountain"></i><span>地形</span><span class="base-layer">底图</span></label>
+        <label class="layer-row"><i data-icon="tree"></i><span>生态纹理</span><input id="showBiomes" type="checkbox" checked aria-label="显示生态纹理"></label>
+        <label class="layer-row"><i data-icon="river"></i><span>河流</span><input id="showRivers" type="checkbox" checked aria-label="显示河流"></label>
+        <label class="layer-row"><i data-icon="hex"></i><span>六角网格</span><input id="showGrid" type="checkbox" checked aria-label="显示六角网格"></label>
+        <label class="layer-row"><i data-icon="type"></i><span>地名</span><input id="showNames" type="checkbox" checked aria-label="显示地名"></label>
+        <div class="section-caption"><span>河流</span><span id="riverCount">02</span></div><div id="riverList"></div>
+        <div class="section-caption"><span>筛选标记</span><button class="text-button" id="clearFilter">清除</button></div>
+        <div class="tag-chips" id="mapFilters"><button data-filter="peak" aria-pressed="false">山峰</button><button data-filter="bay" aria-pressed="false">海湾</button><button data-filter="island" aria-pressed="false">岛屿</button></div>
+      </div>
+      <div class="content-footer"><span class="tiny-label">地图信息</span><div><strong id="cellCount">—</strong><span>已设计单元格</span></div><p>六角网格 · 本地创作</p></div>
+    </aside>
+    <main class="canvas-area" id="canvasArea">
+      <div class="canvas-heading"><div><span class="tiny-label">WORLD ATLAS</span><h1>北境群岛</h1></div><span class="canvas-badge">示例地图</span></div>
+      <div id="contextBar" class="context-bar" hidden></div>
+      <button class="inspector-trigger icon-button" id="inspectorButton" aria-label="打开属性面板" aria-expanded="true"><i data-icon="sliders"></i></button>
+      <svg id="mapCanvas" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 850" role="group" tabindex="0" aria-label="北境群岛示例地图。选择工具可点选单元格，方向键移动选择，空格加拖动平移。"><defs>
+        <pattern id="seaTexture" width="54" height="38" patternUnits="userSpaceOnUse"><path d="M4 22q5-4 10 0t10 0" fill="none" stroke="#bbc9c9" stroke-width="0.7" opacity=".48"/></pattern>
+        <pattern id="forestTexture" width="19" height="22" patternUnits="userSpaceOnUse"><path d="m8 5-3 6h2l-3 5h8l-3-5h2zM8 16v3" fill="#415f49" fill-opacity=".27" stroke="#415f49" stroke-opacity=".15" stroke-width=".7"/></pattern>
+        <pattern id="hillTexture" width="26" height="22" patternUnits="userSpaceOnUse"><path d="M4 15q5-9 10 0m-2 2q4-7 8 0" fill="none" stroke="#776f50" stroke-width=".8" opacity=".4"/></pattern>
+        <pattern id="mountainTexture" width="25" height="27" patternUnits="userSpaceOnUse"><path d="m2 23 10-17 10 17m-15-8 5-9 5 9-5-3z" fill="#ece3cb" fill-opacity=".45" stroke="#6e7264" stroke-width=".85" stroke-opacity=".55"/></pattern>
+      </defs><rect width="1100" height="850" fill="#dce5e3"/><rect width="1100" height="850" fill="url(#seaTexture)"/><g id="mapWorld"><g id="hexCells"></g><g id="biomeLayer" pointer-events="none"></g><g id="riverLayer" pointer-events="none"></g><g id="labelLayer" pointer-events="none"><text x="174" y="510" class="sea-label">寂 静 海</text><text x="720" y="755" class="sea-label">S E A   O F   M I S T</text><text x="470" y="227" class="land-label">薄雾山脊</text><text x="486" y="534" class="land-label">松风平原</text><text x="843" y="320" class="land-label small">寒鸦岛</text><text x="785" y="580" class="land-label small">潮汐群礁</text></g><g id="selectionLayer" pointer-events="none"></g><g id="draftRiverLayer" pointer-events="none"></g></g></svg>
+      <div class="compass" aria-hidden="true"><span>N</span><svg viewBox="0 0 30 44"><path d="m15 5 9 27-9-6-9 6z" fill="none" stroke="currentColor" stroke-width="1.1"/><path d="M15 5v21l9 6z" fill="currentColor"/></svg></div>
+      <div class="canvas-lower-left"><div class="map-legend"><span><i style="--swatch:#bec5a0"></i>平原</span><span><i style="--swatch:#829a7b"></i>森林</span><span><i style="--swatch:#b8b7a4"></i>山地</span></div><div class="scale-bar"><span></span>20 格</div></div>
+      <div class="camera-controls" role="group" aria-label="画布视图"><button id="zoomOut" class="icon-button" aria-label="缩小"><i data-icon="minus"></i></button><output id="zoomValue">100%</output><button id="zoomIn" class="icon-button" aria-label="放大"><i data-icon="plus"></i></button><span></span><button id="fitMap" class="icon-button" aria-label="适合画布" title="适合画布 F"><i data-icon="fit"></i></button></div>
+      <div class="toast" id="toast" role="status" hidden></div>
+    </main>
+    <aside class="inspector" id="inspector" aria-label="属性面板"><div class="panel-heading"><h2 id="inspectorTitle">单元格属性</h2><button id="closeInspector" class="icon-button subtle" aria-label="收起属性面板"><i data-icon="panelRight"></i></button></div><div class="inspector-body" id="inspectorBody"></div><div class="inspector-actions" id="inspectorActions"></div></aside>
+    <button id="drawerScrim" class="drawer-scrim" aria-label="关闭侧栏" hidden></button>
+  </div>
+  <footer class="statusbar"><span><i data-icon="cursor"></i><strong id="activeToolLabel">选择</strong><span class="status-separator">/</span><span id="toolHint">点击单元格查看属性</span></span><span class="status-right"><span id="cursorCoord">R12 C08</span><span class="status-separator">·</span><span>示例修改仅保留到页面刷新</span></span></footer>
+</div>
+<dialog id="dialog" aria-labelledby="dialogTitle"><form method="dialog" id="dialogForm"><div class="dialog-header"><h2 id="dialogTitle"></h2><button type="button" class="icon-button" id="dialogClose" aria-label="关闭对话框"><i data-icon="close"></i></button></div><div id="dialogBody"></div><div class="dialog-footer" id="dialogActions"></div></form></dialog>
+<script src="editor.js"></script>
+</body>
+</html>

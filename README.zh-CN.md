@@ -52,6 +52,11 @@ docker run --rm -p 3010:3010 -e MAPDESIGNER_ROOT=/data -v "$(pwd)/mapdesigner-da
 
 ## 开发说明
 
+Node.js 版本见 `.nvmrc`，pnpm 版本见 `package.json`。
+执行 `pnpm install --frozen-lockfile` 后，可以用 `pnpm check` 完成构建、类型检查与测试，
+用 `pnpm dev` 同时启动后端和 WebUI。
+环境基线、开发流程与接手记录见[开发说明](./docs/development.md)。
+
 本项目在开发过程中使用了 AI 辅助。
 
 ## 许可证
