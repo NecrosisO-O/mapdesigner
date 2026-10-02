@@ -1,0 +1,49 @@
+{
+  "cell_draft_lost_when_outside_viewport": {
+    "before": {
+      "selected": "cell@0,0",
+      "note": "Unsaved user note",
+      "dirty": true
+    },
+    "after": {
+      "selected": null,
+      "note": "",
+      "dirty": false
+    }
+  },
+  "batch_selection_lost_when_outside_viewport": {
+    "before": 1,
+    "after": 0
+  },
+  "river_draft_crosses_map_switch": {
+    "draftStartedOn": "A",
+    "afterSwitch": {
+      "status": "drawing",
+      "points": 2
+    },
+    "submittedMap": "B"
+  },
+  "double_apply_sends_two_mutations": {
+    "clicks": 2,
+    "mutationsBeforeAnyResponse": 2
+  },
+  "batch_terrain_also_clears_other_fields": {
+    "before": {
+      "row": 0,
+      "col": 0,
+      "terrain": "plain",
+      "biome": "grassland",
+      "tags": [
+        "peak"
+      ],
+      "note": "Keep this note"
+    },
+    "changedControl": "terrain",
+    "submittedChanges": {
+      "terrain": "hill",
+      "biome": null,
+      "tags": [],
+      "note": ""
+    }
+  }
+}

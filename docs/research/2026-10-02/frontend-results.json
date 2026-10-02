@@ -1,0 +1,49 @@
+{
+  "out_of_order_map_open": {
+    "lastRequested": "B",
+    "afterB": "B",
+    "finalMap": "A"
+  },
+  "rename_lost_on_pan": {
+    "beforePan": {
+      "name": "User draft",
+      "dirty": true
+    },
+    "afterPan": {
+      "name": "rename-map",
+      "dirty": false
+    }
+  },
+  "failed_range_cannot_retry": {
+    "attempts": 2,
+    "expectedNetworkRequests": 2,
+    "actualNetworkRequests": 1
+  },
+  "overview_range_is_truncated": {
+    "visible": {
+      "minRow": 0,
+      "maxRow": 999,
+      "minCol": 0,
+      "maxCol": 999
+    },
+    "actual": {
+      "minRow": 408,
+      "maxRow": 599,
+      "minCol": 408,
+      "maxCol": 599
+    },
+    "visibleArea": 1000000,
+    "requestedArea": 36864
+  },
+  "network_failure_keeps_loading": {
+    "rejectedWith": "Failed to fetch",
+    "loadingAfterFailure": true
+  },
+  "import_framework_error_envelope": {
+    "frameworkStatus": 413,
+    "clientError": {
+      "name": "TypeError",
+      "message": "Cannot read properties of undefined (reading '0')"
+    }
+  }
+}

@@ -76,6 +76,11 @@ More examples and command conventions are documented in [Agent CLI Guide](./docs
 
 ## Development Note
 
+Use the Node.js version in `.nvmrc` and the pnpm version in `package.json`.
+After `pnpm install --frozen-lockfile`, run `pnpm check` to build, typecheck, and test,
+or `pnpm dev` to start the API and WebUI together.
+See the [Development Guide](./docs/development.md) for the verified baseline and takeover notes.
+
 AI assistance was used during the development of this project.
 
 ## License
