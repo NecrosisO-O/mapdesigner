@@ -55,11 +55,12 @@ function normalizeRiverPoint(point: RiverPoint): RiverPoint {
   };
 }
 
-function normalizeRiver(river: RiverFeature): RiverFeature {
+export function normalizeStoredRiver(river: RiverFeature): RiverFeature {
   return {
     id: river.id,
     name: river.name,
     points: river.points.map(normalizeRiverPoint),
+    width_mode: river.width_mode ?? "legacy",
     ...(river.color ? { color: river.color } : {}),
     ...(typeof river.opacity === "number" ? { opacity: river.opacity } : {})
   };
@@ -67,7 +68,7 @@ function normalizeRiver(river: RiverFeature): RiverFeature {
 
 function normalizeFeatures(features: Partial<MapFeatures> | undefined): MapFeatures {
   return {
-    rivers: sortRivers((features?.rivers ?? []).map(normalizeRiver))
+    rivers: sortRivers((features?.rivers ?? []).map(normalizeStoredRiver))
   };
 }
 

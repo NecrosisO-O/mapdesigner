@@ -3,6 +3,7 @@ import {
   createDisplayCoord,
   parseDisplayCoord,
   DEFAULT_RIVER_WIDTH,
+  upgradeRiverWidths,
   type ActiveCell,
   type MapCommand,
   type MapRuntimeState,
@@ -96,6 +97,7 @@ function parseRiverPoints(pointsText: string, widthsText: string): RiverPoint[] 
 }
 
 function draftFromRiver(river: RiverFeature | null): RiverDraft {
+  river = river ? upgradeRiverWidths(river) : null;
   return {
     name: river?.name ?? "",
     pointsText:

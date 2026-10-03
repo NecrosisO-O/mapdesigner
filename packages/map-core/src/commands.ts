@@ -1,7 +1,7 @@
 import { createCellId, createDisplayCoord, sameCoord } from "./coords.js";
 import { pushHistory } from "./history.js";
 import { validateCommandInput } from "./command-input.js";
-import { buildHexLine } from "./rivers.js";
+import { buildHexLine, prepareRiverEdit } from "./rivers.js";
 import { cloneDocument, normalizeDocument } from "./serialization.js";
 import type {
   ActiveCell,
@@ -80,6 +80,7 @@ function normalizeRiverFeature(river: RiverFeature): RiverFeature {
     id: river.id,
     name: river.name.trim(),
     points: river.points.map(normalizeRiverPoint),
+    width_mode: river.width_mode ?? "distance",
     ...(river.color ? { color: river.color } : {}),
     ...(typeof river.opacity === "number" ? { opacity: river.opacity } : {})
   };
@@ -219,7 +220,12 @@ function finalize(
   };
 }
 
-export function applyCommand(state: MapRuntimeState, command: MapCommand): CommandResult {
+export function applyCommand(
+  state: MapRuntimeState,
+  command: MapCommand,
+  options: { legacyRiverWidths?: boolean } = {}
+): CommandResult {
+  const widthMode = options.legacyRiverWidths ? "legacy" : "distance";
   const inputErrors = validateCommandInput(command);
   if (inputErrors.length)
     return { ok: false, map: state, changed: [], details: [], warnings: [], errors: inputErrors };
@@ -644,6 +650,7 @@ export function applyCommand(state: MapRuntimeState, command: MapCommand): Comma
         id: command.river.id ?? createRiverId(command.river.name, working.features.rivers),
         name: command.river.name,
         points: command.river.points,
+        width_mode: command.river.width_mode ?? widthMode,
         color: command.river.color,
         opacity: command.river.opacity
       });
@@ -688,9 +695,12 @@ export function applyCommand(state: MapRuntimeState, command: MapCommand): Comma
       }
       const existing = working.features.rivers[riverIndex]!;
       const next = normalizeRiverFeature({
-        ...existing,
+        ...prepareRiverEdit(
+          existing,
+          command.changes.points,
+          command.changes.width_mode ?? widthMode
+        ),
         name: command.changes.name ?? existing.name,
-        points: command.changes.points ?? existing.points,
         color: command.changes.color === undefined ? existing.color : command.changes.color,
         opacity: command.changes.opacity === undefined ? existing.opacity : command.changes.opacity
       });
@@ -765,8 +775,7 @@ export function applyCommand(state: MapRuntimeState, command: MapCommand): Comma
       }
       const existing = working.features.rivers[riverIndex]!;
       const next = normalizeRiverFeature({
-        ...existing,
-        points: command.points
+        ...prepareRiverEdit(existing, command.points, widthMode)
       });
       errors.push(...validateRiverFeature(next));
       if (errors.length > 0) {
@@ -801,7 +810,8 @@ export function applyCommand(state: MapRuntimeState, command: MapCommand): Comma
       if (errors.length > 0) {
         return finalize(state, working, [], warnings, errors, "set_river_width", source);
       }
-      const river = working.features.rivers[riverIndex]!;
+      const river = prepareRiverEdit(working.features.rivers[riverIndex]!, undefined, widthMode);
+      working.features.rivers[riverIndex] = river;
       const pointIndex = river.points.findIndex(
         (point) => point.row === command.target.row && point.col === command.target.col
       );
