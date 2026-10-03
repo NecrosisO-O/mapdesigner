@@ -34,6 +34,7 @@ import {
 } from "./service.js";
 import { assertExportDownloadFileName, exportFilePath, normalizeExportOptions } from "./storage.js";
 import { createEnvelope } from "./utils.js";
+import { allowedOrigin, registerAccessGuard } from "./access.js";
 
 async function fileExists(filePath: string): Promise<boolean> {
   try {
@@ -124,8 +125,12 @@ async function applyCommandRequest(id: string, bodyInput: unknown, dryRun = fals
   if (!Array.isArray(body.commands)) {
     throw badRequest("commands must be an array");
   }
+  if (body.expectedRevision !== undefined && !Number.isInteger(body.expectedRevision)) {
+    throw badRequest("expectedRevision must be an integer");
+  }
+  const options = { dryRun, expectedRevision: body.expectedRevision as number | undefined };
   if (!includeMap) {
-    const result = await applyCommandsLight(id, body.commands as MapCommand[], { dryRun });
+    const result = await applyCommandsLight(id, body.commands as MapCommand[], options);
     return createEnvelope({
       result: {
         summary: result.summary,
@@ -139,7 +144,7 @@ async function applyCommandRequest(id: string, bodyInput: unknown, dryRun = fals
       warnings: result.warnings
     });
   }
-  const result = await applyCommands(id, body.commands as MapCommand[], { dryRun });
+  const result = await applyCommands(id, body.commands as MapCommand[], options);
   return createEnvelope({
     result: {
       ...(includeMap ? { map: result.map } : {}),
@@ -190,7 +195,15 @@ async function lightHistoryMoveResponse(result: Awaited<ReturnType<typeof undoMa
 
 export async function createServer(): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
-  await app.register(cors, { origin: true });
+  registerAccessGuard(app);
+  await app.register(cors, { origin: (origin, callback) => callback(null, !origin || allowedOrigin(origin)) });
+  app.setErrorHandler((error, _request, reply) => {
+    const failure = error instanceof Error ? error as Error & { statusCode?: number; code?: string } : new Error("request failed");
+    const status = "statusCode" in failure && typeof failure.statusCode === "number" ? failure.statusCode : 500;
+    reply.code(status).send(createEnvelope({ errors: [{
+      code: "code" in failure ? String(failure.code) : "request_failed", message: status < 500 ? failure.message : "request failed", severity: "invalid"
+    }] }));
+  });
   const webIndexPath = path.join(WEB_DIST_DIR, "index.html");
   const webAssetsDir = path.join(WEB_DIST_DIR, "assets");
   const hasWebBuild = await fileExists(webIndexPath);

@@ -1,5 +1,6 @@
 export * from "./activity.js";
 export * from "./commands.js";
+export * from "./command-input.js";
 export * from "./coords.js";
 export * from "./dictionaries.js";
 export * from "./history.js";

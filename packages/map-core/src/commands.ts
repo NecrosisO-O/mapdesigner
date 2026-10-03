@@ -1,5 +1,6 @@
 import { createCellId, createDisplayCoord, sameCoord } from "./coords.js";
 import { pushHistory } from "./history.js";
+import { validateCommandInput } from "./command-input.js";
 import { buildHexLine } from "./rivers.js";
 import { cloneDocument, normalizeDocument } from "./serialization.js";
 import type {
@@ -211,6 +212,8 @@ function finalize(
 }
 
 export function applyCommand(state: MapRuntimeState, command: MapCommand): CommandResult {
+  const inputErrors = validateCommandInput(command);
+  if (inputErrors.length) return { ok: false, map: state, changed: [], details: [], warnings: [], errors: inputErrors };
   const working = cloneDocument(state.document);
   const warnings: ValidationIssue[] = [];
   const errors: ValidationIssue[] = [];
