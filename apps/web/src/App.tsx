@@ -485,7 +485,12 @@ export default function App() {
           <strong>
             {
               {
-                select: "选择对象",
+                select:
+                  inspectorTab === "river" && riverEditor.selectedRiver
+                    ? "河流 · " + riverEditor.selectedRiver.name
+                    : editor.selectedCell
+                      ? editor.selectedCell.display_coord
+                      : "选择对象",
                 pan: "平移地图",
                 brush: "材料笔刷",
                 "format-brush": "格式刷",
@@ -533,7 +538,12 @@ export default function App() {
             <span>
               {
                 {
-                  select: "点击格子或河流查看属性",
+                  select:
+                    inspectorTab === "river" && riverEditor.selectedRiver
+                      ? "选择节点调整路径与宽度"
+                      : editor.selectedCell
+                        ? "在属性面板修改地形与生态"
+                        : "点击格子或河流查看属性",
                   pan: "拖动地图 · 滚轮缩放",
                   brush: "",
                   "format-brush": "拖动复制选中字段",

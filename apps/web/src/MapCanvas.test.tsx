@@ -421,9 +421,8 @@ describe("MapCanvas", () => {
       expect(countCoordinateLabels()).toBe(0);
     });
 
-    for (let index = 0; index < 12; index += 1) {
-      fireEvent.wheel(container, { deltaY: -120, clientX: 400, clientY: 300 });
-    }
+    // This checks density at the final scale; gesture sequences are covered separately.
+    fireEvent.wheel(container, { deltaY: -1440, clientX: 400, clientY: 300 });
 
     await waitFor(() => {
       const labelMode = screen
@@ -455,9 +454,7 @@ describe("MapCanvas", () => {
     mockCanvasRect(container);
     fireEvent(window, new Event("resize"));
 
-    for (let index = 0; index < 24; index += 1) {
-      fireEvent.wheel(container, { deltaY: -120, clientX: 400, clientY: 300 });
-    }
+    fireEvent.wheel(container, { deltaY: -2880, clientX: 400, clientY: 300 });
 
     await waitFor(() => {
       expect(screen.getByLabelText("地图画布").getAttribute("data-coordinate-label-mode")).toBe(
