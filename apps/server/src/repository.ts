@@ -150,6 +150,7 @@ export interface FeatureWriteChange {
 export interface FeaturePageOptions {
   limit?: number;
   offset?: number;
+  search?: string;
 }
 
 const MAX_LEGACY_IMPORT_FILE_BYTES = 32 * 1024 * 1024;
@@ -322,7 +323,10 @@ function normalizeFeaturePageOptions(
   if (!Number.isInteger(offset) || offset < 0) {
     throw badRequest("feature offset must be a non-negative integer");
   }
-  return { limit, offset };
+  const search = options.search ?? "";
+  if (typeof search !== "string" || search.length > 200)
+    throw badRequest("feature search must be at most 200 characters");
+  return { limit, offset, search: search.trim() };
 }
 
 function isWithinRange(coord: { row: number; col: number }, range: CellRange): boolean {
@@ -428,12 +432,20 @@ function readFeatureRows(db: Database.Database, id: string): FeatureRow[] {
 function readFeaturePage(
   db: Database.Database,
   id: string,
-  range: CellRange,
+  range: CellRange | null,
   options: Required<FeaturePageOptions>
 ): MapFeaturePage {
   const where =
-    "map_id = ? AND kind = 'river' AND bounds_min_row <= ? AND bounds_max_row >= ? AND bounds_min_col <= ? AND bounds_max_col >= ?";
-  const params = [id, range.maxRow, range.minRow, range.maxCol, range.minCol];
+    "map_id = ? AND kind = 'river'" +
+    (range
+      ? " AND bounds_min_row <= ? AND bounds_max_row >= ? AND bounds_min_col <= ? AND bounds_max_col >= ?"
+      : "") +
+    " AND instr(lower(json_extract(json, '$.name')), lower(?)) > 0";
+  const params = [
+    id,
+    ...(range ? [range.maxRow, range.minRow, range.maxCol, range.minCol] : []),
+    options.search
+  ];
   const total = (
     db.prepare("SELECT COUNT(*) AS total FROM features WHERE " + where).get(...params) as {
       total: number;
@@ -1015,6 +1027,20 @@ export async function getMapFeaturesInRange(
 
 export async function getRiverFeatures(id: string): Promise<RiverFeature[]> {
   return (await getMapFeatures(id)).rivers;
+}
+
+export async function searchMapFeatures(
+  id: string,
+  options: FeaturePageOptions = {},
+  range: CellRange | null = null
+): Promise<MapFeaturePage> {
+  const pageOptions = normalizeFeaturePageOptions(options);
+  if (range) assertRange(range);
+  await ensureMapInDatabase(id);
+  const db = getDatabase();
+  const row = getMapRowOrThrow(db, id);
+  backfillMissingFeatureBounds(db, row.id);
+  return readFeaturePage(db, row.id, range, pageOptions);
 }
 
 export async function applyFeatureWriteChanges(

@@ -1,3 +1,4 @@
+import { Icon } from "./Icon.js";
 import { createPortal } from "react-dom";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 export function Dialog(props: {
@@ -56,7 +57,7 @@ export function Dialog(props: {
         <div className="dialog-heading">
           <h2>{props.title}</h2>
           <button aria-label="关闭对话框" onClick={props.onClose}>
-            ×
+            <Icon name="close" />
           </button>
         </div>
         {props.children}

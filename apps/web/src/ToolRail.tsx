@@ -1,4 +1,5 @@
 import type { InteractionMode } from "./TopToolbar.js";
+import { Icon } from "./Icon.js";
 const tools: Array<{ id: InteractionMode; label: string; key: string; path: string }> = [
   { id: "select", label: "选择", key: "V", path: "M5 3l13 9-6 1-3 6z" },
   {
@@ -13,6 +14,7 @@ const tools: Array<{ id: InteractionMode; label: string; key: string; path: stri
     key: "B",
     path: "M9 13L18 3l3 3-10 9M10 15c-6-2-2 6-7 5 5 3 10 0 7-5z"
   },
+  { id: "sample", label: "取样", key: "I", path: "M14 3l7 7M12 5l7 7-10 10H4v-5ZM4 18l3 3" },
   { id: "river-draw", label: "河流", key: "R", path: "M6 3c16 4-10 9 8 18M10 3c16 4-10 9 8 18" },
   {
     id: "batch-select",
@@ -35,7 +37,9 @@ export function ToolRail(props: {
           title={tool.label + " · " + tool.key}
           aria-label={tool.label}
           aria-keyshortcuts={tool.key}
-          aria-pressed={props.mode === tool.id}
+          aria-pressed={
+            props.mode === tool.id || (tool.id === "brush" && props.mode === "format-brush")
+          }
           disabled={props.disabled}
           onClick={() => props.onChange(tool.id)}
         >
@@ -58,7 +62,8 @@ export function ToolRail(props: {
         aria-label="快捷键帮助"
         title="快捷键 · ?"
       >
-        ?
+        <Icon name="help" />
+        <span>帮助</span>
       </button>
     </nav>
   );

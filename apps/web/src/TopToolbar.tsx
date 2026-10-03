@@ -1,8 +1,10 @@
 import type { MapRuntimeState } from "@mapdesigner/map-core";
 import { useEffect, useRef, type ChangeEvent, type RefObject } from "react";
 import type { MapHistory, MapListItem } from "./api.js";
+import { Icon } from "./Icon.js";
 
-export type InteractionMode = "select" | "pan" | "brush" | "river-draw" | "batch-select";
+export type InteractionMode =
+  "select" | "pan" | "brush" | "format-brush" | "sample" | "river-draw" | "batch-select";
 
 interface TopToolbarProps {
   currentMap: MapRuntimeState | null;
@@ -11,6 +13,9 @@ interface TopToolbarProps {
   displayMaps: MapListItem[];
   mapDirty: boolean;
   pending?: boolean;
+  error?: string | null;
+  onRetry?: () => void;
+  onHistory: () => void;
   onExport?: () => void;
   onToggleTheme?: () => void;
   onToggleFocus?: () => void;
@@ -67,7 +72,7 @@ export function TopToolbar(props: TopToolbarProps) {
     <header className="topbar">
       <div className="brand">
         <span className="brand-mark" aria-hidden="true">
-          ⬡
+          <Icon name="map" size={24} />
         </span>
         <strong>MapDesigner</strong>
       </div>
@@ -82,7 +87,7 @@ export function TopToolbar(props: TopToolbarProps) {
         }}
       >
         <summary>
-          地图 <span aria-hidden="true">⌄</span>
+          地图 <Icon name="chevron" size={14} />
         </summary>
         <div
           className="document-menu-content"
@@ -112,6 +117,9 @@ export function TopToolbar(props: TopToolbarProps) {
           <button onClick={() => props.fileInputRef.current?.click()}>导入 JSON</button>
           <button onClick={props.onStartRenaming} disabled={!props.currentMap}>
             重命名
+          </button>
+          <button onClick={props.onSaveMap} disabled={!props.mapDirty || props.pending}>
+            应用待保存修改
           </button>
           <button onClick={props.onSaveAs} disabled={!props.currentMap}>
             另存为
@@ -155,36 +163,72 @@ export function TopToolbar(props: TopToolbarProps) {
             </button>
           </form>
         ) : (
-          <button className="name-button" onClick={props.onStartRenaming} title="重命名地图">
+          <button
+            className="name-button"
+            onClick={props.onStartRenaming}
+            title={props.currentMap?.document.meta.name ?? "未打开地图"}
+          >
             {props.currentMap?.document.meta.name ?? "未打开地图"}
           </button>
         )}
-        <span className={props.mapDirty ? "save-state save-state-dirty" : "save-state"}>
-          {props.pending ? "正在提交…" : props.mapDirty ? "未保存修改" : "已保存"}
+        <span
+          title={props.error ?? undefined}
+          className={props.mapDirty || props.error ? "save-state save-state-dirty" : "save-state"}
+        >
+          {props.pending
+            ? "正在提交…"
+            : props.error
+              ? "提交失败"
+              : props.mapDirty
+                ? "草稿未应用"
+                : props.currentMap
+                  ? "已保存"
+                  : "选择或新建地图"}
         </span>
       </div>
       <div className="document-actions">
-        {props.mapDirty && (
-          <button onClick={props.onSaveMap} disabled={props.pending}>
-            保存
+        {props.error && props.onRetry && (
+          <button className="retry-button" onClick={props.onRetry} disabled={props.pending}>
+            重试
           </button>
         )}
-        <button onClick={props.onUndo} disabled={!canUndo || props.pending} title="撤销 · ⌘/Ctrl Z">
-          撤销
+        {props.mapDirty && (
+          <button className="apply-drafts" onClick={props.onSaveMap} disabled={props.pending}>
+            应用草稿
+          </button>
+        )}
+        <button
+          className="icon-button"
+          aria-label="撤销"
+          onClick={props.onUndo}
+          disabled={!canUndo || props.pending}
+          title="撤销 · ⌘/Ctrl Z"
+        >
+          <Icon name="undo" />
         </button>
         <button
           onClick={props.onRedo}
+          className="icon-button"
+          aria-label="重做"
           disabled={!canRedo || props.pending}
           title="重做 · ⌘/Ctrl Shift Z"
         >
-          重做
+          <Icon name="redo" />
         </button>
         <span className="toolbar-divider" />
+        <button
+          className="icon-button"
+          aria-label="编辑历史"
+          onClick={props.onHistory}
+          title="编辑历史"
+        >
+          <Icon name="history" />
+        </button>
         <button onClick={props.onToggleTheme} aria-label="切换深浅主题" title="切换深浅主题">
-          ◐
+          <Icon name="theme" />
         </button>
         <button onClick={props.onToggleFocus} aria-label="专注画布" title="专注画布">
-          ⛶
+          <Icon name="focus" />
         </button>
         <button className="primary-button" onClick={props.onExport} disabled={!props.currentMap}>
           导出

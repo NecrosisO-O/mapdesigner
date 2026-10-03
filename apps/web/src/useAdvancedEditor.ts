@@ -99,6 +99,20 @@ export function useAdvancedEditor(
   });
 
   const batchSelectedCells = useMemo(() => [...selection.values()].sort(sortCells), [selection]);
+  const mixedFields = useMemo(
+    () =>
+      Object.fromEntries(
+        (["terrain", "biome", "tags", "note"] as const).map((field) => [
+          field,
+          new Set(
+            batchSelectedCells.map((cell) =>
+              JSON.stringify(field === "tags" ? [...cell.tags].sort() : cell[field])
+            )
+          ).size > 1
+        ])
+      ) as Record<BatchField, boolean>,
+    [batchSelectedCells]
+  );
   const draftRef = useRef(batchDraft);
   draftRef.current = batchDraft;
   function setBatchDraft(action: SetStateAction<BatchEditDraft>): void {
@@ -125,11 +139,9 @@ export function useAdvancedEditor(
     setBatchModes((modes) => ({ ...modes, [field]: mode }));
   }
 
-  const batchFilteredTerrainCategories = batchDraft.biome
-    ? getAllowedTerrainCategoriesForBiome(batchDraft.biome)
-    : TERRAIN_CATEGORY_ORDER;
+  const batchFilteredTerrainCategories = TERRAIN_CATEGORY_ORDER;
   const batchTerrainOptions = batchDraft.terrainCategory
-    ? getFilteredTerrainEntries(batchDraft.terrainCategory, batchDraft.biome || undefined)
+    ? getFilteredTerrainEntries(batchDraft.terrainCategory)
     : [];
   const batchBiomeOptions = batchDraft.terrain
     ? getAllowedBiomesForTerrain(batchDraft.terrain)
@@ -176,6 +188,37 @@ export function useAdvancedEditor(
     }));
   }
 
+  function plannedChanges(): Extract<MapCommand, { action: "patch_cells" }>["changes"] {
+    return {
+      ...(batchModes.terrain === "set" ? { terrain: batchDraft.terrain as TerrainKey } : {}),
+      ...(batchModes.biome !== "keep"
+        ? { biome: batchModes.biome === "clear" ? null : (batchDraft.biome as BiomeKey) }
+        : {}),
+      ...(batchModes.tags !== "keep"
+        ? { tags: batchModes.tags === "clear" ? [] : batchDraft.tags }
+        : {}),
+      ...(batchModes.note !== "keep"
+        ? { note: batchModes.note === "clear" ? "" : batchDraft.note }
+        : {})
+    };
+  }
+  function projectedCell(cell: ActiveCell): ActiveCell {
+    const changes = plannedChanges();
+    if (changes.tags && batchModes.tags !== "clear")
+      changes.tags =
+        batchTagMode === "add"
+          ? [...new Set([...cell.tags, ...changes.tags])]
+          : batchTagMode === "remove"
+            ? cell.tags.filter((tag) => !changes.tags!.includes(tag))
+            : changes.tags;
+    return { ...cell, ...changes, status: changes.terrain ? "designed" : cell.status };
+  }
+  const plannedCount = batchSelectedCells.filter((cell) => {
+    const next = projectedCell(cell);
+    return (["terrain", "biome", "tags", "note"] as const).some(
+      (field) => JSON.stringify(next[field]) !== JSON.stringify(cell[field])
+    );
+  }).length;
   async function applyBatchEdit(): Promise<MapRuntimeState | null> {
     if (!currentMap) {
       return null;
@@ -213,6 +256,15 @@ export function useAdvancedEditor(
     if (!result) {
       return null;
     }
+    setSelection(
+      (current) =>
+        new Map(
+          [...current].map(([id, cell]) => [
+            id,
+            batchSelectedCellIds.has(id) ? projectedCell(cell) : cell
+          ])
+        )
+    );
     if (draftRef.current === submitted) setBatchModes(INITIAL_MODES);
     setMessage(`已批量设置 ${batchSelectedCells.length} 个单元格并保存到服务器`);
     return result;
@@ -322,6 +374,8 @@ export function useAdvancedEditor(
   }, [currentMap?.document.meta.id]);
 
   return {
+    mixedFields,
+    plannedCount,
     pending: task.pending,
     batchModes,
     setBatchFieldMode,

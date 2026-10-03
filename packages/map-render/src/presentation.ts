@@ -13,7 +13,8 @@ import {
   buildPatternOverlay,
   buildCellOpacity,
   getCellShorthand,
-  buildSvgDefs
+  buildSvgDefs,
+  getBiomePatternId
 } from "./styles.js";
 import { TERRAIN_SYMBOLS, TAG_SYMBOLS } from "./symbols.js";
 import type { HexCellLayout, MapRenderOptions } from "./types.js";
@@ -183,7 +184,9 @@ export function renderMaterialSvg(
     " " +
     layout.height +
     '" aria-hidden="true"><defs>' +
-    buildSvgDefs(mapStyle).join("") +
+    buildSvgDefs(mapStyle)
+      .filter((def) => biome && def.includes('id="' + getBiomePatternId(biome, mapStyle) + '"'))
+      .join("") +
     "</defs>" +
     renderCellSurface(layout.layout[0]!, options, true) +
     renderCellAnnotations(layout.layout[0]!, options) +

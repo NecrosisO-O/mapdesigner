@@ -8,6 +8,8 @@ import {
   type MapCommand,
   type MapRuntimeState,
   type RiverFeature,
+  type RiverFlow,
+  type RiverEndpoint,
   type RiverPoint
 } from "@mapdesigner/map-core";
 import { useEffect, useRef, useState } from "react";
@@ -20,6 +22,10 @@ export interface RiverDraft {
   widthsText: string;
   color: string;
   opacity: string;
+  flowDirection: RiverFlow;
+  startKind: RiverEndpoint;
+  endKind: RiverEndpoint;
+  junctions: Record<string, string>;
 }
 
 export type RiverDrawingStatus = "idle" | "drawing";
@@ -100,6 +106,12 @@ function draftFromRiver(river: RiverFeature | null): RiverDraft {
   river = river ? upgradeRiverWidths(river) : null;
   return {
     name: river?.name ?? "",
+    flowDirection: river?.flow_direction ?? "unspecified",
+    startKind: river?.start_kind ?? "auto",
+    endKind: river?.end_kind ?? "auto",
+    junctions: Object.fromEntries(
+      (river?.points ?? []).filter((p) => p.junction_id).map((p) => [coordKey(p), p.junction_id!])
+    ),
     pointsText:
       river?.points.map((point) => createDisplayCoord(point.row, point.col)).join(", ") ?? "",
     widthsText:
@@ -113,7 +125,14 @@ function draftFromRiver(river: RiverFeature | null): RiverDraft {
 }
 
 function parseRiverDraftPoints(draft: RiverDraft): RiverPoint[] {
-  return parseRiverPoints(draft.pointsText, draft.widthsText);
+  const points = parseRiverPoints(draft.pointsText, draft.widthsText);
+  for (const key of Object.keys(draft.junctions))
+    if (!points.some((point) => coordKey(point) === key))
+      throw new Error("路径包含连接点，请通过节点编辑移动，或先解除连接。");
+  return points.map((point) => ({
+    ...point,
+    ...(draft.junctions[coordKey(point)] ? { junction_id: draft.junctions[coordKey(point)] } : {})
+  }));
 }
 
 function parseRiverDraftPreviewPoints(draft: RiverDraft): RiverPoint[] {
@@ -159,8 +178,8 @@ export function useRiverEditor(
     setDrawingPoints([]);
   }
 
-  function selectRiver(id: string): void {
-    const river = rivers.find((entry) => entry.id === id) ?? null;
+  function selectRiver(id: string, knownRiver?: RiverFeature): void {
+    const river = knownRiver ?? rivers.find((entry) => entry.id === id) ?? null;
     setSelectedRiverId(id);
     setSelectedRiver(river);
     setDraft(draftFromRiver(river));
@@ -229,7 +248,7 @@ export function useRiverEditor(
 
     let points: RiverPoint[];
     try {
-      points = parseRiverPoints(draft.pointsText, draft.widthsText);
+      points = parseRiverDraftPoints(draft);
     } catch (error) {
       setMessage((error as Error).message);
       return false;
@@ -257,6 +276,9 @@ export function useRiverEditor(
               river_id: selectedRiver.id,
               changes: {
                 name: draft.name,
+                flow_direction: draft.flowDirection,
+                start_kind: draft.startKind,
+                end_kind: draft.endKind,
                 points,
                 color: draft.color || null,
                 opacity
@@ -268,6 +290,9 @@ export function useRiverEditor(
               river: {
                 id: nextId,
                 name: draft.name,
+                flow_direction: draft.flowDirection,
+                start_kind: draft.startKind,
+                end_kind: draft.endKind,
                 points,
                 color: draft.color || null,
                 opacity

@@ -1,4 +1,5 @@
 import { Dialog } from "./Dialog.js";
+import type { ReactNode } from "react";
 import {
   TAG_ENTRIES,
   type ExportRenderOptions,
@@ -10,6 +11,15 @@ import {
 import { formatDateTime } from "./useMapWorkspace.js";
 
 interface SidebarPanelProps {
+  tab: "materials" | "objects" | "legend" | "display";
+  onTabChange: (tab: "materials" | "objects" | "legend" | "display") => void;
+  panelHeader: ReactNode;
+  resizeHandle: ReactNode;
+  materialLibrary: ReactNode;
+  objectBrowser: ReactNode;
+  legend: ReactNode;
+  layers: { terrain: boolean; biomes: boolean; rivers: boolean; tags: boolean };
+  onLayerChange: (key: "terrain" | "biomes" | "rivers" | "tags", visible: boolean) => void;
   onClose: () => void;
   onSelectRiver: (id: string) => void;
   onExportJson: () => void;
@@ -61,106 +71,111 @@ export function SidebarPanel(props: SidebarPanelProps) {
 
   return (
     <aside className="sidebar">
-      <div className="panel-heading">
-        <h2>内容与图层</h2>
-        <button className="drawer-close" aria-label="关闭内容栏" onClick={props.onClose}>
-          ×
-        </button>
-      </div>
-      <section className="panel map-summary">
-        <span className="eyebrow">当前文档</span>
-        <h3>{props.currentMap?.document.meta.name ?? "开始绘制你的世界"}</h3>
-        <p>{designedCellCount.toLocaleString()} 个已设计单元格</p>
-      </section>
-      <section className="panel tool-panel">
-        <h2>视图</h2>
-        <label>
-          地图样式
-          <select
-            value={props.currentMap?.document.meta.map_style ?? "classic-v1"}
-            onChange={(event) => props.onMapStyleChange(event.target.value as MapStyle)}
-            disabled={!props.currentMap}
+      {props.panelHeader}
+      {props.resizeHandle}
+      <div className="sidebar-tabs" role="tablist" aria-label="内容导航">
+        {(["materials", "objects", "legend", "display"] as const).map((tab) => (
+          <button
+            role="tab"
+            key={tab}
+            aria-selected={props.tab === tab}
+            onClick={() => props.onTabChange(tab)}
           >
-            <option value="atlas-v1">自然地图</option>
-            <option value="classic-v1">经典配色</option>
-          </select>
-        </label>
-        <label className="checkbox-row switch-row">
-          <input
-            type="checkbox"
-            checked={props.showCoordinates}
-            onChange={(event) => props.onShowCoordinatesChange(event.target.checked)}
-          />
-          显示坐标
-        </label>
-        <label className="checkbox-row switch-row">
-          <input
-            type="checkbox"
-            checked={props.showShorthand}
-            onChange={(event) => props.onShowShorthandChange(event.target.checked)}
-          />
-          显示简写
-        </label>
-        <label className="checkbox-row switch-row">
-          <input
-            type="checkbox"
-            checked={props.showGrid}
-            onChange={(event) => props.onShowGridChange(event.target.checked)}
-          />
-          显示网格线
-        </label>
-        <label className="checkbox-row switch-row">
-          <input
-            type="checkbox"
-            checked={props.showUndesigned}
-            onChange={(event) => props.onShowUndesignedChange(event.target.checked)}
-          />
-          显示待设计格
-        </label>
-        <div className="tag-filter-block" aria-label="标签筛选">
-          <div className="panel-subtitle-row">
-            <h3>标签筛选</h3>
-            <button
-              type="button"
-              onClick={props.onClearTagFilter}
-              disabled={props.tagFilter.length === 0}
+            {{ materials: "材料", objects: "对象", legend: "图例", display: "显示" }[tab]}
+          </button>
+        ))}
+      </div>
+      <div className="sidebar-scroll">
+        {props.tab === "materials" && props.materialLibrary}
+        {props.tab === "objects" && props.objectBrowser}
+        {props.tab === "legend" && props.legend}
+        <section className="panel tool-panel" hidden={props.tab !== "display"}>
+          <h2>地图显示</h2>
+          <p>这里的显示开关只影响编辑视图。图片导出有独立选项。</p>
+          <div className="layer-switches">
+            {(["terrain", "biomes", "rivers", "tags"] as const).map((key) => (
+              <label key={key} className="checkbox-row">
+                <input
+                  type="checkbox"
+                  checked={props.layers[key]}
+                  onChange={(event) => props.onLayerChange(key, event.target.checked)}
+                />
+                {{ terrain: "地貌", biomes: "生态纹理", rivers: "河流", tags: "地点标记" }[key]}
+              </label>
+            ))}
+          </div>
+          <label>
+            地图样式
+            <select
+              value={props.currentMap?.document.meta.map_style ?? "classic-v1"}
+              onChange={(event) => props.onMapStyleChange(event.target.value as MapStyle)}
+              disabled={!props.currentMap}
             >
-              清除
-            </button>
+              <option value="atlas-v1">自然地图</option>
+              <option value="classic-v1">经典配色</option>
+            </select>
+          </label>
+          <label className="checkbox-row switch-row">
+            <input
+              type="checkbox"
+              checked={props.showCoordinates}
+              onChange={(event) => props.onShowCoordinatesChange(event.target.checked)}
+            />
+            显示坐标
+          </label>
+          <label className="checkbox-row switch-row">
+            <input
+              type="checkbox"
+              checked={props.showShorthand}
+              onChange={(event) => props.onShowShorthandChange(event.target.checked)}
+            />
+            显示简写
+          </label>
+          <label className="checkbox-row switch-row">
+            <input
+              type="checkbox"
+              checked={props.showGrid}
+              onChange={(event) => props.onShowGridChange(event.target.checked)}
+            />
+            显示网格线
+          </label>
+          <label className="checkbox-row switch-row">
+            <input
+              type="checkbox"
+              checked={props.showUndesigned}
+              onChange={(event) => props.onShowUndesignedChange(event.target.checked)}
+            />
+            显示待设计格
+          </label>
+          <div className="tag-filter-block" aria-label="标签筛选">
+            <div className="panel-subtitle-row">
+              <h3>标签筛选</h3>
+              <button
+                type="button"
+                onClick={props.onClearTagFilter}
+                disabled={props.tagFilter.length === 0}
+              >
+                清除
+              </button>
+            </div>
+            <div className="tag-filter-grid">
+              {Object.entries(TAG_ENTRIES).map(([key, entry]) => {
+                const tag = key as TagKey;
+                return (
+                  <label key={key}>
+                    <input
+                      type="checkbox"
+                      checked={props.tagFilter.includes(tag)}
+                      onChange={(event) => props.onTagFilterChange(tag, event.target.checked)}
+                    />
+                    {entry.label}
+                  </label>
+                );
+              })}
+            </div>
           </div>
-          <div className="tag-filter-grid">
-            {Object.entries(TAG_ENTRIES).map(([key, entry]) => {
-              const tag = key as TagKey;
-              return (
-                <label key={key}>
-                  <input
-                    type="checkbox"
-                    checked={props.tagFilter.includes(tag)}
-                    onChange={(event) => props.onTagFilterChange(tag, event.target.checked)}
-                  />
-                  {entry.label}
-                </label>
-              );
-            })}
-          </div>
-        </div>
-      </section>
-
-      <section className="panel">
-        <h3>河流 · 当前区域</h3>
-        <div className="river-list">
-          {props.currentMap?.document.features.rivers.slice(0, 200).map((river) => (
-            <button key={river.id} onClick={() => props.onSelectRiver(river.id)}>
-              <span aria-hidden="true">≈</span>
-              {river.name}
-              <small>{river.points.length} 点</small>
-            </button>
-          ))}
-        </div>
-        {!props.currentMap?.document.features.rivers.length && (
-          <p className="muted">使用河流工具添加一条路径。</p>
-        )}
-      </section>
+        </section>
+      </div>
       {props.exportPanelOpen && (
         <Dialog title="导出地图" onClose={props.onToggleExportPanel}>
           <div id="export-panel-content">

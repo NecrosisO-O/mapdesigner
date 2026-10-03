@@ -1,3 +1,6 @@
+import type { InteractionMode } from "./TopToolbar.js";
+import { materialForCell, type Material } from "./useMaterialBrush.js";
+import type { LegendHighlight } from "./LegendPanel.js";
 import {
   buildHexLine,
   createCellId,
@@ -45,7 +48,12 @@ interface MapCanvasProps {
   selectedCell: ActiveCell | null;
   selectedCellId: string | null;
   onSelectCell: (cell: ActiveCell) => void;
-  interactionMode?: "select" | "pan" | "brush" | "river-draw" | "batch-select";
+  interactionMode?: InteractionMode;
+  brushRadius?: number;
+  brushMaterial?: Material;
+  brushFields?: { terrain: boolean; biome: boolean };
+  focusRequest?: { coord: GridCoordinate; token: number } | null;
+  legendHighlight?: LegendHighlight | null;
   onBrushStroke?: (cells: ActiveCell[]) => void;
   batchSelectedCellIds?: Set<string>;
   onBatchCellToggle?: (cell: ActiveCell) => void;
@@ -260,6 +268,7 @@ function CellGroup(props: {
   showGrid: boolean;
   dimmed: boolean;
   mapStyle: MapStyle;
+  preview?: ActiveCell;
   showTerrain: boolean;
   showSymbols: boolean;
   onSelect: () => void;
@@ -556,8 +565,8 @@ export function MapCanvas(props: MapCanvasProps) {
 
   const handleCellAction = (cell: ActiveCell) => {
     if (props.interactionMode === "pan" || spacePan.current) return;
-    if (props.interactionMode === "brush") {
-      props.onBrushStroke?.([cell]);
+    if (props.interactionMode === "brush" || props.interactionMode === "format-brush") {
+      props.onBrushStroke?.(brushCells(cell));
       return;
     }
     if (props.interactionMode === "river-draw") {
@@ -631,8 +640,38 @@ export function MapCanvas(props: MapCanvasProps) {
     const focused = entry.cell.id === props.selectedCellId || entry.cell.id === hoveredCellId;
     return focused || isCellInCoordinateDensity(entry.cell, coordinateLabelStep);
   };
-  const doesCellMatchTagFilter = (cell: ActiveCell) =>
-    tagFilter.length === 0 || tagFilter.some((tag) => cell.tags.includes(tag));
+  const doesCellMatchTagFilter = (cell: ActiveCell) => {
+    const highlight = props.legendHighlight;
+    return (
+      (tagFilter.length === 0 || tagFilter.some((tag) => cell.tags.includes(tag))) &&
+      (!highlight ||
+        (highlight.kind === "tag"
+          ? cell.tags.includes(highlight.key as TagKey)
+          : cell[highlight.kind] === highlight.key))
+    );
+  };
+  function brushCells(cell: ActiveCell): ActiveCell[] {
+    const found = new Map([[cell.id, cell]]);
+    let edge = [cell];
+    for (let step = 0; step < (props.brushRadius ?? 0); step++) {
+      const next: ActiveCell[] = [];
+      for (const source of edge)
+        for (const coord of getNeighborCoords(source)) {
+          const id = createCellId(coord.row, coord.col),
+            target = sceneCellsById.get(id);
+          if (target && !found.has(id)) {
+            found.set(id, target);
+            next.push(target);
+          }
+        }
+      edge = next;
+    }
+    return [...found.values()];
+  }
+  const brushHover = props.brushMaterial && hoveredCellId && sceneCellsById.get(hoveredCellId);
+  const brushPreviewIds = strokeIds.size
+    ? strokeIds
+    : new Set(brushHover ? brushCells(brushHover).map((cell) => cell.id) : []);
 
   function cellAtPoint(clientX: number, clientY: number): ActiveCell | null {
     const rect = containerRef.current!.getBoundingClientRect(),
@@ -649,7 +688,8 @@ export function MapCanvas(props: MapCanvasProps) {
     const points = strokeLast.current ? buildHexLine(strokeLast.current, cell) : [cell];
     for (const point of points) {
       const target = sceneCellsById.get(createCellId(point.row, point.col));
-      if (target) stroke.current.set(target.id, target);
+      if (target)
+        for (const expanded of brushCells(target)) stroke.current.set(expanded.id, expanded);
     }
     strokeLast.current = cell;
     setStrokeIds(new Set(stroke.current.keys()));
@@ -667,6 +707,19 @@ export function MapCanvas(props: MapCanvasProps) {
       }
     });
   }
+  useEffect(() => {
+    if (!props.focusRequest) return;
+    const point = centerForCoord(props.focusRequest.coord, 36);
+    const zoom = clamp(1 / viewportMetrics.baseScale, MIN_ZOOM, MAX_ZOOM);
+    const scale = viewportMetrics.baseScale * zoom;
+    setCamera({
+      zoom,
+      offset: {
+        x: viewportSize.width / 2 - viewportMetrics.baseOffset.x - (point.x - scene.minX) * scale,
+        y: viewportSize.height / 2 - viewportMetrics.baseOffset.y - (point.y - scene.minY) * scale
+      }
+    });
+  }, [props.focusRequest?.token]);
   useEffect(() => {
     stroke.current = null;
     pointers.current.clear();
@@ -778,7 +831,10 @@ export function MapCanvas(props: MapCanvasProps) {
           };
           return;
         }
-        if (props.interactionMode === "brush" && !spacePan.current) {
+        if (
+          (props.interactionMode === "brush" || props.interactionMode === "format-brush") &&
+          !spacePan.current
+        ) {
           stroke.current = new Map();
           strokeLast.current = null;
           addStrokeCell(
@@ -987,13 +1043,22 @@ export function MapCanvas(props: MapCanvasProps) {
                 centerY={entry.centerY}
                 selected={props.selectedCellId === entry.cell.id}
                 batchSelected={
-                  batchSelectedCellIds.has(entry.cell.id) || strokeIds.has(entry.cell.id)
+                  batchSelectedCellIds.has(entry.cell.id) || brushPreviewIds.has(entry.cell.id)
                 }
                 hovered={hoveredCellId === entry.cell.id}
                 showPattern={effectiveShowPattern && props.showBiomes !== false}
-                showSymbols={effectiveShowPattern}
+                showSymbols={effectiveScale >= 0.28}
                 showTerrain={props.showTerrain !== false}
                 mapStyle={scene.options.mapStyle}
+                preview={
+                  props.brushMaterial && brushPreviewIds.has(entry.cell.id)
+                    ? materialForCell(
+                        entry.cell,
+                        props.brushMaterial,
+                        props.brushFields ?? { terrain: true, biome: true }
+                      )
+                    : undefined
+                }
                 showGrid={props.showGrid}
                 dimmed={!doesCellMatchTagFilter(entry.cell)}
                 onSelect={() => {
@@ -1036,11 +1101,11 @@ export function MapCanvas(props: MapCanvasProps) {
                   entry.cell.id === hoveredCellId ||
                   entry.cell.id === keyboardCell?.id ||
                   batchSelectedCellIds.has(entry.cell.id) ||
-                  strokeIds.has(entry.cell.id)
+                  brushPreviewIds.has(entry.cell.id)
               )
               .map((entry) => {
                 const selected = entry.cell.id === props.selectedCellId;
-                const stroke = strokeIds.has(entry.cell.id);
+                const stroke = brushPreviewIds.has(entry.cell.id);
                 const batch = batchSelectedCellIds.has(entry.cell.id);
                 const focused = entry.cell.id === keyboardCell?.id;
                 return (

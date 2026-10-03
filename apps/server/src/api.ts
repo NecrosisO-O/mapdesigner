@@ -20,6 +20,7 @@ import {
   exportPng,
   getCellsInRange,
   getMapFeatures,
+  searchMapFeatures,
   getMapFeaturesInRange,
   getMapHistory,
   getHistoryStatus,
@@ -290,6 +291,45 @@ export async function createServer(): Promise<FastifyInstance> {
       return createEnvelope({ result: await getMapFeatures(request.params.id) });
     } catch (error) {
       return sendError(reply, "map_features_failed", error, 404);
+    }
+  });
+
+  app.get<{
+    Params: { id: string };
+    Querystring: {
+      search?: string;
+      limit?: string;
+      offset?: string;
+      minRow?: string;
+      maxRow?: string;
+      minCol?: string;
+      maxCol?: string;
+    };
+  }>("/api/maps/:id/features/search", async (request, reply) => {
+    try {
+      const q = request.query;
+      const range =
+        q.minRow !== undefined
+          ? {
+              minRow: readIntegerQuery(q.minRow, "minRow"),
+              maxRow: readIntegerQuery(q.maxRow, "maxRow"),
+              minCol: readIntegerQuery(q.minCol, "minCol"),
+              maxCol: readIntegerQuery(q.maxCol, "maxCol")
+            }
+          : null;
+      return createEnvelope({
+        result: await searchMapFeatures(
+          request.params.id,
+          {
+            search: q.search,
+            limit: q.limit === undefined ? 50 : readIntegerQuery(q.limit, "limit"),
+            offset: q.offset === undefined ? 0 : readIntegerQuery(q.offset, "offset")
+          },
+          range
+        )
+      });
+    } catch (error) {
+      return sendError(reply, "feature_search_failed", error, 400);
     }
   });
 

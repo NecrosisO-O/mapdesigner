@@ -77,6 +77,8 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
     pending = useRef(0);
   const queue = useRef<Promise<unknown>>(Promise.resolve());
   const inFlight = useRef(new Map<string, Promise<WorkspaceMap | null>>());
+  const [writeError, setWriteError] = useState<string | null>(null);
+  const retryCommands = useRef<{ id: string; commands: MapCommand[] } | null>(null);
   const suppressAutoOpen = useRef(false);
   const [isRenaming, setIsRenaming] = useState(false),
     [renameDraft, setRenameDraft] = useState("");
@@ -299,6 +301,7 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
     const duplicate = inFlight.current.get(identity);
     if (duplicate) return duplicate;
     pending.current++;
+    setWriteError(null);
     setPendingCount(pending.current);
     const operation = queue.current
       .then(async () => {
@@ -306,8 +309,10 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
         try {
           return await task(sessionRef.current!, epoch);
         } catch (error) {
-          if (valid(epoch, id))
+          if (valid(epoch, id)) {
+            setWriteError(formatStatusMessage((error as Error).message, "操作失败，请重试"));
             setMessage(formatStatusMessage((error as Error).message, "操作失败，请重试"));
+          }
           return null;
         }
       })
@@ -361,15 +366,18 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
   function applyCommands(commands: MapCommand[]): Promise<MapRuntimeState | null> {
     return enqueue("commands:" + JSON.stringify(commands), async (current, epoch) => {
       const id = current.summary.meta.id;
+      retryCommands.current = { id, commands };
       const response = await api.applyCommands(id, commands, {
         includeMap: false,
         expectedRevision: current.summary.meta.revision
       });
       if (!valid(epoch, id)) return null;
       if (!response.ok || !response.result) {
+        setWriteError(errorMessage(response, "应用修改失败"));
         setMessage(errorMessage(response, "应用修改失败"));
         return null;
       }
+      retryCommands.current = null;
       return acceptResult(response.result, epoch, id);
     });
   }
@@ -424,6 +432,7 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
       });
       if (!valid(epoch, id)) return null;
       if (!response.ok || !response.result) {
+        setWriteError(errorMessage(response, "保存失败"));
         setMessage(errorMessage(response, "保存失败"));
         return null;
       }
@@ -570,9 +579,19 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
       void openMap(maps[0]!.id);
   }, [maps]);
   useEffect(() => {
+    setWriteError(null);
+    retryCommands.current = null;
+  }, [currentMapId]);
+  useEffect(() => {
     if (!isRenaming) setRenameDraft(currentMap?.document.meta.name ?? "");
   }, [currentMap?.document.meta.name, isRenaming]);
   return {
+    writeError,
+    canRetryCommands: retryCommands.current?.id === currentMapId,
+    retryLastCommands: () =>
+      retryCommands.current?.id === currentMapId
+        ? applyCommands(retryCommands.current.commands)
+        : Promise.resolve(null),
     importProgress,
     cancelImport: () => importAbort.current?.abort(),
     overview: session?.overview ?? null,
