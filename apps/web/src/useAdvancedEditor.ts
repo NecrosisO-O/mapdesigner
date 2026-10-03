@@ -68,10 +68,12 @@ export function getNoneBiomeValue(): string {
 export function useAdvancedEditor(
   currentMap: MapRuntimeState | null,
   applyCommands: (commands: MapCommand[]) => Promise<MapRuntimeState | null>,
-  setMessage: (message: string) => void
+  setMessage: (message: string) => void,
+  confirmReplacement?: (commands: MapCommand[]) => Promise<boolean>
 ) {
   const [selection, setSelection] = useState<Map<string, ActiveCell>>(() => new Map());
   const batchSelectedCellIds = useMemo(() => new Set(selection.keys()), [selection]);
+  const [batchTagMode, setBatchTagMode] = useState<"replace" | "add" | "remove">("replace");
   const [batchModes, setBatchModes] = useState(INITIAL_MODES);
   const task = useEditorTask(currentMap?.document.meta.id);
   const [batchDraft, updateBatchDraft] = useState<BatchEditDraft>({
@@ -169,6 +171,7 @@ export function useAdvancedEditor(
     const submitted = draftRef.current;
     const result = await task.run(() => applyCommands([{
       action: "patch_cells", source: "webui",
+      ...(changes.tags && batchModes.tags !== "clear" && batchTagMode !== "replace" ? { tagMode: batchTagMode } : {}),
       targets: batchSelectedCells.map(cell => ({ row: cell.row, col: cell.col })), changes
     }]));
     if (!result) {
@@ -212,7 +215,7 @@ export function useAdvancedEditor(
       setMessage("匹配 terrain 与目标 terrain 相同");
       return null;
     }
-    const result = await task.run(() => applyCommands([{
+    const commands: MapCommand[] = [{
       action: "replace_terrain",
       source: "webui",
       match: {
@@ -221,7 +224,11 @@ export function useAdvancedEditor(
       changes: {
         terrain: replaceTerrainDraft.replacementTerrain as TerrainKey
       }
-    }]));
+    }];
+    const result = await task.run(async () => {
+      if (confirmReplacement && !await confirmReplacement(commands)) return null;
+      return applyCommands(commands);
+    });
     if (!result) {
       return null;
     }
@@ -243,7 +250,7 @@ export function useAdvancedEditor(
       setMessage("匹配 biome 与目标 biome 相同");
       return null;
     }
-    const result = await task.run(() => applyCommands([{
+    const commands: MapCommand[] = [{
       action: "replace_biome",
       source: "webui",
       match: {
@@ -252,7 +259,11 @@ export function useAdvancedEditor(
       changes: {
         biome: replacementBiome
       }
-    }]));
+    }];
+    const result = await task.run(async () => {
+      if (confirmReplacement && !await confirmReplacement(commands)) return null;
+      return applyCommands(commands);
+    });
     if (!result) {
       return null;
     }
@@ -267,7 +278,7 @@ export function useAdvancedEditor(
   }, [currentMap?.document.meta.id]);
 
   return {
-    pending: task.pending, batchModes, setBatchFieldMode,
+    pending: task.pending, batchModes, setBatchFieldMode, batchTagMode, setBatchTagMode,
     batchDirty: batchSelectedCells.length > 0 && Object.values(batchModes).some(mode => mode !== "keep"),
     batchSelectedCellIds,
     batchSelectedCells,

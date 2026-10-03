@@ -50,12 +50,14 @@ function resolveTerrainCategory(terrain: string | null | undefined): string {
 export function useCellEditor(
   currentMap: MapRuntimeState | null,
   applyCommands: (commands: MapCommand[]) => Promise<MapRuntimeState | null>,
-  setMessage: (message: string) => void
+  setMessage: (message: string) => void,
+  brush?: { enabled: boolean; setEnabled: (enabled: boolean) => void; confirmDiscard?: () => Promise<boolean> }
 ) {
   const [selectedCellId, setSelectedCellId] = useState<string | null>(null);
   const [draft, setDraft] = useState<CellDraft>(toDraft(null));
   const [terrainCategory, setTerrainCategory] = useState<string>("");
-  const [formatBrushEnabled, setFormatBrushEnabled] = useState(false);
+  const formatBrushEnabled = brush?.enabled ?? false;
+  const setFormatBrushEnabled = (enabled: boolean) => brush?.setEnabled(enabled);
   const [formatBrushScope, setFormatBrushScope] = useState<FormatBrushScope>({
     terrain: true,
     biome: true,
@@ -256,26 +258,19 @@ export function useCellEditor(
     setMessage(`已进入格式刷模式：${selectedCell.display_coord}，当前刷入 ${getFormatBrushLabel()}`);
   }
 
-  async function applyFormatBrush(targetCell: ActiveCell): Promise<void> {
+  async function applyFormatBrushStroke(targets: ActiveCell[]): Promise<void> {
     if (!currentMap || !selectedCell || selectedCell.status !== "designed") {
       setFormatBrushEnabled(false);
       return;
     }
-    if (targetCell.id === selectedCell.id) {
-      return;
-    }
+    if (!targets.length) return;
     if (Object.values(formatBrushScope).every((enabled) => !enabled)) {
       setMessage("请至少选择一个格式刷字段");
       return;
     }
-    if (!formatBrushScope.terrain && !targetCell.terrain) {
-      setMessage("只刷生态时，目标格必须已有地形");
-      return;
-    }
-
     const result = await task.run(() => applyCommands([{
       action: "patch_cells", source: "webui",
-      targets: [{ row: targetCell.row, col: targetCell.col }],
+      targets: targets.filter(cell => cell.id !== selectedCell.id).map(cell => ({ row: cell.row, col: cell.col })),
       changes: {
         ...(formatBrushScope.terrain ? { terrain: selectedCell.terrain! } : {}),
         ...(formatBrushScope.biome ? { biome: selectedCell.biome } : {}),
@@ -284,17 +279,15 @@ export function useCellEditor(
       }
     }]));
     if (!result) return;
-    setMessage(
-      `已将 ${selectedCell.display_coord} 的${getFormatBrushLabel()}刷到 ${targetCell.display_coord} 并保存到服务器`
-    );
+    setMessage("已将" + getFormatBrushLabel() + "应用到 " + targets.length + " 个格子");
   }
 
-  function handleCanvasCellSelect(cell: ActiveCell): void {
+  async function handleCanvasCellSelect(cell: ActiveCell): Promise<void> {
     if (formatBrushEnabled) {
-      void applyFormatBrush(cell);
+      void applyFormatBrushStroke([cell]);
       return;
     }
-    if (!ensureCanLeaveSelection()) {
+    if (task.pending || (cellDirty && !(brush?.confirmDiscard ? await brush.confirmDiscard() : ensureCanLeaveSelection()))) {
       return;
     }
     setSelectedCellId(cell.id);
@@ -311,7 +304,7 @@ export function useCellEditor(
   useEffect(() => {
     if (cellDirty || !selectedCellId || task.pending) return;
     const visible = currentMap?.activeCells.find(cell => cell.id === selectedCellId);
-    if (visible && visible !== selectedCell) syncDraftFromCell(visible);
+    if (visible && JSON.stringify(toDraft(visible)) !== JSON.stringify(toDraft(selectedCell))) syncDraftFromCell(visible);
   }, [currentMap, selectedCellId, cellDirty, task.pending]);
 
   return {
@@ -340,6 +333,6 @@ export function useCellEditor(
     applyDraft,
     clearSelected,
     toggleFormatBrush,
-    handleCanvasCellSelect
+    handleCanvasCellSelect, applyFormatBrushStroke
   };
 }

@@ -1,4 +1,5 @@
 import {
+  buildHexLine, createCellId, getNeighborCoords,
   type ActiveCell,
   type CellRange,
   type GridCoordinate,
@@ -41,7 +42,8 @@ interface MapCanvasProps {
   selectedCell: ActiveCell | null;
   selectedCellId: string | null;
   onSelectCell: (cell: ActiveCell) => void;
-  interactionMode?: "select" | "river-draw" | "batch-select";
+  interactionMode?: "select" | "pan" | "brush" | "river-draw" | "batch-select";
+  onBrushStroke?: (cells: ActiveCell[]) => void;
   batchSelectedCellIds?: Set<string>;
   onBatchCellToggle?: (cell: ActiveCell) => void;
   riverPreview?: RiverFeature | null;
@@ -245,10 +247,10 @@ function CellGroup(props: {
       aria-label={`${cell.display_coord} ${cell.status}`}
       onClick={props.onSelect}
       role="button"
-      tabIndex={0}
+      tabIndex={props.selected ? 0 : -1}
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
+          event.preventDefault(); event.stopPropagation();
           props.onSelect();
         }
       }}
@@ -338,9 +340,17 @@ export function MapCanvas(props: MapCanvasProps) {
     moved: boolean;
     startCell: ActiveCell | null;
   } | null>(null);
+  const spacePan = useRef(false);
+  const pointers = useRef(new Map<number, { x: number; y: number }>());
+  const pinch = useRef<{ distance: number; zoom: number; sceneX: number; sceneY: number } | null>(null);
+  const stroke = useRef<Map<string, ActiveCell> | null>(null);
+  const strokeLast = useRef<ActiveCell | null>(null);
+  const [strokeIds, setStrokeIds] = useState<Set<string>>(new Set());
+  const [keyboardCell, setKeyboardCell] = useState<ActiveCell | null>(null);
   const suppressNextCellClickRef = useRef(false);
   const lastReportedRangeKeyRef = useRef("");
 
+  const riverDetail = camera.zoom >= 0.8 ? "high" : "low";
   const scene = useMemo(
     () =>
       buildMapScene(props.map, {
@@ -350,10 +360,10 @@ export function MapCanvas(props: MapCanvasProps) {
         includeUndesigned: props.showUndesigned,
         previewRivers: props.riverPreview ? [props.riverPreview] : [],
         boundsCoords: boundsCoordsFromSummary(props.mapSummary),
-        riverDetail: camera.zoom >= 0.8 ? "high" : "low"
+        riverDetail
       }),
     [
-      camera.zoom,
+      riverDetail,
       props.map,
       props.mapSummary,
       props.riverPreview,
@@ -547,6 +557,8 @@ export function MapCanvas(props: MapCanvasProps) {
   };
 
   const handleCellAction = (cell: ActiveCell) => {
+    if (props.interactionMode === "pan" || spacePan.current) return;
+    if (props.interactionMode === "brush") { props.onBrushStroke?.([cell]); return; }
     if (props.interactionMode === "river-draw") {
       props.onRiverPointAdd?.(cell);
       return;
@@ -559,6 +571,17 @@ export function MapCanvas(props: MapCanvasProps) {
   };
 
   const finishDrag = (pointerId: number, target: HTMLDivElement, allowClickSelection = true) => {
+    pointers.current.delete(pointerId);
+    if (pinch.current) { pinch.current = null; dragState.current = null; setIsDragging(false); return; }
+    if (stroke.current) {
+      const cells = [...stroke.current.values()]; stroke.current = null; strokeLast.current = null; setStrokeIds(new Set());
+      if (allowClickSelection && cells.length) props.onBrushStroke?.(cells);
+      suppressNextCellClickRef.current = true;
+      window.setTimeout(() => { suppressNextCellClickRef.current = false; }, 0);
+      dragState.current = null; setIsDragging(false);
+      if (target.hasPointerCapture?.(pointerId)) target.releasePointerCapture(pointerId);
+      return;
+    }
     const currentDrag = dragState.current;
     const isCurrentPointer = currentDrag?.pointerId === pointerId;
     const clickedCell =
@@ -591,9 +614,58 @@ export function MapCanvas(props: MapCanvasProps) {
   const doesCellMatchTagFilter = (cell: ActiveCell) =>
     tagFilter.length === 0 || tagFilter.some((tag) => cell.tags.includes(tag));
 
+  function cellAtPoint(clientX: number, clientY: number): ActiveCell | null {
+    const rect = containerRef.current!.getBoundingClientRect(), scale = viewportMetrics.baseScale * cameraRef.current.zoom;
+    const point = { x: (clientX - rect.left - viewportMetrics.baseOffset.x - cameraRef.current.offset.x) / scale,
+      y: (clientY - rect.top - viewportMetrics.baseOffset.y - cameraRef.current.offset.y) / scale };
+    const coord = scenePointToCoord(point, scene, 36);
+    return sceneCellsById.get(createCellId(coord.row, coord.col)) ?? null;
+  }
+  function addStrokeCell(cell: ActiveCell | null): void {
+    if (!cell || !stroke.current) return;
+    const points = strokeLast.current ? buildHexLine(strokeLast.current, cell) : [cell];
+    for (const point of points) {
+      const target = sceneCellsById.get(createCellId(point.row, point.col));
+      if (target) stroke.current.set(target.id, target);
+    }
+    strokeLast.current = cell; setStrokeIds(new Set(stroke.current.keys()));
+  }
+  function zoomAtCenter(factor: number): void {
+    const current = cameraRef.current, next = clamp(current.zoom * factor, MIN_ZOOM, MAX_ZOOM);
+    const cx = viewportSize.width / 2 - viewportMetrics.baseOffset.x, cy = viewportSize.height / 2 - viewportMetrics.baseOffset.y;
+    setCamera({ zoom: next, offset: { x: cx - (cx - current.offset.x) * next / current.zoom, y: cy - (cy - current.offset.y) * next / current.zoom } });
+  }
+  useEffect(() => { stroke.current = null; pointers.current.clear(); pinch.current = null; setStrokeIds(new Set()); setKeyboardCell(null); }, [props.map.document.meta.id]);
+
   return (
     <div
       ref={containerRef}
+      tabIndex={0} role="region" aria-label="地图编辑区域"
+      onBlur={() => { spacePan.current = false; }}
+      onKeyUp={event => { if (event.key === " ") spacePan.current = false; }}
+      onKeyDown={event => {
+        if ((event.target as HTMLElement).closest("button,input,select,textarea") || event.ctrlKey || event.metaKey) return;
+        const key = event.key;
+        if (key === " ") { event.preventDefault(); spacePan.current = true; }
+        if (["+", "=", "-", "f", "F"].includes(key)) { event.preventDefault(); if (key.toLowerCase() === "f") setCamera({ zoom: 1, offset: { x: 0, y: 0 } }); else zoomAtCenter(key === "-" ? 0.8 : 1.25); }
+        if (key.startsWith("Arrow")) {
+          event.preventDefault();
+          const current = keyboardCell ?? props.selectedCell ?? props.map.activeCells[0];
+          if (!current) return;
+          const delta = key === "ArrowRight" ? { row: 0, col: 1 } : key === "ArrowLeft" ? { row: 0, col: -1 } : key === "ArrowUp" ? { row: 1, col: 0 } : { row: -1, col: 0 };
+          const next = sceneCellsById.get(createCellId(current.row + delta.row, current.col + delta.col));
+          if (next) { setKeyboardCell(next); setHoveredCellId(next.id); props.onHoverCellChange?.(next); }
+        }
+        if (key === "Enter") {
+          event.preventDefault();
+          if (isRiverDrawing && !event.shiftKey && riverDrawingPointCount >= 2) props.onFinishRiverDrawing?.();
+          else { const cell = keyboardCell ?? props.selectedCell ?? props.map.activeCells[0]; if (cell) handleCellAction(cell); }
+        }
+        if (key === "Escape") {
+          stroke.current = null; strokeLast.current = null; setStrokeIds(new Set()); dragState.current = null; pointers.current.clear(); pinch.current = null; setIsDragging(false);
+          if (isRiverDrawing) props.onCancelRiverDrawing?.();
+        }
+      }}
       className={[
         "map-canvas",
         isDragging ? "map-canvas-dragging" : "",
@@ -601,11 +673,27 @@ export function MapCanvas(props: MapCanvasProps) {
         isBatchSelecting ? "map-canvas-batch-select" : ""
       ].filter(Boolean).join(" ")}
       onPointerDown={(event) => {
-        if (event.button !== 0) {
+        if (event.button !== 0 && event.pointerType !== "touch") {
           return;
         }
         if (typeof event.currentTarget.setPointerCapture === "function") {
           event.currentTarget.setPointerCapture(event.pointerId);
+        }
+        event.currentTarget.focus({ preventScroll: true });
+        pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+        if (pointers.current.size === 2) {
+          stroke.current = null; setStrokeIds(new Set());
+          const [a, b] = [...pointers.current.values()], rect = event.currentTarget.getBoundingClientRect();
+          const x = (a!.x + b!.x) / 2 - rect.left, y = (a!.y + b!.y) / 2 - rect.top;
+          const scale = viewportMetrics.baseScale * cameraRef.current.zoom;
+          pinch.current = { distance: Math.max(1, Math.hypot(a!.x - b!.x, a!.y - b!.y)), zoom: cameraRef.current.zoom,
+            sceneX: (x - viewportMetrics.baseOffset.x - cameraRef.current.offset.x) / scale,
+            sceneY: (y - viewportMetrics.baseOffset.y - cameraRef.current.offset.y) / scale };
+          return;
+        }
+        if (props.interactionMode === "brush" && !spacePan.current) {
+          stroke.current = new Map(); strokeLast.current = null;
+          addStrokeCell(getCellFromEventTarget(event.target, sceneCellsById) ?? cellAtPoint(event.clientX, event.clientY));
         }
         dragState.current = {
           pointerId: event.pointerId,
@@ -614,11 +702,21 @@ export function MapCanvas(props: MapCanvasProps) {
           startOffsetX: cameraRef.current.offset.x,
           startOffsetY: cameraRef.current.offset.y,
           moved: false,
-          startCell: getCellFromEventTarget(event.target, sceneCellsById)
+          startCell: spacePan.current || props.interactionMode === "pan" ? null : getCellFromEventTarget(event.target, sceneCellsById)
         };
         setIsDragging(true);
       }}
       onPointerMove={(event) => {
+        if (pointers.current.has(event.pointerId)) pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+        if (pinch.current && pointers.current.size >= 2) {
+          const [a, b] = [...pointers.current.values()], rect = event.currentTarget.getBoundingClientRect();
+          const zoom = clamp(pinch.current.zoom * Math.hypot(a!.x - b!.x, a!.y - b!.y) / pinch.current.distance, MIN_ZOOM, MAX_ZOOM);
+          const scale = viewportMetrics.baseScale * zoom;
+          setCamera({ zoom, offset: { x: (a!.x + b!.x) / 2 - rect.left - viewportMetrics.baseOffset.x - pinch.current.sceneX * scale,
+            y: (a!.y + b!.y) / 2 - rect.top - viewportMetrics.baseOffset.y - pinch.current.sceneY * scale } });
+          return;
+        }
+        if (stroke.current) { addStrokeCell(cellAtPoint(event.clientX, event.clientY)); return; }
         const currentDrag = dragState.current;
         if (!currentDrag || currentDrag.pointerId !== event.pointerId) {
           return;
@@ -649,6 +747,10 @@ export function MapCanvas(props: MapCanvasProps) {
         clearHover();
       }}
     >
+      <div className="canvas-zoom-controls" onPointerDown={event => event.stopPropagation()} onPointerUp={event => event.stopPropagation()}>
+        <button aria-label="缩小" onClick={() => zoomAtCenter(0.8)}>−</button><output aria-label="缩放比例">{Math.round(effectiveScale * 100)}%</output><button aria-label="放大" onClick={() => zoomAtCenter(1.25)}>+</button><button onClick={() => setCamera({ zoom: 1, offset: { x: 0, y: 0 } })}>适合画布</button>
+      </div>
+      <span className="sr-only" aria-live="polite">{keyboardCell ? "当前焦点 " + keyboardCell.display_coord : "使用方向键移动焦点，回车操作单元格"}</span>
       {props.selectedCell ? (
         <div className="canvas-selection-overlay" aria-label="当前选中信息">
           <span>{props.selectedCell.display_coord} | {props.selectedCell.status}</span>
@@ -716,7 +818,7 @@ export function MapCanvas(props: MapCanvasProps) {
                 centerX={entry.centerX}
                 centerY={entry.centerY}
                 selected={props.selectedCellId === entry.cell.id}
-                batchSelected={batchSelectedCellIds.has(entry.cell.id)}
+                batchSelected={batchSelectedCellIds.has(entry.cell.id) || strokeIds.has(entry.cell.id)}
                 hovered={hoveredCellId === entry.cell.id}
                 showCoordinates={shouldShowCoordinatesForEntry(entry)}
                 showShorthand={effectiveShowShorthand && isEntryInLabelViewport(entry)}

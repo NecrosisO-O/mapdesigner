@@ -373,3 +373,43 @@ describe("MapCanvas", () => {
     });
   });
 });
+
+describe("canvas gestures", () => {
+  afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+  const props = { map: sampleMap, selectedCell: null, selectedCellId: null, showCoordinates: true, showShorthand: false, showGrid: true, showUndesigned: true };
+  function pointer(target: Element, type: string, x: number, y: number) {
+    const event = new MouseEvent(type, { bubbles: true, clientX: x, clientY: y, button: 0 });
+    Object.defineProperty(event, "pointerId", { value: 1 }); fireEvent(target, event);
+  }
+  function screenCenter(id: string) {
+    const svg = screen.getByLabelText("Map canvas"), group = svg.querySelector('g[transform]')!;
+    const match = group.getAttribute("transform")!.match(/translate\(([-\d.eE]+) ([-\d.eE]+)\) scale\(([-\d.eE]+)\)/)!;
+    const points = svg.querySelector('[data-cell-id="' + id + '"] polygon')!.getAttribute("points")!.split(" ").map(p => p.split(",").map(Number));
+    const x = points.reduce((sum, p) => sum + p[0]!, 0) / 6, y = points.reduce((sum, p) => sum + p[1]!, 0) / 6;
+    return { x: Number(match[1]) + x * Number(match[3]), y: Number(match[2]) + y * Number(match[3]) };
+  }
+  it("submits one brush stroke on release and drops a cancelled gesture", () => {
+    const brush = vi.fn(); render(<MapCanvas {...props} interactionMode="brush" onSelectCell={vi.fn()} onBrushStroke={brush} />);
+    const canvas = screen.getByLabelText("地图编辑区域"); mockCanvasRect(canvas as HTMLDivElement); fireEvent(window, new Event("resize"));
+    const a = screenCenter("cell@0,0"), b = screenCenter("cell@0,1");
+    pointer(screen.getByRole("button", { name: "R0C0 designed" }), "pointerdown", a.x, a.y);
+    pointer(canvas, "pointermove", b.x, b.y);
+    expect(brush).not.toHaveBeenCalled();
+    pointer(canvas, "pointerup", b.x, b.y);
+    expect(brush).toHaveBeenCalledTimes(1);
+    expect(brush.mock.calls[0]?.[0].map((cell: ActiveCell) => cell.id)).toEqual(["cell@0,0", "cell@0,1"]);
+    pointer(screen.getByRole("button", { name: "R0C0 designed" }), "pointerdown", a.x, a.y);
+    pointer(canvas, "pointermove", b.x, b.y);
+    pointer(canvas, "pointercancel", b.x, b.y);
+    expect(brush).toHaveBeenCalledTimes(1);
+  });
+  it("supports directional navigation and visible zoom controls", () => {
+    const select = vi.fn(); render(<MapCanvas {...props} selectedCell={sampleMap.activeCells[3]!} selectedCellId="cell@0,0" onSelectCell={select} />);
+    const canvas = screen.getByLabelText("地图编辑区域");
+    fireEvent.keyDown(canvas, { key: "ArrowRight" }); fireEvent.keyDown(canvas, { key: "Enter" });
+    expect(select).toHaveBeenCalledWith(expect.objectContaining({ id: "cell@0,1" }));
+    const before = screen.getByLabelText("缩放比例").textContent;
+    fireEvent.click(screen.getByRole("button", { name: "放大" }));
+    expect(screen.getByLabelText("缩放比例").textContent).not.toBe(before);
+  });
+});

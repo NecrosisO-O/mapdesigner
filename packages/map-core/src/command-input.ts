@@ -15,6 +15,7 @@ export function validateCommandInput(input: unknown): ValidationIssue[] {
   if (["set_cell", "clear_cell", "annotate_cell", "set_river_width"].includes(String(action))) {
     issues.push(...validateCoordinate(input.target as never, "target"));
   }
+  if (action === "patch_cells" && input.tagMode !== undefined && !["replace", "add", "remove"].includes(String(input.tagMode))) invalid("tagMode", "unknown tag operation");
   if (action === "set_cells" || action === "patch_cells") {
     if (!Array.isArray(input.targets)) invalid("targets", "targets must be an array");
     else for (const [i, target] of input.targets.entries()) issues.push(...validateCoordinate(target, "targets[" + i + "]"));

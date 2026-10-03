@@ -1,6 +1,6 @@
 /* @vitest-environment jsdom */
 
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { applyCommand, createRuntimeState, type CellRange, type MapCommand, type MapRuntimeState } from "@mapdesigner/map-core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App.js";
@@ -501,13 +501,8 @@ describe("App", () => {
     expect(await screen.findByText("已打开 Sample Map")).toBeTruthy();
     expect(screen.getByRole("option", { name: "Sample Map" })).toBeTruthy();
     const statusBar = screen.getByLabelText("当前状态");
-    expect(screen.getByRole("heading", { name: "地图" })).toBeTruthy();
-    expect(statusBar.textContent).toContain("当前地图：");
-    expect(statusBar.textContent).toContain("ID");
-    expect(statusBar.textContent).toContain("sample-map");
-    expect(statusBar.textContent).toContain("已设计");
-    expect(statusBar.textContent).toContain("1");
-    expect(statusBar.textContent).toContain("版本");
+    expect(statusBar.textContent).toContain("1 格");
+    expect(statusBar.textContent).toContain("修订");
     expect(screen.queryByRole("list", { name: "地图列表" })).toBeNull();
     expect(screen.queryByRole("heading", { name: "悬停信息" })).toBeNull();
   });
@@ -638,7 +633,7 @@ describe("App", () => {
     fireEvent.change(mapSelector, { target: { value: "" } });
 
     expect(apiMock.getMap).not.toHaveBeenCalled();
-    expect(screen.getByText("当前地图：", { exact: false })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Sample Map" })).toBeTruthy();
   });
 
   it("normalizes low-level file errors in the status panel", async () => {
@@ -684,6 +679,7 @@ describe("App", () => {
     render(<App />);
     await screen.findByText("已打开 Sample Map");
 
+    fireEvent.click(screen.getByRole("tab", { name: "河流" }));
     const riverPanel = screen.getByRole("heading", { name: "河流覆盖层" }).closest("section");
     expect(riverPanel).toBeTruthy();
     fireEvent.change(within(riverPanel as HTMLElement).getByLabelText("Name"), { target: { value: "Main River" } });
@@ -703,9 +699,11 @@ describe("App", () => {
     render(<App />);
     await screen.findByText("已打开 Sample Map");
 
+    fireEvent.click(screen.getByRole("tab", { name: "河流" }));
     const riverPanel = screen.getByRole("heading", { name: "河流覆盖层" }).closest("section");
     expect(riverPanel).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "河流" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "河流" }).getAttribute("aria-pressed")).toBe("true"));
     expect(screen.getByRole("button", { name: "河流" }).getAttribute("aria-pressed")).toBe("true");
     expect(screen.getByLabelText("河流绘制工具")).toBeTruthy();
 
@@ -758,17 +756,17 @@ describe("App", () => {
 
     fireEvent.click(getCellButton("R0C0", "designed"));
     fireEvent.click(screen.getByLabelText("刷生态"));
-    fireEvent.click(screen.getByRole("button", { name: "格式刷" }));
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "格式刷" })); });
     fireEvent.click(getCellButton("R0C1", "undesigned"));
 
     await waitFor(() => {
       const statusBar = screen.getByLabelText("当前状态");
-      expect(statusBar.textContent).toContain("已设计");
+      expect(statusBar.textContent).toContain("格");
       expect(statusBar.textContent).toContain("2");
     });
-    expect(screen.getByText("已将 R0C0 的地形刷到 R0C1 并保存到服务器")).toBeTruthy();
+    expect(screen.getByText("已将地形应用到 1 个格子")).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "格式刷" }));
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "格式刷" })); });
     await waitFor(() => expect(getCellButton("R0C1", "designed")).toBeTruthy());
     fireEvent.click(getCellButton("R0C1", "designed"));
 
@@ -795,12 +793,12 @@ describe("App", () => {
 
     fireEvent.click(getCellButton("R0C0", "designed"));
     fireEvent.click(screen.getByLabelText("刷地形"));
-    fireEvent.click(screen.getByRole("button", { name: "格式刷" }));
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "格式刷" })); });
     fireEvent.click(getCellButton("R0C1", "designed"));
 
-    expect(await screen.findByText("已将 R0C0 的生态刷到 R0C1 并保存到服务器")).toBeTruthy();
+    expect(await screen.findByText("已将生态应用到 1 个格子")).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "格式刷" }));
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "格式刷" })); });
     fireEvent.click(getCellButton("R0C1", "designed"));
 
     expect(screen.getByLabelText("当前选中信息").textContent).toContain("R0C1 | designed");
@@ -826,12 +824,12 @@ describe("App", () => {
 
     fireEvent.click(within(cellPanel as HTMLElement).getByLabelText("刷标签"));
     fireEvent.click(within(cellPanel as HTMLElement).getByLabelText("刷备注"));
-    fireEvent.click(within(cellPanel as HTMLElement).getByRole("button", { name: "格式刷" }));
+    await act(async () => { fireEvent.click(within(cellPanel as HTMLElement).getByRole("button", { name: "格式刷" })); });
     fireEvent.click(getCellButton("R0C1", "undesigned"));
 
-    expect(await screen.findByText("已将 R0C0 的地形 + 生态 + 标签 + 备注刷到 R0C1 并保存到服务器")).toBeTruthy();
+    expect(await screen.findByText("已将地形 + 生态 + 标签 + 备注应用到 1 个格子")).toBeTruthy();
 
-    fireEvent.click(within(cellPanel as HTMLElement).getByRole("button", { name: "格式刷" }));
+    await act(async () => { fireEvent.click(within(cellPanel as HTMLElement).getByRole("button", { name: "格式刷" })); });
     fireEvent.click(getCellButton("R0C1", "designed"));
 
     expect((within(cellPanel as HTMLElement).getByLabelText("山峰") as HTMLInputElement).checked).toBe(true);
@@ -842,10 +840,12 @@ describe("App", () => {
     render(<App />);
     await screen.findByText("已打开 Sample Map");
 
+    fireEvent.click(screen.getByRole("tab", { name: "批量" }));
     const advancedPanel = screen.getByRole("heading", { name: "高级编辑" }).closest("section");
     expect(advancedPanel).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "批量" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "批量" }).getAttribute("aria-pressed")).toBe("true"));
     expect(screen.getByRole("button", { name: "批量" }).getAttribute("aria-pressed")).toBe("true");
 
     fireEvent.click(getCellButton("R0C1", "undesigned"));
@@ -872,6 +872,7 @@ describe("App", () => {
     expect(within(advancedPanel as HTMLElement).getByText("已选 2 格")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "选择" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "选择" }).getAttribute("aria-pressed")).toBe("true"));
     fireEvent.click(getCellButton("R0C1", "designed"));
     const cellPanel = screen.getByLabelText("Terrain").closest("section");
     expect(cellPanel).toBeTruthy();
@@ -885,6 +886,7 @@ describe("App", () => {
     render(<App />);
     await screen.findByText("已打开 Sample Map");
 
+    fireEvent.click(screen.getByRole("tab", { name: "批量" }));
     const advancedPanel = screen.getByRole("heading", { name: "高级编辑" }).closest("section");
     expect(advancedPanel).toBeTruthy();
 
@@ -898,6 +900,7 @@ describe("App", () => {
       target: { value: "hill" }
     });
     fireEvent.click(within(advancedPanel as HTMLElement).getByRole("button", { name: "替换地形" }));
+    fireEvent.click(await screen.findByRole("button", { name: "执行替换" }));
 
     expect(await screen.findByText("地形替换已保存到服务器")).toBeTruthy();
 
@@ -908,6 +911,7 @@ describe("App", () => {
       target: { value: "shrubland" }
     });
     fireEvent.click(within(advancedPanel as HTMLElement).getByRole("button", { name: "替换生态" }));
+    fireEvent.click(await screen.findByRole("button", { name: "执行替换" }));
 
     expect(await screen.findByText("生态替换已保存到服务器")).toBeTruthy();
 
@@ -922,8 +926,8 @@ describe("App", () => {
     await screen.findByText("已打开 Sample Map");
 
     fireEvent.click(getCellButton("R0C0", "designed"));
-    fireEvent.click(screen.getByRole("button", { name: "格式刷" }));
-    fireEvent.click(screen.getByRole("button", { name: "格式刷" }));
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "格式刷" })); });
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "格式刷" })); });
     fireEvent.click(getCellButton("R0C1", "undesigned"));
 
     expect(await screen.findByLabelText("当前选中信息")).toBeTruthy();
@@ -1087,6 +1091,9 @@ describe("App", () => {
     render(<App />);
     await screen.findByText("已打开 Sample Map");
     fireEvent.click(screen.getByText("新建地图"));
+    const dialog = await screen.findByRole("dialog", { name: "新建地图" });
+    fireEvent.change(within(dialog).getByLabelText("名称"), { target: { value: "New Map" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "创建" }));
     await waitFor(() => expect(apiMock.createMap).toHaveBeenCalled());
   });
 
@@ -1095,6 +1102,9 @@ describe("App", () => {
     render(<App />);
     await screen.findByText("已打开 Sample Map");
     fireEvent.click(screen.getByText("另存为"));
+    const dialog = await screen.findByRole("dialog", { name: "另存为" });
+    fireEvent.change(within(dialog).getByLabelText("名称"), { target: { value: "Copied Map" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "确认" }));
     await waitFor(() =>
       expect(apiMock.saveMapAs).toHaveBeenCalledWith(
         "sample-map",
@@ -1160,10 +1170,11 @@ describe("App", () => {
     await screen.findByText("已打开 Sample Map");
 
     fireEvent.click(screen.getByRole("button", { name: "删除地图" }));
+    fireEvent.click(await screen.findByRole("button", { name: "确认删除" }));
 
     await waitFor(() => expect(apiMock.deleteMap).toHaveBeenCalledWith("sample-map"));
     expect(await screen.findByText("地图已删除")).toBeTruthy();
-    await waitFor(() => expect(screen.getByText("当前没有打开地图。")).toBeTruthy());
+    await waitFor(() => expect(screen.getByText("还没有打开地图")).toBeTruthy());
     expect(apiMock.getMap).not.toHaveBeenCalledWith("other-map");
   });
 
@@ -1174,7 +1185,7 @@ describe("App", () => {
     expect(screen.queryByLabelText("预设")).toBeNull();
     expect(screen.queryByText("导出图片")).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: "展开" }));
+    fireEvent.click(screen.getByRole("button", { name: "导出" }));
 
     fireEvent.change(screen.getByLabelText("预设"), {
       target: { value: "reference" }
@@ -1216,7 +1227,7 @@ describe("App", () => {
     render(<App />);
     await screen.findByText("已打开 Sample Map");
 
-    fireEvent.click(screen.getByRole("button", { name: "展开" }));
+    fireEvent.click(screen.getByRole("button", { name: "导出" }));
     fireEvent.click(screen.getByRole("button", { name: "导出图片" }));
 
     expect(await screen.findByText("正在导出 PNG...")).toBeTruthy();
@@ -1245,7 +1256,7 @@ describe("App", () => {
     render(<App />);
     await screen.findByText("已打开 Sample Map");
 
-    fireEvent.click(screen.getByRole("button", { name: "展开" }));
+    fireEvent.click(screen.getByRole("button", { name: "导出" }));
     fireEvent.click(screen.getByLabelText("透明背景"));
     fireEvent.click(screen.getByText("导出图片"));
 
@@ -1264,7 +1275,7 @@ describe("App", () => {
     render(<App />);
     await screen.findByText("已打开 Sample Map");
 
-    fireEvent.click(screen.getByRole("button", { name: "展开" }));
+    fireEvent.click(screen.getByRole("button", { name: "导出" }));
     fireEvent.change(screen.getByLabelText("导出范围"), {
       target: { value: "full" }
     });
@@ -1301,11 +1312,11 @@ describe("App", () => {
     render(<App />);
     await screen.findByText("已打开 Sample Map");
 
-    fireEvent.click(screen.getByRole("button", { name: "展开" }));
+    fireEvent.click(screen.getByRole("button", { name: "导出" }));
     expect(screen.getByLabelText("预设")).toBeTruthy();
     expect(screen.getByText("导出图片")).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "收起" }));
+    fireEvent.click(screen.getByRole("button", { name: "关闭对话框" }));
     expect(screen.queryByLabelText("预设")).toBeNull();
     expect(screen.queryByText("导出图片")).toBeNull();
   });

@@ -1,7 +1,11 @@
+import { Dialog } from "./Dialog.js";
 import { TAG_ENTRIES, type ExportRenderOptions, type MapRuntimeState, type MapSummary, type TagKey } from "@mapdesigner/map-core";
 import { formatDateTime } from "./useMapWorkspace.js";
 
 interface SidebarPanelProps {
+  onClose: () => void;
+  onSelectRiver: (id: string) => void;
+  onExportJson: () => void;
   loading: boolean;
   message: string;
   currentMap: MapRuntimeState | null;
@@ -43,45 +47,8 @@ export function SidebarPanel(props: SidebarPanelProps) {
 
   return (
     <aside className="sidebar">
-      <section className="panel status-panel" aria-label="当前状态">
-        <div className="panel-title-row">
-          <h2>地图</h2>
-          <span className={props.mapDirty ? "status-chip status-chip-dirty" : "status-chip"}>
-            {props.mapDirty ? "未保存" : "已保存"}
-          </span>
-        </div>
-        <div className="status-message-banner" aria-live="polite">
-          {props.loading ? "加载中..." : props.message}
-        </div>
-        {props.currentMap ? (
-          <div className="meta-list">
-            <p>
-              当前地图：<strong>{props.currentMap.document.meta.name}</strong>
-            </p>
-            <dl>
-              <div>
-                <dt>ID</dt>
-                <dd>{props.currentMap.document.meta.id}</dd>
-              </div>
-              <div>
-                <dt>已设计</dt>
-                <dd>{designedCellCount}</dd>
-              </div>
-              <div>
-                <dt>版本</dt>
-                <dd>{props.currentMap.document.meta.revision}</dd>
-              </div>
-              <div>
-                <dt>更新时间</dt>
-                <dd>{formatDateTime(props.currentMap.document.meta.updated_at)}</dd>
-              </div>
-            </dl>
-          </div>
-        ) : (
-          <p>当前没有打开地图。</p>
-        )}
-      </section>
-
+      <div className="panel-heading"><h2>内容与图层</h2><button className="drawer-close" aria-label="关闭内容栏" onClick={props.onClose}>×</button></div>
+      <section className="panel map-summary"><span className="eyebrow">当前文档</span><h3>{props.currentMap?.document.meta.name ?? "开始绘制你的世界"}</h3><p>{designedCellCount.toLocaleString()} 个已设计单元格</p></section>
       <section className="panel tool-panel">
         <h2>视图</h2>
         <label className="checkbox-row switch-row">
@@ -141,29 +108,18 @@ export function SidebarPanel(props: SidebarPanelProps) {
         </div>
       </section>
 
-      <section className="panel collapsible-panel tool-panel">
-        <div className="panel-header">
-          <h2>图片导出</h2>
-          <button
-            type="button"
-            className="panel-toggle"
-            onClick={props.onToggleExportPanel}
-            aria-expanded={props.exportPanelOpen}
-            aria-controls="export-panel-content"
-          >
-            {props.exportPanelOpen ? "收起" : "展开"}
-          </button>
-        </div>
-        {props.exportPanelOpen ? (
+      <section className="panel"><h3>河流 · 当前区域</h3><div className="river-list">{props.currentMap?.document.features.rivers.slice(0, 200).map(river => <button key={river.id} onClick={() => props.onSelectRiver(river.id)}><span aria-hidden="true">≈</span>{river.name}<small>{river.points.length} 点</small></button>)}</div>{!props.currentMap?.document.features.rivers.length && <p className="muted">使用河流工具添加一条路径。</p>}</section>
+      {props.exportPanelOpen && <Dialog title="导出地图" onClose={props.onToggleExportPanel}>
           <div id="export-panel-content">
             <div className="export-action-row">
               <button
                 className="primary-button"
                 onClick={props.onExportPng}
-                disabled={!props.currentMap || designedCellCount === 0 || props.isExportingPng}
+                disabled={!props.currentMap || props.isExportingPng}
               >
                 {props.isExportingPng ? "导出中..." : "导出图片"}
               </button>
+              <button onClick={props.onExportJson} disabled={!props.currentMap || props.isExportingPng}>导出 JSON</button>
             </div>
             <label>
               导出范围
@@ -265,8 +221,7 @@ export function SidebarPanel(props: SidebarPanelProps) {
               导出简写
             </label>
           </div>
-        ) : null}
-      </section>
+      </Dialog>}
     </aside>
   );
 }

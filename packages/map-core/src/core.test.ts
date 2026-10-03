@@ -535,3 +535,11 @@ describe("field patches", () => {
     expect(result.map).toBe(initial);
   });
 });
+it("adds and removes selected tags while retaining other cell data", () => {
+  const doc = createEmptyDocument({ id: "tags", name: "Tags" });
+  doc.cells = [{ row: 0, col: 0, terrain: "plain", biome: null, tags: ["peak"], note: "preserve" }];
+  const result = applyCommand(createRuntimeState(doc), { action: "patch_cells", targets: [{ row: 0, col: 0 }], tagMode: "remove", changes: { tags: ["peak"] } });
+  expect(result.map.document.cells[0]).toEqual({ ...doc.cells[0], tags: [] });
+  const added = applyCommand(result.map, { action: "patch_cells", targets: [{ row: 0, col: 0 }], tagMode: "add", changes: { tags: ["peak", "peak"] } });
+  expect(added.map.document.cells).toEqual(doc.cells);
+});

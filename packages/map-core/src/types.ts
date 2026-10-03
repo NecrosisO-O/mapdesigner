@@ -208,6 +208,7 @@ export interface ClearCellCommand extends MapCommandBase {
 
 export interface PatchCellsCommand extends MapCommandBase {
   action: "patch_cells";
+  tagMode?: "replace" | "add" | "remove";
   targets: GridCoordinate[];
   changes: Partial<SetCellCommand["changes"]>;
 }
