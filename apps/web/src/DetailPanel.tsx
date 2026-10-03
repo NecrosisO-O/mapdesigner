@@ -143,6 +143,145 @@ export function DetailPanel(props: DetailPanelProps) {
           {props.cellDirty ? <span className="status-chip status-chip-dirty">未应用</span> : null}
         </div>
 
+        <div className="cell-editor-fields">
+          <div className="format-brush-panel" hidden={!props.formatBrushEnabled}>
+            <div className="format-brush-options">
+              <label className="checkbox-row switch-row">
+                <input
+                  type="checkbox"
+                  checked={props.formatBrushScope.terrain}
+                  onChange={(event) =>
+                    props.onFormatBrushScopeChange("terrain", event.target.checked)
+                  }
+                  disabled={!props.selectedCell || props.pending}
+                />
+                刷地形
+              </label>
+              <label className="checkbox-row switch-row">
+                <input
+                  type="checkbox"
+                  checked={props.formatBrushScope.biome}
+                  onChange={(event) =>
+                    props.onFormatBrushScopeChange("biome", event.target.checked)
+                  }
+                  disabled={!props.selectedCell || props.pending}
+                />
+                刷生态
+              </label>
+              <label className="checkbox-row switch-row">
+                <input
+                  type="checkbox"
+                  checked={props.formatBrushScope.tags}
+                  onChange={(event) => props.onFormatBrushScopeChange("tags", event.target.checked)}
+                  disabled={!props.selectedCell || props.pending}
+                />
+                刷标签
+              </label>
+              <label className="checkbox-row switch-row">
+                <input
+                  type="checkbox"
+                  checked={props.formatBrushScope.note}
+                  onChange={(event) => props.onFormatBrushScopeChange("note", event.target.checked)}
+                  disabled={!props.selectedCell || props.pending}
+                />
+                刷备注
+              </label>
+            </div>
+            {props.formatBrushEnabled && props.selectedCell ? (
+              <p className="format-brush-summary">
+                格式刷源格：{props.selectedCell.display_coord} | 当前刷入：
+                {props.getFormatBrushLabel()}
+              </p>
+            ) : (
+              <p className="format-brush-summary">
+                选中已设计单元格后可进入格式刷模式；再次点击按钮即可退出。
+              </p>
+            )}
+          </div>
+
+          <div className="editor-section">
+            <h3>地貌</h3>
+            <label>
+              地形分类
+              <select
+                value={props.terrainCategory}
+                onChange={(event) => props.onTerrainCategoryChange(event.target.value)}
+                disabled={!props.selectedCell || props.pending}
+              >
+                <option value="">请选择分类</option>
+                {props.filteredTerrainCategories.map((categoryKey) => (
+                  <option key={categoryKey} value={categoryKey}>
+                    {TERRAIN_CATEGORY_LABELS[categoryKey]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              地形
+              <select
+                value={props.draft.terrain}
+                onChange={(event) => props.onTerrainChange(event.target.value)}
+                disabled={!props.selectedCell || !props.terrainCategory}
+              >
+                <option value="">{props.terrainCategory ? "未设置" : "请先选择 地形分类"}</option>
+                {props.terrainOptions.map((entry) => (
+                  <option key={entry.key} value={entry.key}>
+                    {entry.label} ({entry.short})
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div className="editor-section">
+            <h3>生态</h3>
+            <label>
+              生态
+              <select
+                value={props.draft.biome}
+                onChange={(event) => props.onBiomeChange(event.target.value)}
+                disabled={!props.selectedCell || props.pending}
+              >
+                <option value="">未设置</option>
+                {props.biomeOptions.map((key) => (
+                  <option key={key} value={key}>
+                    {BIOME_ENTRIES[key].label} ({BIOME_ENTRIES[key].short})
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div className="editor-section">
+            <h3>标记</h3>
+            <div className="tag-grid">
+              {Object.entries(TAG_ENTRIES).map(([key, entry]) => (
+                <label key={key}>
+                  <input
+                    type="checkbox"
+                    checked={props.draft.tags.includes(key)}
+                    disabled={!props.selectedCell || props.pending}
+                    onChange={(event) => props.onTagChange(key, event.target.checked)}
+                  />
+                  {entry.label}
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div className="editor-section">
+            <h3>备注</h3>
+            <label>
+              备注
+              <textarea
+                rows={6}
+                value={props.draft.note}
+                disabled={!props.selectedCell || props.pending}
+                onChange={(event) => props.onNoteChange(event.target.value)}
+              />
+            </label>
+          </div>
+        </div>
         <div className="panel-header">
           <div className="action-row action-row-inline">
             <button
@@ -172,145 +311,9 @@ export function DetailPanel(props: DetailPanelProps) {
             </button>
           </div>
         </div>
-
-        <div className="format-brush-panel">
-          <div className="format-brush-options">
-            <label className="checkbox-row switch-row">
-              <input
-                type="checkbox"
-                checked={props.formatBrushScope.terrain}
-                onChange={(event) =>
-                  props.onFormatBrushScopeChange("terrain", event.target.checked)
-                }
-                disabled={!props.selectedCell || props.pending}
-              />
-              刷地形
-            </label>
-            <label className="checkbox-row switch-row">
-              <input
-                type="checkbox"
-                checked={props.formatBrushScope.biome}
-                onChange={(event) => props.onFormatBrushScopeChange("biome", event.target.checked)}
-                disabled={!props.selectedCell || props.pending}
-              />
-              刷生态
-            </label>
-            <label className="checkbox-row switch-row">
-              <input
-                type="checkbox"
-                checked={props.formatBrushScope.tags}
-                onChange={(event) => props.onFormatBrushScopeChange("tags", event.target.checked)}
-                disabled={!props.selectedCell || props.pending}
-              />
-              刷标签
-            </label>
-            <label className="checkbox-row switch-row">
-              <input
-                type="checkbox"
-                checked={props.formatBrushScope.note}
-                onChange={(event) => props.onFormatBrushScopeChange("note", event.target.checked)}
-                disabled={!props.selectedCell || props.pending}
-              />
-              刷备注
-            </label>
-          </div>
-          {props.formatBrushEnabled && props.selectedCell ? (
-            <p className="format-brush-summary">
-              格式刷源格：{props.selectedCell.display_coord} | 当前刷入：
-              {props.getFormatBrushLabel()}
-            </p>
-          ) : (
-            <p className="format-brush-summary">
-              选中已设计单元格后可进入格式刷模式；再次点击按钮即可退出。
-            </p>
-          )}
-        </div>
-
-        <div className="editor-section">
-          <h3>地貌</h3>
-          <label>
-            地形分类
-            <select
-              value={props.terrainCategory}
-              onChange={(event) => props.onTerrainCategoryChange(event.target.value)}
-              disabled={!props.selectedCell || props.pending}
-            >
-              <option value="">请选择分类</option>
-              {props.filteredTerrainCategories.map((categoryKey) => (
-                <option key={categoryKey} value={categoryKey}>
-                  {TERRAIN_CATEGORY_LABELS[categoryKey]}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            地形
-            <select
-              value={props.draft.terrain}
-              onChange={(event) => props.onTerrainChange(event.target.value)}
-              disabled={!props.selectedCell || !props.terrainCategory}
-            >
-              <option value="">{props.terrainCategory ? "未设置" : "请先选择 地形分类"}</option>
-              {props.terrainOptions.map((entry) => (
-                <option key={entry.key} value={entry.key}>
-                  {entry.label} ({entry.short})
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-
-        <div className="editor-section">
-          <h3>生态</h3>
-          <label>
-            生态
-            <select
-              value={props.draft.biome}
-              onChange={(event) => props.onBiomeChange(event.target.value)}
-              disabled={!props.selectedCell || props.pending}
-            >
-              <option value="">未设置</option>
-              {props.biomeOptions.map((key) => (
-                <option key={key} value={key}>
-                  {BIOME_ENTRIES[key].label} ({BIOME_ENTRIES[key].short})
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-
-        <div className="editor-section">
-          <h3>标记</h3>
-          <div className="tag-grid">
-            {Object.entries(TAG_ENTRIES).map(([key, entry]) => (
-              <label key={key}>
-                <input
-                  type="checkbox"
-                  checked={props.draft.tags.includes(key)}
-                  disabled={!props.selectedCell || props.pending}
-                  onChange={(event) => props.onTagChange(key, event.target.checked)}
-                />
-                {entry.label}
-              </label>
-            ))}
-          </div>
-        </div>
-
-        <div className="editor-section">
-          <h3>备注</h3>
-          <label>
-            备注
-            <textarea
-              rows={6}
-              value={props.draft.note}
-              disabled={!props.selectedCell || props.pending}
-              onChange={(event) => props.onNoteChange(event.target.value)}
-            />
-          </label>
-        </div>
       </section>
 
-      <div hidden={props.activeTab !== "batch"}>
+      <div className="inspector-scroll-panel" hidden={props.activeTab !== "batch"}>
         <AdvancedEditPanel
           currentMap={props.currentMap}
           batchModeActive={props.batchModeActive}
