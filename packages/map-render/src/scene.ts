@@ -1,14 +1,6 @@
 import { buildHexLayout, centerForCoord } from "./layout.js";
-import {
-  buildCellOpacity,
-  buildCellStroke,
-  buildPatternOverlay,
-  buildSvgDefs,
-  getCellShorthand,
-  getPrimaryTag,
-  getPrimaryTagSymbol,
-  getTerrainColor
-} from "./styles.js";
+import { buildSvgDefs } from "./styles.js";
+import { escapeXml, renderCellSurface, renderCellAnnotations } from "./presentation.js";
 import type { ExportSceneInput, MapRenderOptions, MapScene } from "./types.js";
 import {
   expandRiverPath,
@@ -22,6 +14,12 @@ import {
 type ResolvedMapRenderOptions = MapScene["options"];
 
 const DEFAULT_OPTIONS: ResolvedMapRenderOptions = {
+  mapStyle: "classic-v1",
+  includeTerrain: true,
+  includeTerrainSymbols: true,
+  includeBiomes: true,
+  includeRivers: true,
+  includeTags: true,
   size: 36,
   padding: 48,
   background: "#F4F0E6",
@@ -120,15 +118,6 @@ export function filterRiversForRange(
     const riverRange = coordRangeForRiver(river);
     return riverRange ? doRangesOverlap(riverRange, padded) : false;
   });
-}
-
-function escapeXml(value: string): string {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&apos;");
 }
 
 interface RiverRenderPoint {
@@ -453,14 +442,20 @@ function buildRiverControlPoints(
 }
 
 export function buildMapScene(map: MapRuntimeState, options: MapRenderOptions = {}): MapScene {
-  const resolved = { ...DEFAULT_OPTIONS, ...options };
+  const resolved: ResolvedMapRenderOptions = {
+    ...DEFAULT_OPTIONS,
+    mapStyle: map.document.meta.map_style ?? "classic-v1",
+    ...Object.fromEntries(Object.entries(options).filter(([, value]) => value !== undefined))
+  };
   const cells = resolved.includeUndesigned
     ? map.activeCells
     : map.activeCells.filter((cell) => cell.status === "designed");
   const renderRange = resolved.riverClipRange ?? rangeFromCells(cells);
-  const rivers = renderRange
-    ? filterRiversForRange(map.document.features?.rivers ?? [], renderRange)
-    : (map.document.features?.rivers ?? []);
+  const rivers = !resolved.includeRivers
+    ? []
+    : renderRange
+      ? filterRiversForRange(map.document.features?.rivers ?? [], renderRange)
+      : (map.document.features?.rivers ?? []);
   const previewRivers = renderRange
     ? filterRiversForRange(resolved.previewRivers, renderRange)
     : resolved.previewRivers;
@@ -524,55 +519,12 @@ export function buildMapScene(map: MapRuntimeState, options: MapRenderOptions = 
         renderRange ?? undefined
       )
     ],
-    defs: buildSvgDefs(),
+    defs: buildSvgDefs(resolved.mapStyle),
     options: resolved
   };
 }
 
-function renderCell(scene: MapScene, entry: MapScene["layout"][number]): string {
-  const { cell } = entry;
-  const isSelected = scene.options.selectedCellId === cell.id;
-  const isHovered = scene.options.hoveredCellId === cell.id;
-  const fill = getTerrainColor(cell.terrain);
-  const overlay = scene.options.usePatternOverlays ? buildPatternOverlay(cell.biome) : null;
-  const stroke = buildCellStroke(cell, isSelected, isHovered);
-  const opacity = buildCellOpacity(cell);
-  const shorthand = scene.options.includeShorthand ? getCellShorthand(cell) : null;
-  const primaryTag = getPrimaryTagSymbol(getPrimaryTag(cell));
-  const gridStrokeWidth = scene.options.includeGrid ? 1.2 : 0.5;
-  const gridStrokeOpacity = scene.options.includeGrid ? 0.9 : 0.3;
-  const textFill = cell.status === "designed" ? "#1D1B18" : "#6F675D";
-  const primaryTagText = primaryTag
-    ? `<text x="${entry.centerX}" y="${entry.centerY - 16}" text-anchor="middle" font-size="9" font-weight="700" fill="#6B2F18">${escapeXml(primaryTag)}</text>`
-    : "";
-  const coordinateText = scene.options.includeCoordinates
-    ? `<text x="${entry.centerX}" y="${entry.centerY - 3}" text-anchor="middle" font-size="9" font-weight="600" fill="${textFill}">${escapeXml(cell.display_coord)}</text>`
-    : "";
-  const shorthandText =
-    shorthand && cell.status === "designed"
-      ? `<text x="${entry.centerX}" y="${entry.centerY + 11}" text-anchor="middle" font-size="8.5" font-weight="500" fill="${textFill}">${escapeXml(shorthand)}</text>`
-      : "";
-
-  return [
-    `<g data-cell-id="${cell.id}" data-status="${cell.status}">`,
-    `<polygon points="${entry.points}" fill="${fill}" stroke="${stroke}" stroke-width="${gridStrokeWidth}" stroke-opacity="${gridStrokeOpacity}" opacity="${opacity}" />`,
-    overlay
-      ? `<polygon points="${entry.points}" fill="${overlay}" stroke="none" opacity="${cell.status === "designed" ? 0.9 : 0.5}" />`
-      : "",
-    primaryTagText,
-    coordinateText,
-    shorthandText,
-    `</g>`
-  ].join("");
-}
-
-export function renderSvgString(scene: MapScene): string {
-  const defs = `<defs>${scene.defs.join("")}</defs>`;
-  const cells = scene.layout.map((entry) => renderCell(scene, entry)).join("");
-  const background =
-    scene.background === "transparent"
-      ? ""
-      : `<rect width="100%" height="100%" fill="${escapeXml(scene.background)}" />`;
+export function renderRiverLayers(scene: MapScene): string {
   const riverAttrs = (body: MapScene["riverBodies"][number], layer: string) =>
     `data-river-layer="${layer}" data-river-id="${escapeXml(body.riverId)}" data-river-name="${escapeXml(body.riverName)}"` +
     (body.preview ? ' data-river-preview="true"' : "") +
@@ -614,18 +566,34 @@ export function renderSvgString(scene: MapScene): string {
         `</g>`
     )
     .join("");
-  return [
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${scene.width}" height="${scene.height}" viewBox="0 0 ${scene.width} ${scene.height}" role="img" aria-label="MapDesigner export">`,
-    defs,
-    background,
-    cells,
-    riverBanks,
-    riverBodies,
-    riverHighlights,
-    riverPreviews,
-    riverControlPoints,
-    `</svg>`
-  ].join("");
+  return [riverBanks, riverBodies, riverHighlights, riverPreviews, riverControlPoints].join("");
+}
+
+export function renderSvgString(scene: MapScene): string {
+  const background =
+    scene.background === "transparent"
+      ? ""
+      : '<rect width="100%" height="100%" fill="' + escapeXml(scene.background) + '" />';
+  const surfaces = scene.layout.map((entry) => renderCellSurface(entry, scene.options)).join("");
+  const labels = scene.layout.map((entry) => renderCellAnnotations(entry, scene.options)).join("");
+  return (
+    '<svg xmlns="http://www.w3.org/2000/svg" width="' +
+    scene.width +
+    '" height="' +
+    scene.height +
+    '" viewBox="0 0 ' +
+    scene.width +
+    " " +
+    scene.height +
+    '" role="img" aria-label="MapDesigner export"><defs>' +
+    scene.defs.join("") +
+    "</defs>" +
+    background +
+    surfaces +
+    renderRiverLayers(scene) +
+    labels +
+    "</svg>"
+  );
 }
 
 export function buildExportScene(input: ExportSceneInput): MapScene {
@@ -641,7 +609,7 @@ export function buildExportScene(input: ExportSceneInput): MapScene {
     size: 36 * input.options.scale,
     padding: input.options.padding,
     background: input.options.background,
-    usePatternOverlays: false,
+    usePatternOverlays: true,
     includeCoordinates: input.options.includeCoordinates,
     includeShorthand: input.options.includeShorthand,
     includeGrid: input.options.includeGrid,

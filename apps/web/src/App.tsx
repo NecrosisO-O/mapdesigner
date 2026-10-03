@@ -396,6 +396,9 @@ export default function App() {
           showShorthand={showShorthand}
           showGrid={showGrid}
           showUndesigned={showUndesigned}
+          onMapStyleChange={(style) => {
+            void workspace.applyCommands([{ action: "set_map_style", style, source: "webui" }]);
+          }}
           onShowCoordinatesChange={setShowCoordinates}
           onShowShorthandChange={setShowShorthand}
           onShowGridChange={setShowGrid}

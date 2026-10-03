@@ -4,6 +4,7 @@ import {
   type ExportRenderOptions,
   type MapRuntimeState,
   type MapSummary,
+  type MapStyle,
   type TagKey
 } from "@mapdesigner/map-core";
 import { formatDateTime } from "./useMapWorkspace.js";
@@ -21,6 +22,7 @@ interface SidebarPanelProps {
   showShorthand: boolean;
   showGrid: boolean;
   showUndesigned: boolean;
+  onMapStyleChange: (style: MapStyle) => void;
   onShowCoordinatesChange: (checked: boolean) => void;
   onShowShorthandChange: (checked: boolean) => void;
   onShowGridChange: (checked: boolean) => void;
@@ -72,6 +74,17 @@ export function SidebarPanel(props: SidebarPanelProps) {
       </section>
       <section className="panel tool-panel">
         <h2>视图</h2>
+        <label>
+          地图样式
+          <select
+            value={props.currentMap?.document.meta.map_style ?? "classic-v1"}
+            onChange={(event) => props.onMapStyleChange(event.target.value as MapStyle)}
+            disabled={!props.currentMap}
+          >
+            <option value="atlas-v1">自然地图</option>
+            <option value="classic-v1">经典配色</option>
+          </select>
+        </label>
         <label className="checkbox-row switch-row">
           <input
             type="checkbox"
