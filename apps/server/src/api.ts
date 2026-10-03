@@ -1,6 +1,6 @@
 import { getOverview } from "./overview.js";
 import { registerJobs } from "./jobs.js";
-import { downloadUrl } from "./downloads.js";
+import { downloadDisposition, downloadUrl } from "./downloads.js";
 import fs from "node:fs/promises";
 import { createReadStream } from "node:fs";
 import path from "node:path";
@@ -530,7 +530,7 @@ export async function createServer(): Promise<FastifyInstance> {
       const filePath = exportFilePath(EXPORT_STORAGE_DIR, fileName);
       await fs.access(filePath);
       const content = createReadStream(filePath);
-      reply.header("Content-Disposition", `attachment; filename="${fileName}"`);
+      reply.header("Content-Disposition", downloadDisposition(fileName));
       reply.type(fileName.endsWith(".png") ? "image/png" : "application/json; charset=utf-8");
       return reply.send(content);
     } catch (error) {

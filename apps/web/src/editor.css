@@ -13,6 +13,7 @@
   --muted: #718078;
   --border: #dce3dc;
   --accent: #316b51;
+  --on-accent: #fff;
   --accent-soft: #e7f0e9;
   --danger: #a24236;
   color: var(--text);
@@ -118,6 +119,8 @@ h3 {
   --muted: #a3b4a8;
   --border: #39493e;
   --accent: #9ac9ab;
+  --on-accent: #18291f;
+  --danger: #f0a090;
   --accent-soft: #31493a;
 }
 .app-shell {
@@ -219,7 +222,7 @@ h3 {
 .primary-button {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   font-weight: 650;
 }
 .primary-button:hover:not(:disabled) {
@@ -240,7 +243,7 @@ h3 {
   position: absolute;
   left: 73px;
   top: 69px;
-  z-index: 10;
+  z-index: 18;
   display: flex;
   gap: 5px;
 }
@@ -652,6 +655,17 @@ h3 {
   gap: 8px;
   margin-bottom: 18px;
 }
+.export-progress {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.export-result {
+  overflow-wrap: anywhere;
+  margin-bottom: 14px;
+}
 .export-action-row > button {
   flex: 1;
 }
@@ -705,9 +719,11 @@ h3 {
   display: none;
 }
 @media (max-width: 1180px) {
-  .layout,
-  .app-shell[data-inspector-open="false"] .layout {
+  .layout {
     grid-template-columns: 58px 0 minmax(180px, 1fr) 284px;
+  }
+  .app-shell[data-inspector-open="false"] .layout {
+    grid-template-columns: 58px 0 minmax(180px, 1fr) 0;
   }
   .sidebar {
     position: absolute;
@@ -739,6 +755,9 @@ h3 {
   }
 }
 @media (max-width: 760px) {
+  .app-shell {
+    --tool-rail-width: 48px;
+  }
   .topbar {
     min-height: 55px;
     padding: 7px 9px;
@@ -885,4 +904,21 @@ h3 {
 .map-canvas {
   user-select: none;
   -webkit-user-select: none;
+}
+
+.app-shell.focus-mode .layout {
+  grid-template-columns: var(--tool-rail-width, 58px) 0 minmax(100px, 1fr) 0;
+}
+
+@media (max-height: 500px) {
+  .tool-rail {
+    overflow-y: auto;
+    gap: 3px;
+    padding-top: 6px;
+    padding-bottom: 6px;
+  }
+  .tool-rail button {
+    min-height: 36px;
+    padding: 5px 2px;
+  }
 }

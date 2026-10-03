@@ -422,7 +422,7 @@ function configureEditableMapMock(initialMap: typeof sampleMap): void {
 }
 
 function getViewportTransform(): SVGGElement {
-  const svg = screen.getByLabelText("Map canvas");
+  const svg = screen.getByLabelText("地图画布");
   const viewport = svg.querySelector("g[transform]");
   expect(viewport).toBeTruthy();
   return viewport as SVGGElement;
@@ -452,7 +452,7 @@ function getScenePointAtScreenPoint(
 }
 
 async function prepareCanvasViewport() {
-  const mapCanvas = screen.getByLabelText("Map canvas").parentElement as HTMLDivElement;
+  const mapCanvas = screen.getByLabelText("地图画布").parentElement as HTMLDivElement;
 
   vi.spyOn(mapCanvas, "getBoundingClientRect").mockReturnValue({
     x: 0,
@@ -476,7 +476,9 @@ async function prepareCanvasViewport() {
 }
 
 function getCellButton(displayCoord: string, status: "designed" | "undesigned") {
-  return screen.getByRole("button", { name: `${displayCoord} ${status}` });
+  return screen.getByRole("button", {
+    name: `${displayCoord} ${status === "designed" ? "已设计" : "待设计"}`
+  });
 }
 
 describe("App", () => {
@@ -757,7 +759,7 @@ describe("App", () => {
       fireEvent.click(getCellButton("R0C0", "designed"));
     });
     expect(await screen.findByLabelText("当前选中信息")).toBeTruthy();
-    expect(screen.getByLabelText("当前选中信息").textContent).toContain("R0C0 | designed");
+    expect(screen.getByLabelText("当前选中信息").textContent).toContain("R0C0 | 已设计");
     expect(screen.queryByRole("heading", { name: "当前选中" })).toBeNull();
     const terrainCategoryField = screen.getByLabelText("地形分类") as HTMLSelectElement;
     expect(terrainCategoryField.value).toBe("plain");
@@ -790,9 +792,9 @@ describe("App", () => {
 
     expect(await screen.findByText("河流修改已保存到服务器")).toBeTruthy();
     expect(
-      within(riverPanel as HTMLElement).getByRole("option", { name: /^Main River / })
+      within(riverPanel as HTMLElement).getByRole("option", { name: "Main River" })
     ).toBeTruthy();
-    const svg = screen.getByLabelText("Map canvas");
+    const svg = screen.getByLabelText("地图画布");
     expect(svg.querySelector("[data-river-id]")).toBeTruthy();
   });
 
@@ -823,13 +825,13 @@ describe("App", () => {
     expect(await screen.findByText("路径点：2")).toBeTruthy();
     expect(screen.getByLabelText("河流绘制工具").textContent).toContain("路径点 2");
     expect(
-      screen.getByLabelText("Map canvas").querySelector('[data-river-preview="true"]')
+      screen.getByLabelText("地图画布").querySelector('[data-river-preview="true"]')
     ).toBeTruthy();
     expect(
-      screen.getByLabelText("Map canvas").querySelector('[data-river-control-point="start"]')
+      screen.getByLabelText("地图画布").querySelector('[data-river-control-point="start"]')
     ).toBeTruthy();
     expect(
-      screen.getByLabelText("Map canvas").querySelector('[data-river-control-point="end"]')
+      screen.getByLabelText("地图画布").querySelector('[data-river-control-point="end"]')
     ).toBeTruthy();
 
     fireEvent.click(
@@ -838,13 +840,13 @@ describe("App", () => {
 
     expect(await screen.findByText("河流修改已保存到服务器")).toBeTruthy();
     expect(screen.getByRole("button", { name: "选择" }).getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getByLabelText("Map canvas").querySelector("[data-river-id]")).toBeTruthy();
+    expect(screen.getByLabelText("地图画布").querySelector("[data-river-id]")).toBeTruthy();
 
     await act(async () => {
       fireEvent.click(getCellButton("R0C1", "undesigned"));
     });
     expect(await screen.findByLabelText("当前选中信息")).toBeTruthy();
-    expect(screen.getByLabelText("当前选中信息").textContent).toContain("R0C1 | undesigned");
+    expect(screen.getByLabelText("当前选中信息").textContent).toContain("R0C1 | 待设计");
   });
 
   it("enables format brush from a designed cell and disables it on an undesigned cell", async () => {
@@ -906,7 +908,7 @@ describe("App", () => {
     });
 
     expect(await screen.findByLabelText("当前选中信息")).toBeTruthy();
-    expect(screen.getByLabelText("当前选中信息").textContent).toContain("R0C1 | designed");
+    expect(screen.getByLabelText("当前选中信息").textContent).toContain("R0C1 | 已设计");
     expect((screen.getByLabelText("地形") as HTMLSelectElement).value).toBe("plain");
     expect((screen.getByLabelText("生态") as HTMLSelectElement).value).toBe("");
   });
@@ -948,7 +950,7 @@ describe("App", () => {
       fireEvent.click(getCellButton("R0C1", "designed"));
     });
 
-    expect(screen.getByLabelText("当前选中信息").textContent).toContain("R0C1 | designed");
+    expect(screen.getByLabelText("当前选中信息").textContent).toContain("R0C1 | 已设计");
     expect((screen.getByLabelText("地形") as HTMLSelectElement).value).toBe("plain");
     expect((screen.getByLabelText("生态") as HTMLSelectElement).value).toBe("grassland");
   });
@@ -1116,7 +1118,7 @@ describe("App", () => {
     });
 
     expect(await screen.findByLabelText("当前选中信息")).toBeTruthy();
-    expect(screen.getByLabelText("当前选中信息").textContent).toContain("R0C1 | undesigned");
+    expect(screen.getByLabelText("当前选中信息").textContent).toContain("R0C1 | 待设计");
   });
 
   it("filters terrain options by the selected terrain category", async () => {
@@ -1473,6 +1475,34 @@ describe("App", () => {
     );
   });
 
+  it("cancels an export from inside its dialog without downloading a partial result", async () => {
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    apiMock.exportPng.mockImplementation(
+      (_id, _options, { signal }) =>
+        new Promise((resolve) => {
+          signal.addEventListener(
+            "abort",
+            () =>
+              resolve({
+                ok: false,
+                warnings: [],
+                errors: [{ message: "任务已取消" }]
+              }),
+            { once: true }
+          );
+        })
+    );
+    render(<App />);
+    await screen.findByText("已打开 Sample Map");
+    fireEvent.click(screen.getByRole("button", { name: "导出" }));
+    const dialog = screen.getByRole("dialog", { name: "导出地图" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "导出图片" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "取消任务" }));
+    expect(await within(dialog).findByText("导出结果：任务已取消")).toBeTruthy();
+    expect(within(dialog).queryByRole("button", { name: "取消任务" })).toBeNull();
+    expect(clickSpy).not.toHaveBeenCalled();
+  });
+
   it("can switch png export to whole map mode", async () => {
     vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
     render(<App />);
@@ -1506,7 +1536,7 @@ describe("App", () => {
     const tagFilterPanel = screen.getByLabelText("标签筛选");
     fireEvent.click(within(tagFilterPanel).getByLabelText("山峰"));
 
-    const svg = screen.getByLabelText("Map canvas");
+    const svg = screen.getByLabelText("地图画布");
     expect(svg.querySelector('[data-cell-id="cell@0,0"]')?.getAttribute("data-filter-match")).toBe(
       "true"
     );

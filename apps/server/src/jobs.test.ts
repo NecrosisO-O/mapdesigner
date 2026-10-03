@@ -151,3 +151,36 @@ it("paginates beyond 500 rivers and includes the final river in a range export",
   expect(spy.mock.calls[0]?.[0].map.document.features.rivers).toHaveLength(501);
   spy.mockRestore();
 });
+
+it("downloads Chinese-named JSON and PNG files over a real HTTP connection", async () => {
+  const map = await service.createMap({ name: "星湾群岛" });
+  await service.applyCommandsLight(map.document.meta.id, [
+    { action: "set_cell", target: { row: 0, col: 0 }, changes: { terrain: "plain" } }
+  ]);
+  const address = await app.listen({ host: "127.0.0.1", port: 0 });
+  for (const kind of ["json", "png"]) {
+    const started = (
+      await app.inject({
+        method: "POST",
+        url: "/api/jobs/export",
+        payload: { kind, mapId: map.document.meta.id }
+      })
+    ).json().result;
+    const job = await finish(started.id);
+    expect(job.state, job.error).toBe("done");
+    const response = await fetch(address + job.result.downloadUrl);
+    expect(response.status).toBe(200);
+    const disposition = response.headers.get("content-disposition")!;
+    expect(disposition).toMatch(/^[\x20-\x7e]+$/);
+    expect(decodeURIComponent(disposition.split("filename*=UTF-8''")[1]!)).toBe(
+      job.result.fileName
+    );
+    if (kind === "json") {
+      expect((await response.json()).meta.name).toBe("星湾群岛");
+    } else {
+      const image = await sharp(Buffer.from(await response.arrayBuffer())).metadata();
+      expect(image.format).toBe("png");
+      expect(image.width).toBeGreaterThan(0);
+    }
+  }
+});

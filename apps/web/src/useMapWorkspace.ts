@@ -65,6 +65,7 @@ const errorMessage = (response: { errors?: Array<{ message?: string }> }, fallba
 export function useMapWorkspace(setMessage: (message: string) => void) {
   const [maps, setMaps] = useState<MapListItem[]>([]);
   const [session, setSession] = useState<EditorSession | null>(null);
+  const [viewport, setViewport] = useState<{ mapId: string; range: CellRange } | null>(null);
   const sessionRef = useRef<EditorSession | null>(null);
   const generation = useRef(0),
     rangeRequest = useRef(0),
@@ -278,7 +279,13 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
     range: CellRange,
     id = sessionRef.current?.summary.meta.id
   ): Promise<void> {
-    if (!opening.current && id === sessionRef.current?.summary.meta.id) await loadRange(range);
+    if (!id || id !== sessionRef.current?.summary.meta.id) return;
+    setViewport((current) =>
+      current?.mapId === id && keyOf(current.range) === keyOf(range)
+        ? current
+        : { mapId: id, range }
+    );
+    if (!opening.current) await loadRange(range);
   }
   function enqueue(
     key: string,
@@ -581,7 +588,7 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
     loading,
     pendingCount,
     mapDirty,
-    visibleRange: session?.range ?? null,
+    visibleRange: viewport?.mapId === currentMapId ? viewport.range : null,
     fileInputRef,
     setRenameDraft,
     setCurrentMap: (map: MapRuntimeState | null) =>

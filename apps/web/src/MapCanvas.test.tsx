@@ -181,7 +181,7 @@ function mockCanvasRect(container: HTMLDivElement) {
 }
 
 function countCoordinateLabels() {
-  const svg = screen.getByLabelText("Map canvas");
+  const svg = screen.getByLabelText("地图画布");
   return Array.from(svg.querySelectorAll("text")).filter((node) =>
     /^R-?\d+C-?\d+$/.test(node.textContent ?? "")
   ).length;
@@ -207,16 +207,16 @@ describe("MapCanvas", () => {
       />
     );
 
-    const container = screen.getByLabelText("Map canvas").parentElement as HTMLDivElement;
+    const container = screen.getByLabelText("地图画布").parentElement as HTMLDivElement;
     mockCanvasRect(container);
 
     fireEvent(window, new Event("resize"));
 
     await waitFor(() => {
-      expect(screen.getByLabelText("Map canvas").getAttribute("data-render-detail")).toBe("near");
+      expect(screen.getByLabelText("地图画布").getAttribute("data-render-detail")).toBe("near");
       expect(screen.getByText("R0C0")).toBeTruthy();
       expect(screen.getByText("PLN-GRS")).toBeTruthy();
-      expect(screen.getByRole("button", { name: "R0C0 designed" })).toBeTruthy();
+      expect(screen.getByRole("button", { name: "R0C0 已设计" })).toBeTruthy();
     });
 
     for (let index = 0; index < 25; index += 1) {
@@ -226,8 +226,8 @@ describe("MapCanvas", () => {
     await waitFor(() => {
       expect(screen.queryByText("R0C0")).toBeNull();
       expect(screen.queryByText("PLN-GRS")).toBeNull();
-      expect(screen.getByRole("button", { name: "R0C0 designed" })).toBeTruthy();
-      expect(screen.getByLabelText("Map canvas").getAttribute("data-render-detail")).toMatch(/far/);
+      expect(screen.getByRole("button", { name: "R0C0 已设计" })).toBeTruthy();
+      expect(screen.getByLabelText("地图画布").getAttribute("data-render-detail")).toMatch(/far/);
     });
   });
 
@@ -246,8 +246,8 @@ describe("MapCanvas", () => {
       />
     );
 
-    const container = screen.getByLabelText("Map canvas").parentElement as HTMLDivElement;
-    const designedCell = screen.getByRole("button", { name: "R0C0 designed" });
+    const container = screen.getByLabelText("地图画布").parentElement as HTMLDivElement;
+    const designedCell = screen.getByRole("button", { name: "R0C0 已设计" });
     mockCanvasRect(container);
     fireEvent(window, new Event("resize"));
 
@@ -295,8 +295,8 @@ describe("MapCanvas", () => {
       />
     );
 
-    const container = screen.getByLabelText("Map canvas").parentElement as HTMLDivElement;
-    const designedCell = screen.getByRole("button", { name: "R0C0 designed" });
+    const container = screen.getByLabelText("地图画布").parentElement as HTMLDivElement;
+    const designedCell = screen.getByRole("button", { name: "R0C0 已设计" });
     mockCanvasRect(container);
     fireEvent(window, new Event("resize"));
 
@@ -308,13 +308,13 @@ describe("MapCanvas", () => {
     expect(onSelectCell).not.toHaveBeenCalled();
     expect(screen.getByLabelText("河流绘制工具").textContent).toContain("路径点 2");
     expect(
-      screen.getByLabelText("Map canvas").querySelector('[data-river-preview="true"]')
+      screen.getByLabelText("地图画布").querySelector('[data-river-preview="true"]')
     ).toBeTruthy();
     expect(
-      screen.getByLabelText("Map canvas").querySelector('[data-river-control-point="start"]')
+      screen.getByLabelText("地图画布").querySelector('[data-river-control-point="start"]')
     ).toBeTruthy();
     expect(
-      screen.getByLabelText("Map canvas").querySelector('[data-river-control-point="end"]')
+      screen.getByLabelText("地图画布").querySelector('[data-river-control-point="end"]')
     ).toBeTruthy();
   });
 
@@ -337,14 +337,14 @@ describe("MapCanvas", () => {
       />
     );
 
-    const container = screen.getByLabelText("Map canvas").parentElement as HTMLDivElement;
-    const designedCell = screen.getByRole("button", { name: "R0C0 designed" });
+    const container = screen.getByLabelText("地图画布").parentElement as HTMLDivElement;
+    const designedCell = screen.getByRole("button", { name: "R0C0 已设计" });
     mockCanvasRect(container);
     fireEvent(window, new Event("resize"));
 
     expect(
       screen
-        .getByLabelText("Map canvas")
+        .getByLabelText("地图画布")
         .querySelector('[data-cell-id="cell@0,0"]')
         ?.getAttribute("data-batch-selected")
     ).toBe("true");
@@ -379,7 +379,7 @@ describe("MapCanvas", () => {
       />
     );
 
-    const container = screen.getByLabelText("Map canvas").parentElement as HTMLDivElement;
+    const container = screen.getByLabelText("地图画布").parentElement as HTMLDivElement;
     mockCanvasRect(container);
     fireEvent(window, new Event("resize"));
 
@@ -410,12 +410,12 @@ describe("MapCanvas", () => {
       />
     );
 
-    const container = screen.getByLabelText("Map canvas").parentElement as HTMLDivElement;
+    const container = screen.getByLabelText("地图画布").parentElement as HTMLDivElement;
     mockCanvasRect(container);
     fireEvent(window, new Event("resize"));
 
     await waitFor(() => {
-      expect(screen.getByLabelText("Map canvas").getAttribute("data-coordinate-label-mode")).toBe(
+      expect(screen.getByLabelText("地图画布").getAttribute("data-coordinate-label-mode")).toBe(
         "hidden"
       );
       expect(countCoordinateLabels()).toBe(0);
@@ -427,7 +427,7 @@ describe("MapCanvas", () => {
 
     await waitFor(() => {
       const labelMode = screen
-        .getByLabelText("Map canvas")
+        .getByLabelText("地图画布")
         .getAttribute("data-coordinate-label-mode");
       const coordinateCount = countCoordinateLabels();
       expect(labelMode).toMatch(/sparse|medium|full/);
@@ -451,7 +451,7 @@ describe("MapCanvas", () => {
       />
     );
 
-    const container = screen.getByLabelText("Map canvas").parentElement as HTMLDivElement;
+    const container = screen.getByLabelText("地图画布").parentElement as HTMLDivElement;
     mockCanvasRect(container);
     fireEvent(window, new Event("resize"));
 
@@ -460,7 +460,7 @@ describe("MapCanvas", () => {
     }
 
     await waitFor(() => {
-      expect(screen.getByLabelText("Map canvas").getAttribute("data-coordinate-label-mode")).toBe(
+      expect(screen.getByLabelText("地图画布").getAttribute("data-coordinate-label-mode")).toBe(
         "full"
       );
       const coordinateCount = countCoordinateLabels();
@@ -490,7 +490,7 @@ describe("canvas gestures", () => {
     fireEvent(target, event);
   }
   function screenCenter(id: string) {
-    const svg = screen.getByLabelText("Map canvas"),
+    const svg = screen.getByLabelText("地图画布"),
       group = svg.querySelector("g[transform]")!;
     const match = group
       .getAttribute("transform")!
@@ -517,7 +517,7 @@ describe("canvas gestures", () => {
     fireEvent(window, new Event("resize"));
     const a = screenCenter("cell@0,0"),
       b = screenCenter("cell@0,1");
-    pointer(screen.getByRole("button", { name: "R0C0 designed" }), "pointerdown", a.x, a.y);
+    pointer(screen.getByRole("button", { name: "R0C0 已设计" }), "pointerdown", a.x, a.y);
     pointer(canvas, "pointermove", b.x, b.y);
     expect(brush).not.toHaveBeenCalled();
     pointer(canvas, "pointerup", b.x, b.y);
@@ -526,7 +526,7 @@ describe("canvas gestures", () => {
       "cell@0,0",
       "cell@0,1"
     ]);
-    pointer(screen.getByRole("button", { name: "R0C0 designed" }), "pointerdown", a.x, a.y);
+    pointer(screen.getByRole("button", { name: "R0C0 已设计" }), "pointerdown", a.x, a.y);
     pointer(canvas, "pointermove", b.x, b.y);
     pointer(canvas, "pointercancel", b.x, b.y);
     expect(brush).toHaveBeenCalledTimes(1);

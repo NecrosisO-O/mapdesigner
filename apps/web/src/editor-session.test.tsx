@@ -138,6 +138,25 @@ function mockWorkspace() {
   );
 }
 describe("workspace responses", () => {
+  it("exports the visible range even when moving within the same preloaded region", async () => {
+    mockWorkspace();
+    const { result } = renderHook(() => useMapWorkspace(vi.fn()));
+    await act(() => result.current.openMap("A"));
+    const initial = { minRow: -4, maxRow: 4, minCol: -4, maxCol: 4 };
+    await act(() => result.current.requestVisibleRange(initial));
+    const loaded = vi.mocked(api.getCellsInRange).mock.calls.at(-1)![1];
+    expect(loaded.minRow).toBeLessThan(initial.minRow);
+    expect(loaded.maxRow).toBeGreaterThan(initial.maxRow);
+    expect(result.current.visibleRange).toEqual(initial);
+    const calls = vi.mocked(api.getCellsInRange).mock.calls.length;
+    const moved = { ...initial, minCol: -3, maxCol: 5 };
+    await act(() => result.current.requestVisibleRange(moved));
+    expect(result.current.visibleRange).toEqual(moved);
+    expect(api.getCellsInRange).toHaveBeenCalledTimes(calls);
+    await act(() => result.current.openMap("B"));
+    await act(() => result.current.requestVisibleRange(initial, "A"));
+    expect(result.current.visibleRange).toBeNull();
+  });
   it("ignores an older map open that finishes last", async () => {
     mockWorkspace();
     const wait = deferred<Awaited<ReturnType<typeof api.getMapSummary>>>();

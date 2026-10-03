@@ -27,6 +27,9 @@ interface SidebarPanelProps {
   onShowUndesignedChange: (checked: boolean) => void;
   exportPanelOpen: boolean;
   isExportingPng: boolean;
+  exportProgress: string;
+  exportResult: string;
+  onCancelExport: () => void;
   pngOptions: ExportRenderOptions;
   pngRangeMode: "visible" | "full";
   lastOpaqueBackground: string;
@@ -148,6 +151,17 @@ export function SidebarPanel(props: SidebarPanelProps) {
       {props.exportPanelOpen && (
         <Dialog title="导出地图" onClose={props.onToggleExportPanel}>
           <div id="export-panel-content">
+            {props.isExportingPng && (
+              <div className="export-progress" role="status">
+                <span>{props.exportProgress || "准备导出"}</span>
+                <button onClick={props.onCancelExport}>取消任务</button>
+              </div>
+            )}
+            {props.exportResult && (
+              <p className="export-result" role="status">
+                导出结果：{props.exportResult}
+              </p>
+            )}
             <div className="export-action-row">
               <button
                 className="primary-button"
@@ -171,7 +185,7 @@ export function SidebarPanel(props: SidebarPanelProps) {
                   props.onPngRangeModeChange(event.target.value as "visible" | "full")
                 }
               >
-                <option value="visible">当前加载区域</option>
+                <option value="visible">当前可见区域</option>
                 <option value="full">全图</option>
               </select>
             </label>
@@ -188,8 +202,8 @@ export function SidebarPanel(props: SidebarPanelProps) {
                   props.onPresetChange(event.target.value as ExportRenderOptions["preset"])
                 }
               >
-                <option value="clean">clean</option>
-                <option value="reference">reference</option>
+                <option value="clean">纯净地图</option>
+                <option value="reference">参考地图（坐标与简写）</option>
               </select>
             </label>
             <label>
