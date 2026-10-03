@@ -1,31 +1,17 @@
 import { sameCoord } from "./coords.js";
+import { isOpenWaterTerrain } from "./materials.js";
 import type {
   ActiveCell,
   DesignedCellRecord,
   GridCoordinate,
   RiverFeature,
   RiverPathSample,
-  RiverPoint,
-  TerrainKey
+  RiverPoint
 } from "./types.js";
 
 export const DEFAULT_RIVER_WIDTH = 4;
 export const MIN_RIVER_WIDTH = 0.5;
 export const MAX_RIVER_WIDTH = 64;
-
-const RIVER_ENDPOINT_WATER_TERRAINS = new Set<TerrainKey>([
-  "ocean",
-  "sea",
-  "lagoon",
-  "estuary",
-  "lake",
-  "salt_lake",
-  "river",
-  "delta",
-  "wetland",
-  "tidal_flat",
-  "coast"
-]);
 
 function axialToCube(coord: GridCoordinate): { x: number; y: number; z: number } {
   const x = coord.col;
@@ -238,7 +224,7 @@ export function findRiversAtCell(
 export function isRiverWaterEndpointCell(
   cell: Pick<ActiveCell | DesignedCellRecord, "terrain"> | null | undefined
 ): boolean {
-  return Boolean(cell?.terrain && RIVER_ENDPOINT_WATER_TERRAINS.has(cell.terrain));
+  return isOpenWaterTerrain(cell?.terrain ?? null);
 }
 
 export function getRiverEndpointConnections(
@@ -253,7 +239,13 @@ export function getRiverEndpointConnections(
   const startCell = cells.find((cell) => sameCoord(cell, first));
   const endCell = cells.find((cell) => sameCoord(cell, last));
   return {
-    startConnected: isRiverWaterEndpointCell(startCell),
-    endConnected: isRiverWaterEndpointCell(endCell)
+    startConnected:
+      (river.start_kind === undefined ||
+        river.start_kind === "auto" ||
+        river.start_kind === "water") &&
+      isRiverWaterEndpointCell(startCell),
+    endConnected:
+      (river.end_kind === undefined || river.end_kind === "auto" || river.end_kind === "water") &&
+      isRiverWaterEndpointCell(endCell)
   };
 }

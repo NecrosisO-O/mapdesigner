@@ -1,9 +1,11 @@
 import { buildHexLayout, centerForCoord } from "./layout.js";
 import { buildSvgDefs } from "./styles.js";
+import { riverGeometry, riverBandPath } from "./river-geometry.js";
+import { buildWaterGeometry, riverWaterTransitions, waterCellLookup } from "./water.js";
+import { paintRiverWater } from "./river-paint.js";
 import { escapeXml, renderCellSurface, renderCellAnnotations } from "./presentation.js";
 import type { ExportSceneInput, MapRenderOptions, MapScene } from "./types.js";
 import {
-  expandRiverPath,
   getRiverEndpointConnections,
   type ActiveCell,
   type CellRange,
@@ -52,31 +54,6 @@ function doRangesOverlap(left: CellRange, right: CellRange): boolean {
   );
 }
 
-const riverSamplesCache = new Map<string, ReturnType<typeof expandRiverPath>>();
-let cachedSampleCount = 0;
-function riverSamples(river: RiverFeature): ReturnType<typeof expandRiverPath> {
-  const key = JSON.stringify(river),
-    hit = riverSamplesCache.get(key);
-  if (hit) {
-    riverSamplesCache.delete(key);
-    riverSamplesCache.set(key, hit);
-    return hit;
-  }
-  const samples = expandRiverPath(river);
-  if (samples.length <= 100_000) {
-    while (
-      riverSamplesCache.size &&
-      (cachedSampleCount + samples.length > 100_000 || riverSamplesCache.size >= 128)
-    ) {
-      const oldest = riverSamplesCache.keys().next().value!;
-      cachedSampleCount -= riverSamplesCache.get(oldest)!.length;
-      riverSamplesCache.delete(oldest);
-    }
-    riverSamplesCache.set(key, samples);
-    cachedSampleCount += samples.length;
-  }
-  return samples;
-}
 function coordRangeForRiver(river: RiverFeature): CellRange | null {
   return rangeFromCoords(river.points);
 }
@@ -113,8 +90,9 @@ export function filterRiversForRange(
   range: CellRange,
   padding = 1
 ): RiverFeature[] {
-  const padded = padRange(range, padding);
   return rivers.filter((river) => {
+    const width = Math.max(4, ...river.points.map((point) => point.width ?? 4));
+    const padded = padRange(range, padding + Math.ceil(width / 54));
     const riverRange = coordRangeForRiver(river);
     return riverRange ? doRangesOverlap(riverRange, padded) : false;
   });
@@ -130,111 +108,6 @@ function formatNumber(value: number): string {
   return Number(value.toFixed(3)).toString();
 }
 
-function distanceBetween(left: RiverRenderPoint, right: RiverRenderPoint): number {
-  return Math.hypot(left.x - right.x, left.y - right.y);
-}
-
-function perpendicularDistance(
-  point: RiverRenderPoint,
-  start: RiverRenderPoint,
-  end: RiverRenderPoint
-): number {
-  const dx = end.x - start.x;
-  const dy = end.y - start.y;
-  const length = Math.hypot(dx, dy);
-  if (length === 0) {
-    return distanceBetween(point, start);
-  }
-  return Math.abs(dy * point.x - dx * point.y + end.x * start.y - end.y * start.x) / length;
-}
-
-function simplifyRiverPoints(
-  points: RiverRenderPoint[],
-  tolerance: number,
-  widthTolerance: number
-): RiverRenderPoint[] {
-  if (points.length <= 2) {
-    return points;
-  }
-
-  let splitIndex = -1;
-  let maxScore = -1;
-  const start = points[0]!;
-  const end = points[points.length - 1]!;
-  for (let index = 1; index < points.length - 1; index += 1) {
-    const point = points[index]!;
-    const geometryScore = perpendicularDistance(point, start, end) / Math.max(tolerance, 0.001);
-    const amount = index / (points.length - 1);
-    const expectedWidth = start.width + (end.width - start.width) * amount;
-    const widthScore = Math.abs(point.width - expectedWidth) / Math.max(widthTolerance, 0.001);
-    const score = Math.max(geometryScore, widthScore);
-    if (score > maxScore) {
-      maxScore = score;
-      splitIndex = index;
-    }
-  }
-
-  if (maxScore <= 1 || splitIndex <= 0) {
-    return [start, end];
-  }
-
-  const left = simplifyRiverPoints(points.slice(0, splitIndex + 1), tolerance, widthTolerance);
-  const right = simplifyRiverPoints(points.slice(splitIndex), tolerance, widthTolerance);
-  return [...left.slice(0, -1), ...right];
-}
-
-function catmullRom(
-  p0: RiverRenderPoint,
-  p1: RiverRenderPoint,
-  p2: RiverRenderPoint,
-  p3: RiverRenderPoint,
-  t: number
-): RiverRenderPoint {
-  const t2 = t * t;
-  const t3 = t2 * t;
-  const interpolate = (a: number, b: number, c: number, d: number) =>
-    0.5 * (2 * b + (-a + c) * t + (2 * a - 5 * b + 4 * c - d) * t2 + (-a + 3 * b - 3 * c + d) * t3);
-  return {
-    x: interpolate(p0.x, p1.x, p2.x, p3.x),
-    y: interpolate(p0.y, p1.y, p2.y, p3.y),
-    width: interpolate(p0.width, p1.width, p2.width, p3.width)
-  };
-}
-
-function smoothRiverPoints(
-  points: RiverRenderPoint[],
-  size: number,
-  detail: "high" | "low"
-): RiverRenderPoint[] {
-  if (points.length <= 2) {
-    return points;
-  }
-
-  const smoothed: RiverRenderPoint[] = [];
-  for (let index = 0; index < points.length - 1; index += 1) {
-    const p0 = points[Math.max(0, index - 1)]!;
-    const p1 = points[index]!;
-    const p2 = points[index + 1]!;
-    const p3 = points[Math.min(points.length - 1, index + 2)]!;
-    const segmentDistance = distanceBetween(p1, p2);
-    const steps =
-      detail === "low"
-        ? Math.max(1, Math.min(3, Math.ceil(segmentDistance / Math.max(size * 1.2, 1))))
-        : Math.max(3, Math.min(8, Math.ceil(segmentDistance / Math.max(size * 0.3, 1))));
-    for (let step = 0; step < steps; step += 1) {
-      if (index > 0 && step === 0) {
-        continue;
-      }
-      smoothed.push(catmullRom(p0, p1, p2, p3, step / steps));
-    }
-  }
-  smoothed.push(points[points.length - 1]!);
-  return smoothed.map((point) => ({
-    ...point,
-    width: Math.max(0.5, point.width)
-  }));
-}
-
 function centerPathFromPoints(points: RiverRenderPoint[]): string {
   if (points.length === 0) {
     return "";
@@ -242,48 +115,6 @@ function centerPathFromPoints(points: RiverRenderPoint[]): string {
   return [
     `M ${formatNumber(points[0]!.x)} ${formatNumber(points[0]!.y)}`,
     ...points.slice(1).map((point) => `L ${formatNumber(point.x)} ${formatNumber(point.y)}`)
-  ].join(" ");
-}
-
-function buildRiverBandPath(points: RiverRenderPoint[], extraWidth: number): string | null {
-  if (points.length < 2) {
-    return null;
-  }
-
-  const left: Array<{ x: number; y: number }> = [];
-  const right: Array<{ x: number; y: number }> = [];
-  for (let index = 0; index < points.length; index += 1) {
-    const previous = points[Math.max(0, index - 1)]!;
-    const current = points[index]!;
-    const next = points[Math.min(points.length - 1, index + 1)]!;
-    const dx = next.x - previous.x;
-    const dy = next.y - previous.y;
-    const length = Math.hypot(dx, dy) || 1;
-    const normalX = -dy / length;
-    const normalY = dx / length;
-    const halfWidth = Math.max(0.4, current.width + extraWidth) / 2;
-    left.push({
-      x: current.x + normalX * halfWidth,
-      y: current.y + normalY * halfWidth
-    });
-    right.push({
-      x: current.x - normalX * halfWidth,
-      y: current.y - normalY * halfWidth
-    });
-  }
-
-  const end = points[points.length - 1]!;
-  const start = points[0]!;
-  return [
-    `M ${formatNumber(left[0]!.x)} ${formatNumber(left[0]!.y)}`,
-    ...left.slice(1).map((point) => `L ${formatNumber(point.x)} ${formatNumber(point.y)}`),
-    `Q ${formatNumber(end.x)} ${formatNumber(end.y)} ${formatNumber(right[right.length - 1]!.x)} ${formatNumber(right[right.length - 1]!.y)}`,
-    ...right
-      .slice(0, -1)
-      .reverse()
-      .map((point) => `L ${formatNumber(point.x)} ${formatNumber(point.y)}`),
-    `Q ${formatNumber(start.x)} ${formatNumber(start.y)} ${formatNumber(left[0]!.x)} ${formatNumber(left[0]!.y)}`,
-    "Z"
   ].join(" ");
 }
 
@@ -331,32 +162,34 @@ function buildRiverBodies(
   clipRange?: CellRange,
   detail: "high" | "low" = "high"
 ): MapScene["riverBodies"] {
+  const isWater = waterCellLookup(cells);
+  const parent = new Map(rivers.map((r) => [r.id, r.id]));
+  function root(id: string): string {
+    const p = parent.get(id)!;
+    if (p !== id) parent.set(id, root(p));
+    return parent.get(id)!;
+  }
+  const junctions = new Map<string, string>();
+  for (const river of rivers)
+    for (const point of river.points)
+      if (point.junction_id) {
+        const prior = junctions.get(point.junction_id);
+        if (prior) parent.set(root(river.id), root(prior));
+        else junctions.set(point.junction_id, river.id);
+      }
   return rivers.flatMap((river) => {
-    const samples = riverSamples(river);
-    if (samples.length < 2) {
-      return [];
-    }
+    const geometry = riverWaterTransitions(riverGeometry(river, detail), river, isWater);
+    if (geometry.length < 2) return [];
     const color = river.color ?? "#2F83B7";
     const opacity = river.opacity ?? 0.88;
     const connections = getRiverEndpointConnections(river, cells);
-    const basePoints = samples.map((sample, index) => {
-      const center = centerForCoord(sample, size);
-      let width = sample.width;
-      if (
-        (index === 0 && connections.startConnected) ||
-        (index === samples.length - 1 && connections.endConnected)
-      ) {
-        width *= 1.2;
-      }
-      return {
-        x: center.x,
-        y: center.y,
-        width
-      };
-    });
-    const simplified =
-      detail === "low" ? simplifyRiverPoints(basePoints, size * 0.5, 0.8) : basePoints;
-    const canonical = smoothRiverPoints(simplified, size, detail);
+    const scale = size / 36;
+    const canonical = geometry.map((point) => ({
+      ...point,
+      x: point.x * scale,
+      y: point.y * scale,
+      width: point.width * scale
+    }));
     return visibleRiverRuns(canonical, clipRange, size).flatMap((run) => {
       const points = canonical
         .slice(run.start, run.end + 1)
@@ -367,7 +200,7 @@ function buildRiverBodies(
         minWidth = Math.min(minWidth, point.width);
         maxWidth = Math.max(maxWidth, point.width);
       }
-      const bodyPath = buildRiverBandPath(points, 0);
+      const bodyPath = riverBandPath(points, 0);
       if (!bodyPath) {
         return [];
       }
@@ -375,8 +208,9 @@ function buildRiverBodies(
         {
           id: run.start === 0 ? river.id : river.id + "-fragment-" + run.start,
           riverId: river.id,
+          networkId: root(river.id),
           riverName: river.name,
-          bankPath: preview ? null : buildRiverBandPath(points, 3.2),
+          bankPath: preview ? null : riverBandPath(points, 3.2 * scale),
           bodyPath,
           highlightPath: preview ? null : centerPathFromPoints(points),
           centerPath: centerPathFromPoints(points),
@@ -462,9 +296,7 @@ export function buildMapScene(map: MapRuntimeState, options: MapRenderOptions = 
   const allRivers = [...rivers, ...previewRivers];
   const riverCoordRange = renderRange ? padRange(renderRange, 1) : null;
   const riverCoords = allRivers.flatMap((river) =>
-    riverSamples(river).filter(
-      (sample) => !riverCoordRange || isCoordInRange(sample, riverCoordRange)
-    )
+    river.points.filter((sample) => !riverCoordRange || isCoordInRange(sample, riverCoordRange))
   );
   const layout = buildHexLayout(cells, {
     size: resolved.size,
@@ -479,6 +311,7 @@ export function buildMapScene(map: MapRuntimeState, options: MapRenderOptions = 
     minY: layout.minY,
     background: resolved.background,
     layout: layout.layout,
+    water: buildWaterGeometry(layout.layout),
     riverBodies: [
       ...buildRiverBodies(
         rivers,
@@ -530,26 +363,7 @@ export function renderRiverLayers(scene: MapScene): string {
     (body.preview ? ' data-river-preview="true"' : "") +
     (body.connectedStart ? ' data-river-connected-start="true"' : "") +
     (body.connectedEnd ? ' data-river-connected-end="true"' : "");
-  const riverBanks = scene.riverBodies
-    .map((body) =>
-      body.bankPath
-        ? `<path ${riverAttrs(body, "bank")} d="${body.bankPath}" fill="${escapeXml(body.bankColor)}" stroke="none" opacity="${Math.min(0.5, body.opacity * 0.42)}" />`
-        : ""
-    )
-    .join("");
-  const riverBodies = scene.riverBodies
-    .map(
-      (body) =>
-        `<path ${riverAttrs(body, "body")} d="${body.bodyPath}" fill="${escapeXml(body.color)}" stroke="none" opacity="${body.preview ? Math.min(0.52, body.opacity * 0.66) : body.opacity}" />`
-    )
-    .join("");
-  const riverHighlights = scene.riverBodies
-    .map((body) =>
-      body.highlightPath
-        ? `<path ${riverAttrs(body, "highlight")} d="${body.highlightPath}" fill="none" stroke="${escapeXml(body.highlightColor)}" stroke-width="${body.highlightWidth}" stroke-linecap="round" stroke-linejoin="round" opacity="${Math.min(0.28, body.opacity * 0.3)}" />`
-        : ""
-    )
-    .join("");
+  const water = paintRiverWater(scene);
   const riverPreviews = scene.riverBodies
     .map((body) =>
       body.preview
@@ -566,7 +380,7 @@ export function renderRiverLayers(scene: MapScene): string {
         `</g>`
     )
     .join("");
-  return [riverBanks, riverBodies, riverHighlights, riverPreviews, riverControlPoints].join("");
+  return [water, riverPreviews, riverControlPoints].join("");
 }
 
 export function renderSvgString(scene: MapScene): string {

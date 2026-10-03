@@ -26,6 +26,7 @@ export interface HexCellLayout {
 export interface RiverBodyLayout {
   id: string;
   riverId: string;
+  networkId: string;
   riverName: string;
   bankPath: string | null;
   bodyPath: string;
@@ -91,6 +92,7 @@ export interface MapScene {
   minY: number;
   background: string;
   layout: HexCellLayout[];
+  water: { surfacePath: string; shorePath: string };
   riverBodies: RiverBodyLayout[];
   riverControlPoints: RiverControlPointLayout[];
   defs: string[];
