@@ -4,12 +4,13 @@ import {
   type CellRange,
   type GridCoordinate,
   type MapRuntimeState,
+  type MapOverview,
   type MapSummary,
   type RiverFeature,
   type TagKey
 } from "@mapdesigner/map-core";
 import {
-  buildMapScene,
+  buildMapScene, centerForCoord,
   buildCellOpacity,
   buildCellStroke,
   buildPatternOverlay,
@@ -38,6 +39,7 @@ const LABEL_VIEWPORT_MARGIN_PX = 120;
 
 interface MapCanvasProps {
   map: MapRuntimeState;
+  overview?: MapOverview | null;
   mapSummary?: MapSummary | null;
   selectedCell: ActiveCell | null;
   selectedCellId: string | null;
@@ -105,7 +107,7 @@ function getViewportMetrics(width: number, height: number, sceneWidth: number, s
 }
 
 function boundsCoordsFromSummary(summary: MapSummary | null | undefined): GridCoordinate[] | undefined {
-  const bounds = summary?.bounds;
+  const bounds = summary?.render_bounds ?? summary?.bounds;
   if (
     !bounds ||
     bounds.min_row === null ||
@@ -780,7 +782,7 @@ export function MapCanvas(props: MapCanvasProps) {
         </div>
       ) : null}
       <div className="canvas-help-overlay" aria-hidden="true">
-        {isRiverDrawing
+        {props.overview ? "全图概览 · 放大后编辑单元格" : isRiverDrawing
           ? "河流绘制 · 点击单元格添加路径点"
           : isBatchSelecting
             ? "批量选择 · 点击单元格加入或移除"
@@ -800,6 +802,12 @@ export function MapCanvas(props: MapCanvasProps) {
         <g
           transform={`translate(${viewportMetrics.baseOffset.x + camera.offset.x} ${viewportMetrics.baseOffset.y + camera.offset.y}) scale(${viewportMetrics.baseScale * camera.zoom})`}
         >
+          {props.overview && <g aria-label="地图概览">{props.overview.tiles.map(tile => {
+            const step = props.overview!.bucket_size;
+            const points = [{row:tile.row,col:tile.col},{row:tile.row+step,col:tile.col},{row:tile.row+step,col:tile.col+step},{row:tile.row,col:tile.col+step}]
+              .map(coord => { const p = centerForCoord(coord, scene.options.size); return (p.x-scene.minX) + "," + (p.y-scene.minY); }).join(" ");
+            return <polygon key={tile.row + "," + tile.col} points={points} fill={tile.river ? "#4e9bb9" : getTerrainColor(tile.terrain)} opacity={tile.river ? 0.8 : Math.max(0.28, Math.min(1, tile.count / (step * step)))}><title>{tile.count} 格{tile.river ? " · 河流" : ""}</title></polygon>;
+          })}</g>}
           {scene.layout.map((entry) => (
             <g
               key={entry.cell.id}

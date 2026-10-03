@@ -95,10 +95,12 @@ export function validateRiverFeature(river: RiverFeature, index = 0): Validation
     if (river.points.length < 2) {
       issues.push(issue("invalid_river_points", "river requires at least two points", "invalid", `${target}.points`));
     }
+    let sampleCount = 0;
     river.points.forEach((point, pointIndex) => {
       issues.push(...validateRiverPoint(point, `${target}.points[${pointIndex}]`));
       const previous = river.points[pointIndex - 1];
-      if (previous && previous.row === point.row && previous.col === point.col) {
+      if (previous && point) sampleCount += Math.max(Math.abs(previous.row - point.row), Math.abs(previous.col - point.col), Math.abs(previous.row + previous.col - point.row - point.col)) + 1;
+      if (previous && point && previous.row === point.row && previous.col === point.col) {
         issues.push(
           issue(
             "duplicate_river_point",
@@ -109,6 +111,7 @@ export function validateRiverFeature(river: RiverFeature, index = 0): Validation
         );
       }
     });
+    if (sampleCount > 500_000) issues.push(issue("river_too_large", "river path exceeds 500000 cells", "invalid", target));
   }
   if (river.color !== undefined && river.color !== null && !isHexColor(river.color)) {
     issues.push(issue("invalid_river_color", "river color must be a #RRGGBB color", "invalid", `${target}.color`));

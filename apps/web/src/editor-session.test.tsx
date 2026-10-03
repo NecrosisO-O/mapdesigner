@@ -115,3 +115,23 @@ describe("workspace responses", () => {
     expect(result.current.loading).toBe(false);
   });
 });
+it("requests a complete overview instead of clipping a large viewport to its centre", async () => {
+  mockWorkspace();
+  const overview = vi.spyOn(api, "getOverview").mockImplementation(async (id, range) => ok({ map_id: id, revision: 1, range, bucket_size: 16, designed_cell_count: 2, tiles: [] }));
+  const { result } = renderHook(() => useMapWorkspace(vi.fn()));
+  await act(() => result.current.openMap("A"));
+  await act(() => result.current.requestVisibleRange({ minRow: 0, maxRow: 999, minCol: 0, maxCol: 999 }));
+  const range = overview.mock.calls[0]![1];
+  expect(range.minRow).toBeLessThanOrEqual(0); expect(range.maxRow).toBeGreaterThanOrEqual(999);
+  expect(range.minCol).toBeLessThanOrEqual(0); expect(range.maxCol).toBeGreaterThanOrEqual(999);
+  expect(result.current.overview?.designed_cell_count).toBe(2);
+});
+it("keeps terrain category choices when identical viewport cells arrive", async () => {
+  const map = makeMap();
+  const { result, rerender } = renderHook(({ map }) => useCellEditor(map, async () => null, vi.fn()), { initialProps: { map } });
+  const empty = map.activeCells.find(c => c.status === "undesigned")!;
+  await act(() => result.current.handleCanvasCellSelect(empty));
+  act(() => result.current.handleTerrainCategoryChange("upland"));
+  rerender({ map: structuredClone(map) });
+  expect(result.current.terrainCategory).toBe("upland");
+});

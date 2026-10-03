@@ -335,16 +335,10 @@ function doRangesOverlap(left: CellRange, right: CellRange): boolean {
 }
 
 function coordRangeForRiver(river: RiverFeature): CellRange | null {
-  const samples = expandRiverPath(river);
-  if (samples.length === 0) {
-    return null;
-  }
-  return {
-    minRow: Math.min(...samples.map((sample) => sample.row)),
-    maxRow: Math.max(...samples.map((sample) => sample.row)),
-    minCol: Math.min(...samples.map((sample) => sample.col)),
-    maxCol: Math.max(...samples.map((sample) => sample.col))
-  };
+  if (!river.points.length) return null;
+  let minRow = Infinity, maxRow = -Infinity, minCol = Infinity, maxCol = -Infinity;
+  for (const point of river.points) { minRow = Math.min(minRow, point.row); maxRow = Math.max(maxRow, point.row); minCol = Math.min(minCol, point.col); maxCol = Math.max(maxCol, point.col); }
+  return { minRow, maxRow, minCol, maxCol };
 }
 
 function rangeFromFeatureRow(row: FeatureRow): CellRange | null {
@@ -374,13 +368,17 @@ function getMapRowOrThrow(db: Database.Database, id: string): MapRow {
 }
 
 function mapSummaryFromRow(db: Database.Database, row: MapRow): MapSummary {
-  const riverCount = db.prepare("SELECT COUNT(*) AS count FROM features WHERE map_id = ? AND kind = 'river'").get(row.id) as
-    | { count: number }
-    | undefined;
+  const riverCount = db.prepare("SELECT COUNT(*) AS count, MIN(bounds_min_row) AS min_row, MAX(bounds_max_row) AS max_row, MIN(bounds_min_col) AS min_col, MAX(bounds_max_col) AS max_col FROM features WHERE map_id = ? AND kind = 'river'").get(row.id) as { count: number } & MapBounds;
+  const renderBounds = mapRowToBounds(row);
+  for (const key of ["min_row", "max_row", "min_col", "max_col"] as const) {
+    const value = riverCount[key];
+    if (value !== null) renderBounds[key] = renderBounds[key] === null ? value : key.startsWith("min") ? Math.min(renderBounds[key]!, value) : Math.max(renderBounds[key]!, value);
+  }
   return {
     meta: mapRowToMeta(row),
     grid: mapRowToGrid(row),
     bounds: mapRowToBounds(row),
+    render_bounds: renderBounds,
     designed_cell_count: row.designed_cell_count,
     feature_counts: {
       rivers: riverCount?.count ?? 0
@@ -477,24 +475,8 @@ function readCellAt(db: Database.Database, id: string, row: number, col: number)
   return found ? cellRowToDesignedCell(found) : null;
 }
 
-function updateMapCellAggregate(db: Database.Database, id: string, revisionIncrement: number): MapRow {
+function updateMapCellAggregate(db: Database.Database, id: string, revisionIncrement: number, projected: MapSummary): MapRow {
   const row = getMapRowOrThrow(db, id);
-  const aggregate = db.prepare(
-    `SELECT
-       COUNT(*) AS count,
-       MIN(row) AS min_row,
-       MAX(row) AS max_row,
-       MIN(col) AS min_col,
-       MAX(col) AS max_col
-     FROM cells
-     WHERE map_id = ?`
-  ).get(id) as {
-    count: number;
-    min_row: number | null;
-    max_row: number | null;
-    min_col: number | null;
-    max_col: number | null;
-  };
   db.prepare(
     `UPDATE maps
      SET updated_at = @updated_at,
@@ -509,11 +491,11 @@ function updateMapCellAggregate(db: Database.Database, id: string, revisionIncre
     id,
     updated_at: revisionIncrement > 0 ? new Date().toISOString() : row.updated_at,
     revision: row.revision + revisionIncrement,
-    bounds_min_row: aggregate.count > 0 ? aggregate.min_row : null,
-    bounds_max_row: aggregate.count > 0 ? aggregate.max_row : null,
-    bounds_min_col: aggregate.count > 0 ? aggregate.min_col : null,
-    bounds_max_col: aggregate.count > 0 ? aggregate.max_col : null,
-    designed_cell_count: aggregate.count
+    bounds_min_row: projected.designed_cell_count > 0 ? projected.bounds.min_row : null,
+    bounds_max_row: projected.designed_cell_count > 0 ? projected.bounds.max_row : null,
+    bounds_min_col: projected.designed_cell_count > 0 ? projected.bounds.min_col : null,
+    bounds_max_col: projected.designed_cell_count > 0 ? projected.bounds.max_col : null,
+    designed_cell_count: projected.designed_cell_count
   });
   return getMapRowOrThrow(db, id);
 }
@@ -1155,6 +1137,7 @@ export function applyCellWriteChangesSync(
     if (changes.length === 0) {
       return row;
     }
+    const projected = previewCellChangesSync(normalizedId, changes);
     const deleteCell = db.prepare("DELETE FROM cells WHERE map_id = ? AND row = ? AND col = ?");
     const upsertCell = db.prepare(
       `INSERT INTO cells (map_id, row, col, terrain, biome, tags_json, note)
@@ -1180,7 +1163,7 @@ export function applyCellWriteChangesSync(
         note: change.cell.note
       });
     }
-    return updateMapCellAggregate(db, row.id, options.revisionIncrement ?? 1);
+    return updateMapCellAggregate(db, row.id, options.revisionIncrement ?? 1, projected);
   };
   if (options.dryRun) {
     db.prepare("SAVEPOINT cell_write_preview").run();

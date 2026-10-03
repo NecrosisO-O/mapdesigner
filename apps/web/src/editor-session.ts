@@ -1,8 +1,9 @@
-import { getHistoryLimitForDesignedCellCount, type ActiveCell, type CellRange, type MapFeatures, type MapRuntimeState, type MapSummary } from "@mapdesigner/map-core";
+import { getHistoryLimitForDesignedCellCount, type ActiveCell, type CellRange, type MapFeatures, type MapOverview, type MapRuntimeState, type MapSummary } from "@mapdesigner/map-core";
 import type { MapHistory } from "./api.js";
 
 export interface EditorSession {
   summary: MapSummary;
+  overview?: MapOverview | null;
   features: MapFeatures;
   cells: ActiveCell[];
   range: CellRange | null;
@@ -35,9 +36,11 @@ export function runtimeSummary(map: MapRuntimeState): MapSummary {
     designed_cell_count: map.document.cells.length, feature_counts: { rivers: map.document.features.rivers.length } };
 }
 
+export interface RangeData { cells: ActiveCell[]; features: MapFeatures; overview?: MapOverview | null }
+
 /** Cache display data only; selections and drafts never depend on its lifetime. */
 export class ViewportCache {
-  private entries = new Map<string, { cells: ActiveCell[]; features: MapFeatures }>();
+  private entries = new Map<string, RangeData>();
   constructor(private readonly cellBudget = 60_000, private readonly rangeBudget = 8) {}
   clear(): void { this.entries.clear(); }
   get(key: string) {
@@ -45,15 +48,19 @@ export class ViewportCache {
     if (entry) { this.entries.delete(key); this.entries.set(key, entry); }
     return entry;
   }
-  set(key: string, value: { cells: ActiveCell[]; features: MapFeatures }): void {
-    this.entries.delete(key); this.entries.set(key, value);
-    let count = [...this.entries.values()].reduce((sum, entry) => sum + entry.cells.length, 0);
+  set(key: string, value: RangeData): void {
+    this.entries.delete(key);
+    const weight = value.cells.length + (value.overview?.tiles.length ?? 0) + value.features.rivers.reduce((sum, river) => sum + river.points.length, 0);
+    if (weight > this.cellBudget) return;
+    this.entries.set(key, value);
+    let count = [...this.entries.values()].reduce((sum, entry) => sum + entry.cells.length + (entry.overview?.tiles.length ?? 0) + entry.features.rivers.reduce((n, river) => n + river.points.length, 0), 0);
     while (this.entries.size > 1 && (count > this.cellBudget || this.entries.size > this.rangeBudget)) {
       const oldest = this.entries.keys().next().value!;
-      count -= this.entries.get(oldest)!.cells.length;
+      const entry = this.entries.get(oldest)!;
+      count -= entry.cells.length + (entry.overview?.tiles.length ?? 0) + entry.features.rivers.reduce((n, river) => n + river.points.length, 0);
       this.entries.delete(oldest);
     }
   }
   get size(): number { return this.entries.size; }
-  get cellCount(): number { return [...this.entries.values()].reduce((sum, entry) => sum + entry.cells.length, 0); }
+  get cellCount(): number { return [...this.entries.values()].reduce((sum, entry) => sum + entry.cells.length + (entry.overview?.tiles.length ?? 0) + entry.features.rivers.reduce((n, river) => n + river.points.length, 0), 0); }
 }

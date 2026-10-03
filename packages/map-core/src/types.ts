@@ -77,6 +77,7 @@ export interface MapSummary {
   meta: MapMeta;
   grid: GridConfig;
   bounds: MapBounds;
+  render_bounds?: MapBounds;
   designed_cell_count: number;
   feature_counts: {
     rivers: number;
@@ -88,6 +89,15 @@ export interface CellRange {
   maxRow: number;
   minCol: number;
   maxCol: number;
+}
+
+export interface MapOverview {
+  map_id: string;
+  revision: number;
+  range: CellRange;
+  bucket_size: number;
+  designed_cell_count: number;
+  tiles: Array<{ row: number; col: number; count: number; terrain: TerrainKey | null; river: boolean }>;
 }
 
 export interface CellRangeResult {

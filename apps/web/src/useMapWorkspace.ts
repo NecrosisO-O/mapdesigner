@@ -1,7 +1,7 @@
 import type { ActiveCell, CellChangeDetail, CellRange, MapCommand, MapFeatures, MapRuntimeState, MapSummary } from "@mapdesigner/map-core";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, type ApiEnvelope, type CommandApplyResponse, type HistoryMoveResult, type MapHistory, type MapListItem } from "./api.js";
-import { runtimeSummary, sessionRuntime, ViewportCache, type EditorSession } from "./editor-session.js";
+import { runtimeSummary, sessionRuntime, ViewportCache, type EditorSession, type RangeData } from "./editor-session.js";
 
 export function formatDateTime(value: string): string {
   const date = new Date(value);
@@ -16,16 +16,16 @@ export function formatStatusMessage(message: string | undefined, fallback: strin
 const keyOf = (range: CellRange) => [range.minRow, range.maxRow, range.minCol, range.maxCol].join(":");
 function normalizeRange(range: CellRange): CellRange {
   const span = (min: number, max: number) => {
-    if (max - min + 13 > 160) { const center = Math.floor((min + max) / 2); min = center - 80; max = center + 79; }
-    else { min -= 6; max += 6; }
+    min -= 6; max += 6;
     return [Math.floor(min / 24) * 24, Math.ceil((max + 1) / 24) * 24 - 1] as const;
   };
   const [minRow, maxRow] = span(range.minRow, range.maxRow), [minCol, maxCol] = span(range.minCol, range.maxCol);
   return { minRow, maxRow, minCol, maxCol };
 }
 function initialRange(summary: MapSummary): CellRange {
-  return normalizeRange({ minRow: summary.bounds.min_row ?? -1, maxRow: summary.bounds.max_row ?? 1,
-    minCol: summary.bounds.min_col ?? -1, maxCol: summary.bounds.max_col ?? 1 });
+  const bounds = summary.render_bounds ?? summary.bounds;
+  return normalizeRange({ minRow: bounds.min_row ?? -1, maxRow: bounds.max_row ?? 1,
+    minCol: bounds.min_col ?? -1, maxCol: bounds.max_col ?? 1 });
 }
 const errorMessage = (response: { errors?: Array<{ message?: string }> }, fallback: string) => formatStatusMessage(response.errors?.[0]?.message, fallback);
 
@@ -112,6 +112,16 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
       return features;
     } catch (error) { if (valid(epoch, id)) setMessage((error as Error).message); return null; }
   }
+  async function readRange(id: string, range: CellRange, epoch: number): Promise<RangeData> {
+    if ((range.maxRow - range.minRow + 1) * (range.maxCol - range.minCol + 1) > 40_000) {
+      const response = await api.getOverview(id, range);
+      if (!response.ok || !response.result) throw new Error(errorMessage(response, "加载地图概览失败"));
+      return { cells: [], features: { rivers: [] }, overview: response.result };
+    }
+    const [response, features] = await Promise.all([api.getCellsInRange(id, range, true), readFeatures(id, range, epoch)]);
+    if (!response.ok || !response.result) throw new Error(errorMessage(response, "加载可视单元格失败"));
+    return { cells: response.result.cells, features, overview: null };
+  }
   async function openMap(id: string): Promise<MapRuntimeState | null> {
     const epoch = beginSwitch();
     try {
@@ -119,12 +129,11 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
       if (!valid(epoch)) return null;
       if (!response.ok || !response.result) throw new Error(errorMessage(response, "打开地图失败"));
       const summary = response.result, range = initialRange(summary);
-      const [cells, features] = await Promise.all([api.getCellsInRange(id, range, true), readFeatures(id, range, epoch)]);
+      const data = await readRange(id, range, epoch);
       if (!valid(epoch)) return null;
-      if (!cells.ok || !cells.result) throw new Error(errorMessage(cells, "加载可视单元格失败"));
-      const next: EditorSession = { summary, range, features, cells: cells.result.cells, nameDraft: null, history: null };
+      const next: EditorSession = { summary, range, ...data, nameDraft: null, history: null };
       publish(next); suppressAutoOpen.current = false; setIsRenaming(false); setRenameDraft(summary.meta.name);
-      cache.current.set(id + ":" + summary.meta.revision + ":" + keyOf(range), { cells: next.cells, features });
+      cache.current.set(id + ":" + summary.meta.revision + ":" + keyOf(range), data);
       await refreshMapHistory(id);
       if (!valid(epoch, id)) return null;
       setMessage("已打开 " + summary.meta.name);
@@ -142,11 +151,9 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
     try {
       let data = force ? undefined : cache.current.get(key);
       if (!data) {
-        const [response, features] = await Promise.all([api.getCellsInRange(id, nextRange, true), readFeatures(id, nextRange, epoch)]);
+        data = await readRange(id, nextRange, epoch);
         if (!valid(epoch, id) || seq !== rangeRequest.current) return null;
-        if (!response.ok || !response.result) throw new Error(errorMessage(response, "加载可视单元格失败"));
         if (sessionRef.current!.summary.meta.revision !== current.summary.meta.revision) return null;
-        data = { cells: response.result.cells, features };
         cache.current.set(key, data);
       }
       if (!valid(epoch, id) || seq !== rangeRequest.current) return null;
@@ -301,6 +308,7 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
   useEffect(() => { if (!isRenaming) setRenameDraft(currentMap?.document.meta.name ?? ""); }, [currentMap?.document.meta.name, isRenaming]);
   return {
     importProgress, cancelImport: () => importAbort.current?.abort(),
+    overview: session?.overview ?? null,
     maps, currentMap, visibleMap: currentMap, currentMapId, mapSummary: session?.summary ?? null,
     mapHistory: session?.history ?? null, displayMaps, isRenaming, renameDraft, loading, pendingCount, mapDirty,
     visibleRange: session?.range ?? null, fileInputRef, setRenameDraft,

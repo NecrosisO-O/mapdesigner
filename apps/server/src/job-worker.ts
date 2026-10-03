@@ -11,6 +11,7 @@ function beforeCommit(): void {
   // Cancellation and commit race through a single atomic state transition.
   if (Atomics.compareExchange(flag, 0, 0, 2) !== 0) throw new Error("任务已取消");
 }
+let completion: Record<string, unknown>;
 try {
   let result: unknown;
   if (input.kind === "import") {
@@ -31,10 +32,12 @@ try {
     }
     beforeCommit();
   }
-  parentPort!.postMessage({ result });
+  completion = { result };
 } catch (error) {
-  parentPort!.postMessage({ error: error instanceof Error ? error.message : "任务失败", cancelled: Atomics.load(flag, 0) === 1 });
+  completion = { error: error instanceof Error ? error.message : "任务失败", cancelled: Atomics.load(flag, 0) === 1 };
 } finally {
   closeDatabaseForTests();
   if (input.kind === "import") await fs.rm(input.filePath, { force: true });
 }
+
+parentPort!.postMessage(completion);

@@ -1,3 +1,4 @@
+import { getOverview } from "./overview.js";
 import { registerJobs } from "./jobs.js";
 import { downloadUrl } from "./downloads.js";
 import fs from "node:fs/promises";
@@ -240,6 +241,11 @@ export async function createServer(): Promise<FastifyInstance> {
       return sendError(reply, "map_summary_failed", error, 404);
     }
   });
+
+  app.get<{ Params: { id: string }; Querystring: Record<string, string> }>("/api/maps/:id/overview", async request => createEnvelope({ result: await getOverview(request.params.id, {
+    minRow: readIntegerQuery(request.query.minRow, "minRow"), maxRow: readIntegerQuery(request.query.maxRow, "maxRow"),
+    minCol: readIntegerQuery(request.query.minCol, "minCol"), maxCol: readIntegerQuery(request.query.maxCol, "maxCol")
+  }) }));
 
   app.get<{ Params: { id: string } }>("/api/maps/:id/features", async (request, reply) => {
     try {

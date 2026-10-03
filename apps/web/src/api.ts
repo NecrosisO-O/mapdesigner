@@ -1,5 +1,6 @@
 import type {
   CellRange,
+  MapOverview,
   CellRangeResult,
   CellChangeDetail,
   ExportRenderOptions,
@@ -163,6 +164,7 @@ export const api = {
     }
     return request<MapFeaturePage>(`/api/maps/${id}/features/range?${params.toString()}`);
   },
+  getOverview: (id: string, range: CellRange) => request<MapOverview>("/api/maps/" + id + "/overview?" + new URLSearchParams(Object.fromEntries(Object.entries(range).map(([key, value]) => [key, String(value)]))).toString()),
   getMapHistory: (id: string, limit = 5) => request<MapHistory>(`/api/maps/${id}/history?limit=${limit}`),
   getHistoryStatus: (id: string) => request<HistoryStatus>(`/api/maps/${id}/history-status`),
   getCellsInRange: (id: string, range: CellRange, includeUndesigned = true) =>
