@@ -1,5 +1,10 @@
-import type { ValidationIssue } from "./types.js";
-import { validateCoordinate, validateRiverPoint } from "./validation.js";
+import type { RiverFeature, ValidationIssue } from "./types.js";
+import {
+  isRiverId,
+  validateCoordinate,
+  validateRiverFeature,
+  validateRiverPoint
+} from "./validation.js";
 
 /** Check untyped input before command evaluation dereferences or normalizes it. */
 export function validateCommandInput(input: unknown): ValidationIssue[] {
@@ -13,8 +18,14 @@ export function validateCommandInput(input: unknown): ValidationIssue[] {
     return issues;
   }
   const action = input.action;
+  if (action === "set_map_style" && !["classic-v1", "atlas-v1"].includes(String(input.style)))
+    invalid("style", "unknown map style");
   if (
     ![
+      "set_map_style",
+      "connect_river_points",
+      "disconnect_river_point",
+      "restore_rivers",
       "patch_cells",
       "set_cell",
       "set_cells",
@@ -34,6 +45,30 @@ export function validateCommandInput(input: unknown): ValidationIssue[] {
   }
   if (input.source !== undefined && !["system", "webui", "cli"].includes(String(input.source)))
     invalid("source", "unknown command source");
+  if (action === "connect_river_points" || action === "disconnect_river_point") {
+    const refs = action === "connect_river_points" ? input.points : [input.point];
+    if (!Array.isArray(refs) || (action === "connect_river_points" && refs.length < 2))
+      invalid("points", "a connection needs at least two controls");
+    else
+      for (const ref of refs)
+        if (
+          !record(ref) ||
+          !isRiverId(ref.river_id) ||
+          !Number.isSafeInteger(ref.point_index) ||
+          Number(ref.point_index) < 0
+        )
+          invalid("points", "invalid river point reference");
+  }
+  if (action === "restore_rivers") {
+    if (!Array.isArray(input.rivers) || !Array.isArray(input.remove_ids))
+      invalid("rivers", "rivers and remove_ids must be arrays");
+    else {
+      input.rivers.forEach((river, index) => issues.push(...validateRiverFeature(river, index)));
+      if (input.remove_ids.some((id) => !isRiverId(id))) invalid("remove_ids", "invalid river id");
+      const ids = input.rivers.map((r) => (record(r) ? r.id : null));
+      if (new Set(ids).size !== ids.length) invalid("rivers", "duplicate river ids");
+    }
+  }
   if (["set_cell", "clear_cell", "annotate_cell", "set_river_width"].includes(String(action))) {
     issues.push(...validateCoordinate(input.target as never, "target"));
   }
@@ -63,6 +98,13 @@ export function validateCommandInput(input: unknown): ValidationIssue[] {
     if (!record(input.changes)) invalid("changes", "changes must be an object");
     else {
       const changes = input.changes;
+      for (const [key, allowed] of Object.entries({
+        flow_direction: ["unspecified", "forward", "reverse"],
+        start_kind: ["auto", "spring", "water", "open"],
+        end_kind: ["auto", "spring", "water", "open"]
+      }))
+        if (changes[key] !== undefined && !allowed.includes(String(changes[key])))
+          invalid(`changes.${key}`, `unknown ${key}`);
       if (
         changes.width_mode !== undefined &&
         changes.width_mode !== "legacy" &&
@@ -112,5 +154,9 @@ export function validateCommandInput(input: unknown): ValidationIssue[] {
       for (const [i, point] of points.entries())
         issues.push(...validateRiverPoint(point, "points[" + i + "]"));
   }
+  if (action === "create_river" && record(input.river))
+    issues.push(
+      ...validateRiverFeature({ ...input.river, id: input.river.id ?? "pending" } as RiverFeature)
+    );
   return issues;
 }

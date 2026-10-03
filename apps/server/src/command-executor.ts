@@ -35,6 +35,7 @@ import {
   moveHistoryCursorSync,
   previewCellChangesSync,
   recordOperationSync,
+  setMapStyleSync,
   withMapTransaction,
   type CellWriteChange,
   type FeatureWriteChange
@@ -71,22 +72,18 @@ function riverDiff(before: RiverFeature[], after: RiverFeature[]) {
       b = next.get(id);
     if (JSON.stringify(a) === JSON.stringify(b)) continue;
     writes.push({ kind: "river", featureId: id, river: b ?? null });
-    if (!a) inverse.push({ action: "delete_river", source: "system", river_id: id });
-    else if (!b) inverse.push({ action: "create_river", source: "system", river: a });
-    else
-      inverse.push({
-        action: "update_river",
-        source: "system",
-        river_id: id,
-        changes: {
-          name: a.name,
-          points: a.points,
-          width_mode: a.width_mode ?? "legacy",
-          color: a.color ?? null,
-          opacity: a.opacity ?? null
-        }
-      });
   }
+  if (writes.length)
+    inverse.push({
+      action: "restore_rivers",
+      source: "system",
+      rivers: writes.flatMap((write) =>
+        previous.has(write.featureId) ? [previous.get(write.featureId)!] : []
+      ),
+      remove_ids: writes
+        .filter((write) => !previous.has(write.featureId))
+        .map((write) => write.featureId)
+    });
   return { writes, inverse };
 }
 
@@ -174,9 +171,12 @@ function executeSync(
     ) {
       throw badRequest("note must be a string");
     }
+    const beforeStyle = state.document.meta.map_style ?? "classic-v1";
     const beforeRivers = state.document.features.rivers;
     const result = applyCommand(state, command, { legacyRiverWidths });
     if (!result.ok) throw badRequest(result.errors.map((e) => e.message).join("; "), result.errors);
+    if (beforeStyle !== result.map.document.meta.map_style)
+      inverse.unshift({ action: "set_map_style", style: beforeStyle, source: "system" });
     const features = riverDiff(beforeRivers, result.map.document.features.rivers);
     for (const write of features.writes) featureWrites.set(write.featureId, write);
     inverse.unshift(...features.inverse, ...result.details.map(inverseCell).reverse());
@@ -216,7 +216,7 @@ function executeSync(
   const stats = buildApplyChangeStats(commands, changes);
   let summary = previewCellChangesSync(id, [...writes.values()]);
   summary.meta = {
-    ...initial.meta,
+    ...state.document.meta,
     revision: initial.meta.revision + increment,
     updated_at: state.document.meta.updated_at
   };
@@ -226,6 +226,7 @@ function executeSync(
   if (!options.dryRun) {
     applyCellWriteChangesSync(id, [...writes.values()], { revisionIncrement: 0 });
     applyFeatureWriteChangesSync(id, [...featureWrites.values()], { revisionIncrement: 0 });
+    setMapStyleSync(id, state.document.meta.map_style ?? "classic-v1");
     advanceMapRevisionSync(id, increment);
     if (recordHistory && commands.length)
       recordOperationSync(id, {

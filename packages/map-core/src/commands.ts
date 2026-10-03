@@ -3,6 +3,11 @@ import { pushHistory } from "./history.js";
 import { validateCommandInput } from "./command-input.js";
 import { buildHexLine, prepareRiverEdit } from "./rivers.js";
 import { cloneDocument, normalizeDocument } from "./serialization.js";
+import {
+  connectRiverPoints,
+  propagateRiverJunctions,
+  validateRiverNetwork
+} from "./river-network.js";
 import type {
   ActiveCell,
   CellChangeDetail,
@@ -71,6 +76,7 @@ function normalizeRiverPoint(point: RiverPoint): RiverPoint {
   return {
     row: point.row,
     col: point.col,
+    ...(point.junction_id ? { junction_id: point.junction_id } : {}),
     ...(typeof point.width === "number" ? { width: point.width } : {})
   };
 }
@@ -81,6 +87,9 @@ function normalizeRiverFeature(river: RiverFeature): RiverFeature {
     name: river.name.trim(),
     points: river.points.map(normalizeRiverPoint),
     width_mode: river.width_mode ?? "distance",
+    flow_direction: river.flow_direction ?? "unspecified",
+    start_kind: river.start_kind ?? "auto",
+    end_kind: river.end_kind ?? "auto",
     ...(river.color ? { color: river.color } : {}),
     ...(typeof river.opacity === "number" ? { opacity: river.opacity } : {})
   };
@@ -196,6 +205,12 @@ function finalize(
   label: string,
   source: "webui" | "cli" | "system" = "system"
 ): CommandResult {
+  if (label.includes("river") && !errors.length) {
+    errors.push(
+      ...document.features.rivers.flatMap((river, index) => validateRiverFeature(river, index))
+    );
+    errors.push(...validateRiverNetwork(document.features.rivers));
+  }
   if (errors.some((entry) => entry.severity === "invalid")) {
     return {
       ok: false,
@@ -236,6 +251,45 @@ export function applyCommand(
   const source = command.source ?? "system";
 
   switch (command.action) {
+    case "connect_river_points": {
+      errors.push(...connectRiverPoints(working.features.rivers, command.points));
+      working.meta.revision += 1;
+      working.meta.updated_at = new Date().toISOString();
+      return finalize(state, working, [], [], errors, command.action, source);
+    }
+    case "disconnect_river_point": {
+      const point = working.features.rivers.find((r) => r.id === command.point.river_id)?.points[
+        command.point.point_index
+      ];
+      if (!point)
+        errors.push({
+          code: "missing_river_point",
+          message: "river point was not found",
+          severity: "invalid"
+        });
+      else delete point.junction_id;
+      working.meta.revision += 1;
+      working.meta.updated_at = new Date().toISOString();
+      return finalize(state, working, [], [], errors, command.action, source);
+    }
+    case "restore_rivers": {
+      const replaced = new Set([...command.remove_ids, ...command.rivers.map((r) => r.id)]);
+      working.features.rivers = [
+        ...working.features.rivers.filter((r) => !replaced.has(r.id)),
+        ...structuredClone(command.rivers)
+      ];
+      working.meta.revision += 1;
+      working.meta.updated_at = new Date().toISOString();
+      return finalize(state, working, [], [], [], command.action, source);
+    }
+    case "set_map_style": {
+      if (working.meta.map_style !== command.style) {
+        working.meta.map_style = command.style;
+        working.meta.updated_at = new Date().toISOString();
+        working.meta.revision += 1;
+      }
+      return finalize(state, working, [], [], [], command.action, source);
+    }
     case "patch_cells": {
       const cells = new Map(working.cells.map((cell) => [createCellId(cell.row, cell.col), cell]));
       if (command.changes.tags !== undefined)
@@ -651,6 +705,9 @@ export function applyCommand(
         name: command.river.name,
         points: command.river.points,
         width_mode: command.river.width_mode ?? widthMode,
+        flow_direction: command.river.flow_direction,
+        start_kind: command.river.start_kind,
+        end_kind: command.river.end_kind,
         color: command.river.color,
         opacity: command.river.opacity
       });
@@ -701,6 +758,9 @@ export function applyCommand(
           command.changes.width_mode ?? widthMode
         ),
         name: command.changes.name ?? existing.name,
+        flow_direction: command.changes.flow_direction ?? existing.flow_direction,
+        start_kind: command.changes.start_kind ?? existing.start_kind,
+        end_kind: command.changes.end_kind ?? existing.end_kind,
         color: command.changes.color === undefined ? existing.color : command.changes.color,
         opacity: command.changes.opacity === undefined ? existing.opacity : command.changes.opacity
       });
@@ -709,6 +769,7 @@ export function applyCommand(
         return finalize(state, working, [], warnings, errors, "update_river", source);
       }
       working.features.rivers[riverIndex] = next;
+      propagateRiverJunctions(working.features.rivers, existing, next);
       working.meta.updated_at = new Date().toISOString();
       working.meta.revision += 1;
       return finalize(state, working, [], warnings, [], "update_river", source);
@@ -782,6 +843,7 @@ export function applyCommand(
         return finalize(state, working, [], warnings, errors, "set_river_path", source);
       }
       working.features.rivers[riverIndex] = next;
+      propagateRiverJunctions(working.features.rivers, existing, next);
       working.meta.updated_at = new Date().toISOString();
       working.meta.revision += 1;
       return finalize(state, working, [], warnings, [], "set_river_path", source);

@@ -1,5 +1,6 @@
 import { BIOME_KEYS, TAG_KEYS, TERRAIN_KEYS } from "./dictionaries.js";
 import { MAX_RIVER_WIDTH, MIN_RIVER_WIDTH } from "./rivers.js";
+import { validateRiverNetwork } from "./river-network.js";
 import type {
   BiomeKey,
   DesignedCellRecord,
@@ -58,6 +59,14 @@ export function validateRiverPoint(point: RiverPoint, target: string): Validatio
   const issues = validateCoordinate(point, target);
   if (!point || typeof point !== "object") return issues;
   if (
+    point.junction_id !== undefined &&
+    point.junction_id !== null &&
+    !isRiverId(point.junction_id)
+  )
+    issues.push(
+      issue("invalid_junction", "junction_id must be a valid identifier", "invalid", target)
+    );
+  if (
     point.width !== undefined &&
     point.width !== null &&
     (typeof point.width !== "number" ||
@@ -80,6 +89,19 @@ export function validateRiverPoint(point: RiverPoint, target: string): Validatio
 export function validateRiverFeature(river: RiverFeature, index = 0): ValidationIssue[] {
   const target = `features.rivers[${index}]`;
   const issues: ValidationIssue[] = [];
+  if (!river || typeof river !== "object")
+    return [issue("invalid_river", "river must be an object", "invalid", target)];
+  for (const [key, allowed] of Object.entries({
+    flow_direction: ["unspecified", "forward", "reverse"],
+    start_kind: ["auto", "spring", "water", "open"],
+    end_kind: ["auto", "spring", "water", "open"]
+  })) {
+    const value = river[key as "flow_direction" | "start_kind" | "end_kind"];
+    if (value !== undefined && !allowed.includes(value))
+      issues.push(
+        issue("invalid_river_semantics", `unknown ${key}`, "invalid", `${target}.${key}`)
+      );
+  }
   if (
     river.width_mode !== undefined &&
     river.width_mode !== "legacy" &&
@@ -320,6 +342,11 @@ export function validateMapDocument(document: unknown): ValidationIssue[] {
     if (!value.meta.id) {
       issues.push(issue("invalid_meta_id", "meta.id is required", "invalid", "meta.id"));
     }
+    if (
+      value.meta.map_style !== undefined &&
+      !["classic-v1", "atlas-v1"].includes(value.meta.map_style)
+    )
+      issues.push(issue("invalid_map_style", "unknown map style", "invalid", "meta.map_style"));
     if (!value.meta.name) {
       issues.push(issue("invalid_meta_name", "meta.name is required", "invalid", "meta.name"));
     }
@@ -375,8 +402,10 @@ export function validateMapDocument(document: unknown): ValidationIssue[] {
         );
       } else {
         const seenRiverIds = new Set<string>();
+        issues.push(...validateRiverNetwork(value.features.rivers));
         value.features.rivers.forEach((river, index) => {
           issues.push(...validateRiverFeature(river, index));
+          if (!river) return;
           if (seenRiverIds.has(river.id)) {
             issues.push(
               issue(

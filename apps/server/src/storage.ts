@@ -98,8 +98,13 @@ export async function writeFileAtomicStream(
     `.${path.basename(filePath)}.${process.pid}.${crypto.randomBytes(6).toString("hex")}.tmp`
   );
   const stream = createWriteStream(temporaryPath);
+  let streamError: Error | null = null;
+  stream.on("error", (error) => {
+    streamError = error;
+  });
   let closed = false;
   const closeStream = async (): Promise<void> => {
+    if (streamError) throw streamError;
     if (closed) {
       return;
     }
@@ -114,6 +119,10 @@ export async function writeFileAtomicStream(
     await writeContent(
       (chunk) =>
         new Promise<void>((resolve, reject) => {
+          if (streamError) {
+            reject(streamError);
+            return;
+          }
           stream.write(chunk, (error) => {
             if (error) {
               reject(error);
