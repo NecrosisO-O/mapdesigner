@@ -13,11 +13,15 @@ import {
   type MapCommand,
   type MapRuntimeState,
   type TagKey,
-  type TerrainCategoryKey,
   type TerrainKey
 } from "@mapdesigner/map-core";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type SetStateAction } from "react";
 
+import { useEditorTask } from "./useEditorTask.js";
+
+export type BatchField = "terrain" | "biome" | "tags" | "note";
+export type FieldMode = "keep" | "set" | "clear";
+const INITIAL_MODES: Record<BatchField, FieldMode> = { terrain: "keep", biome: "keep", tags: "keep", note: "keep" };
 const NONE_BIOME_VALUE = "__none__";
 
 export interface BatchEditDraft {
@@ -66,8 +70,11 @@ export function useAdvancedEditor(
   applyCommands: (commands: MapCommand[]) => Promise<MapRuntimeState | null>,
   setMessage: (message: string) => void
 ) {
-  const [batchSelectedCellIds, setBatchSelectedCellIds] = useState<Set<string>>(() => new Set());
-  const [batchDraft, setBatchDraft] = useState<BatchEditDraft>({
+  const [selection, setSelection] = useState<Map<string, ActiveCell>>(() => new Map());
+  const batchSelectedCellIds = useMemo(() => new Set(selection.keys()), [selection]);
+  const [batchModes, setBatchModes] = useState(INITIAL_MODES);
+  const task = useEditorTask(currentMap?.document.meta.id);
+  const [batchDraft, updateBatchDraft] = useState<BatchEditDraft>({
     terrainCategory: "",
     terrain: "",
     biome: "",
@@ -84,14 +91,26 @@ export function useAdvancedEditor(
     replacementBiome: ""
   });
 
-  const batchSelectedCells = useMemo(() => {
-    if (!currentMap) {
-      return [];
-    }
-    return currentMap.activeCells
-      .filter((cell) => batchSelectedCellIds.has(cell.id))
-      .sort(sortCells);
-  }, [batchSelectedCellIds, currentMap]);
+  const batchSelectedCells = useMemo(() => [...selection.values()].sort(sortCells), [selection]);
+  const draftRef = useRef(batchDraft);
+  draftRef.current = batchDraft;
+  function setBatchDraft(action: SetStateAction<BatchEditDraft>): void {
+    const previous = draftRef.current;
+    const next = typeof action === "function" ? action(previous) : action;
+    draftRef.current = next;
+    updateBatchDraft(next);
+    setBatchModes(modes => {
+      const updated = { ...modes };
+      for (const field of ["terrain", "biome", "tags", "note"] as const) {
+        if (next[field] !== previous[field]) updated[field] = next[field] === "" || (Array.isArray(next[field]) && !next[field].length) ? (field === "terrain" ? "keep" : "clear") : "set";
+      }
+      return updated;
+    });
+  }
+  function setBatchFieldMode(field: BatchField, mode: FieldMode): void {
+    if (field === "terrain" && mode === "clear") return;
+    setBatchModes(modes => ({ ...modes, [field]: mode }));
+  }
 
   const batchFilteredTerrainCategories = batchDraft.biome
     ? getAllowedTerrainCategoriesForBiome(batchDraft.biome)
@@ -105,63 +124,23 @@ export function useAdvancedEditor(
     : [];
 
   function toggleBatchCell(cell: ActiveCell): void {
-    setBatchSelectedCellIds((current) => {
-      const next = new Set(current);
-      if (next.has(cell.id)) {
-        next.delete(cell.id);
-      } else {
-        next.add(cell.id);
-      }
+    setSelection(current => {
+      const next = new Map(current);
+      if (next.has(cell.id)) next.delete(cell.id); else next.set(cell.id, cell);
       return next;
     });
   }
 
-  function clearBatchSelection(): void {
-    setBatchSelectedCellIds(new Set());
-  }
+  function clearBatchSelection(): void { setSelection(new Map()); }
 
   function setBatchTerrainCategory(nextCategory: string): void {
-    setBatchDraft((current) => {
-      const allowedTerrains = new Set(
-        getFilteredTerrainEntries(nextCategory, current.biome || undefined).map((entry) => entry.key)
-      );
-      return {
-        ...current,
-        terrainCategory: nextCategory,
-        terrain: current.terrain && allowedTerrains.has(current.terrain as TerrainKey) ? current.terrain : ""
-      };
-    });
+    setBatchDraft(current => ({ ...current, terrainCategory: nextCategory }));
   }
-
   function setBatchTerrain(nextTerrain: string): void {
-    setBatchDraft((current) => {
-      const allowedBiomes = new Set(nextTerrain ? getAllowedBiomesForTerrain(nextTerrain) : []);
-      return {
-        ...current,
-        terrainCategory: nextTerrain ? terrainCategoryOf(nextTerrain) : current.terrainCategory,
-        terrain: nextTerrain,
-        biome: current.biome && !allowedBiomes.has(current.biome as BiomeKey) ? "" : current.biome
-      };
-    });
+    setBatchDraft(current => ({ ...current, terrainCategory: terrainCategoryOf(nextTerrain), terrain: nextTerrain }));
   }
-
   function setBatchBiome(nextBiome: string): void {
-    setBatchDraft((current) => {
-      const filteredCategories = nextBiome ? getAllowedTerrainCategoriesForBiome(nextBiome) : TERRAIN_CATEGORY_ORDER;
-      const allowedTerrains = nextBiome ? new Set(getFilteredTerrainEntries(current.terrainCategory, nextBiome).map((entry) => entry.key)) : null;
-      return {
-        ...current,
-        biome: nextBiome,
-        terrainCategory:
-          current.terrainCategory && filteredCategories.includes(current.terrainCategory as TerrainCategoryKey)
-            ? current.terrainCategory
-            : "",
-        terrain:
-          nextBiome && current.terrain && allowedTerrains && !allowedTerrains.has(current.terrain as TerrainKey)
-            ? ""
-            : current.terrain
-      };
-    });
+    setBatchDraft(current => ({ ...current, biome: nextBiome }));
   }
 
   function setBatchTag(tag: TagKey, checked: boolean): void {
@@ -181,24 +160,21 @@ export function useAdvancedEditor(
       setMessage("请先选择要批量编辑的单元格");
       return null;
     }
-    if (!batchDraft.terrain) {
-      setMessage("批量设置必须选择 terrain");
-      return null;
-    }
-    const result = await applyCommands([{
-      action: "set_cells",
-      source: "webui",
-      targets: batchSelectedCells.map((cell) => ({ row: cell.row, col: cell.col })),
-      changes: {
-        terrain: batchDraft.terrain as TerrainKey,
-        biome: batchDraft.biome ? (batchDraft.biome as BiomeKey) : null,
-        tags: batchDraft.tags,
-        note: batchDraft.note
-      }
-    }]);
+    const changes: Extract<MapCommand, { action: "patch_cells" }>["changes"] = {};
+    if (batchModes.terrain === "set") changes.terrain = batchDraft.terrain as TerrainKey;
+    if (batchModes.biome !== "keep") changes.biome = batchModes.biome === "clear" ? null : batchDraft.biome as BiomeKey;
+    if (batchModes.tags !== "keep") changes.tags = batchModes.tags === "clear" ? [] : batchDraft.tags;
+    if (batchModes.note !== "keep") changes.note = batchModes.note === "clear" ? "" : batchDraft.note;
+    if (!Object.keys(changes).length) { setMessage("请选择需要修改的字段"); return null; }
+    const submitted = draftRef.current;
+    const result = await task.run(() => applyCommands([{
+      action: "patch_cells", source: "webui",
+      targets: batchSelectedCells.map(cell => ({ row: cell.row, col: cell.col })), changes
+    }]));
     if (!result) {
       return null;
     }
+    if (draftRef.current === submitted) setBatchModes(INITIAL_MODES);
     setMessage(`已批量设置 ${batchSelectedCells.length} 个单元格并保存到服务器`);
     return result;
   }
@@ -236,7 +212,7 @@ export function useAdvancedEditor(
       setMessage("匹配 terrain 与目标 terrain 相同");
       return null;
     }
-    const result = await applyCommands([{
+    const result = await task.run(() => applyCommands([{
       action: "replace_terrain",
       source: "webui",
       match: {
@@ -245,7 +221,7 @@ export function useAdvancedEditor(
       changes: {
         terrain: replaceTerrainDraft.replacementTerrain as TerrainKey
       }
-    }]);
+    }]));
     if (!result) {
       return null;
     }
@@ -267,7 +243,7 @@ export function useAdvancedEditor(
       setMessage("匹配 biome 与目标 biome 相同");
       return null;
     }
-    const result = await applyCommands([{
+    const result = await task.run(() => applyCommands([{
       action: "replace_biome",
       source: "webui",
       match: {
@@ -276,7 +252,7 @@ export function useAdvancedEditor(
       changes: {
         biome: replacementBiome
       }
-    }]);
+    }]));
     if (!result) {
       return null;
     }
@@ -285,27 +261,14 @@ export function useAdvancedEditor(
   }
 
   useEffect(() => {
-    if (!currentMap) {
-      setBatchSelectedCellIds(new Set());
-    }
-  }, [currentMap]);
-
-  useEffect(() => {
-    setBatchSelectedCellIds(new Set());
+    setSelection(new Map());
+    setBatchModes(INITIAL_MODES);
+    updateBatchDraft({ terrainCategory: "", terrain: "", biome: "", tags: [], note: "" });
   }, [currentMap?.document.meta.id]);
 
-  useEffect(() => {
-    if (!currentMap) {
-      return;
-    }
-    const activeIds = new Set(currentMap.activeCells.map((cell) => cell.id));
-    setBatchSelectedCellIds((current) => {
-      const next = new Set([...current].filter((id) => activeIds.has(id)));
-      return next.size === current.size ? current : next;
-    });
-  }, [currentMap]);
-
   return {
+    pending: task.pending, batchModes, setBatchFieldMode,
+    batchDirty: batchSelectedCells.length > 0 && Object.values(batchModes).some(mode => mode !== "keep"),
     batchSelectedCellIds,
     batchSelectedCells,
     batchDraft,

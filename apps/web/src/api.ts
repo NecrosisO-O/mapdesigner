@@ -47,6 +47,7 @@ export interface MapHistory {
 }
 
 export interface HistoryMoveResult {
+  changes?: CellChangeDetail[];
   map?: MapRuntimeState;
   summary?: MapSummary;
   features?: MapFeatures;
@@ -90,19 +91,35 @@ export interface CommandApplyResponse {
   };
 }
 
-async function request<T>(input: RequestInfo, init?: RequestInit): Promise<ApiEnvelope<T>> {
-  const headers =
-    init?.body === undefined
-      ? init?.headers
-      : {
-          "Content-Type": "application/json",
-          ...(init?.headers ?? {})
-        };
-  const response = await fetch(input, {
-    ...init,
-    headers
-  });
-  return response.json() as Promise<ApiEnvelope<T>>;
+function failure<T>(message: string, code = "request_failed"): ApiEnvelope<T> {
+  return { ok: false, warnings: [], errors: [{ code, message, severity: "invalid" }] };
+}
+
+export async function request<T>(input: RequestInfo, init?: RequestInit): Promise<ApiEnvelope<T>> {
+  const headers = new Headers(init?.headers);
+  if (init?.body !== undefined && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
+  let token = "";
+  try { token = sessionStorage.getItem("mapdesigner-access-token") ?? ""; } catch { /* Storage may be unavailable. */ }
+  if (token) headers.set("Authorization", "Bearer " + token);
+  try {
+    const response = await fetch(input, { ...init,
+      headers: [...headers.keys()].length ? Object.fromEntries(headers.entries()) : undefined,
+      signal: init?.signal ?? AbortSignal.timeout(30000)
+    });
+    let data: unknown;
+    try { data = await response.json(); } catch { return failure("服务器返回了无法读取的响应（HTTP " + response.status + "）"); }
+    if (!data || typeof data !== "object") return failure("服务器响应格式错误");
+    const value = data as Record<string, unknown>;
+    if (typeof value.ok !== "boolean") return failure(typeof value.message === "string" ? value.message : "请求失败（HTTP " + response.status + "）", typeof value.code === "string" ? value.code : "http_error");
+    const errors = Array.isArray(value.errors) ? value.errors as ApiEnvelope<T>["errors"] : [];
+    const ok = value.ok && response.ok !== false;
+    return { ok, ...(value.result !== undefined ? { result: value.result as T } : {}),
+      warnings: Array.isArray(value.warnings) ? value.warnings as ApiEnvelope<T>["warnings"] : [],
+      errors: !ok && !errors.length ? [{ code: "http_error", message: "请求失败（HTTP " + response.status + "）", severity: "invalid" }] : errors };
+  } catch (error) {
+    return failure(error instanceof Error && ["AbortError", "TimeoutError"].includes(error.name)
+      ? "请求已取消或超时，请重试" : "无法连接服务器，请检查服务是否运行", "network_error");
+  }
 }
 
 export const api = {
@@ -151,10 +168,10 @@ export const api = {
       method: "POST",
       body: JSON.stringify(input)
     }),
-  applyCommands: (id: string, commands: MapCommand[], options: { dryRun?: boolean; includeMap?: boolean } = {}) =>
+  applyCommands: (id: string, commands: MapCommand[], options: { dryRun?: boolean; includeMap?: boolean; expectedRevision?: number } = {}) =>
     request<CommandApplyResponse>(`/api/maps/${id}/commands${options.dryRun ? "/dry-run" : ""}?includeMap=${options.includeMap ?? true}`, {
       method: "POST",
-      body: JSON.stringify({ commands })
+      body: JSON.stringify({ commands, ...(options.expectedRevision !== undefined ? { expectedRevision: options.expectedRevision } : {}) })
     }),
   duplicateMap: (id: string) =>
     request<MapRuntimeState>(`/api/maps/${id}/duplicate`, {

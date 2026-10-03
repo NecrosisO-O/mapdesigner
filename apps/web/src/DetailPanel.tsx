@@ -1,3 +1,4 @@
+import type { BatchField, FieldMode } from "./useAdvancedEditor.js";
 import {
   BIOME_ENTRIES,
   TAG_ENTRIES,
@@ -54,6 +55,8 @@ interface DetailPanelProps {
   batchModeActive: boolean;
   batchSelectedCount: number;
   batchDraft: BatchEditDraft;
+  batchModes: Record<BatchField, FieldMode>;
+  onBatchFieldModeChange: (field: BatchField, mode: FieldMode) => void;
   replaceTerrainDraft: ReplaceTerrainDraft;
   replaceBiomeDraft: ReplaceBiomeDraft;
   batchFilteredTerrainCategories: TerrainCategoryKey[];
@@ -277,6 +280,8 @@ export function DetailPanel(props: DetailPanelProps) {
         batchModeActive={props.batchModeActive}
         selectedCount={props.batchSelectedCount}
         batchDraft={props.batchDraft}
+        batchModes={props.batchModes}
+        onBatchFieldModeChange={props.onBatchFieldModeChange}
         replaceTerrainDraft={props.replaceTerrainDraft}
         replaceBiomeDraft={props.replaceBiomeDraft}
         batchFilteredTerrainCategories={props.batchFilteredTerrainCategories}

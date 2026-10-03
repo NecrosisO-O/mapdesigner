@@ -8,18 +8,18 @@ export function validateCommandInput(input: unknown): ValidationIssue[] {
   const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === "object" && !Array.isArray(value);
   if (!record(input)) { invalid("command", "command must be an object"); return issues; }
   const action = input.action;
-  if (!["set_cell", "set_cells", "clear_cell", "annotate_cell", "replace_terrain", "replace_biome", "create_river", "update_river", "delete_river", "set_river_path", "set_river_width"].includes(String(action))) {
+  if (!["patch_cells", "set_cell", "set_cells", "clear_cell", "annotate_cell", "replace_terrain", "replace_biome", "create_river", "update_river", "delete_river", "set_river_path", "set_river_width"].includes(String(action))) {
     invalid("action", "unknown command action"); return issues;
   }
   if (input.source !== undefined && !["system", "webui", "cli"].includes(String(input.source))) invalid("source", "unknown command source");
   if (["set_cell", "clear_cell", "annotate_cell", "set_river_width"].includes(String(action))) {
     issues.push(...validateCoordinate(input.target as never, "target"));
   }
-  if (action === "set_cells") {
+  if (action === "set_cells" || action === "patch_cells") {
     if (!Array.isArray(input.targets)) invalid("targets", "targets must be an array");
     else for (const [i, target] of input.targets.entries()) issues.push(...validateCoordinate(target, "targets[" + i + "]"));
   }
-  if (["set_cell", "set_cells", "annotate_cell", "replace_terrain", "replace_biome", "update_river"].includes(String(action))) {
+  if (["patch_cells", "set_cell", "set_cells", "annotate_cell", "replace_terrain", "replace_biome", "update_river"].includes(String(action))) {
     if (!record(input.changes)) invalid("changes", "changes must be an object");
     else {
       const changes = input.changes;
