@@ -395,6 +395,8 @@ describe("MapCanvas", () => {
     });
   });
 
+  // JSDOM constructs 1,681 SVG cell trees on shared CI runners. The deadline is not a frame budget;
+  // browser performance is measured independently by the visual QA runner.
   it("limits coordinate labels by viewport and density instead of rendering every cell at once", async () => {
     const largeMap = buildLargeMap();
     render(
@@ -433,7 +435,7 @@ describe("MapCanvas", () => {
       expect(coordinateCount).toBeGreaterThan(0);
       expect(coordinateCount).toBeLessThan(largeMap.activeCells.length / 2);
     });
-  });
+  }, 15000);
 
   it("keeps coordinate labels culled to the visible map area at deep zoom", async () => {
     const largeMap = buildLargeMap();
@@ -464,7 +466,7 @@ describe("MapCanvas", () => {
       expect(coordinateCount).toBeGreaterThan(0);
       expect(coordinateCount).toBeLessThan(largeMap.activeCells.length / 3);
     });
-  });
+  }, 15000);
 });
 
 describe("canvas gestures", () => {
