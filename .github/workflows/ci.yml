@@ -30,3 +30,29 @@ jobs:
           cache: true
       - run: pnpm install --frozen-lockfile
       - run: pnpm check
+      - run: pnpm format:check
+
+  container:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - run: docker build -t mapdesigner:test .
+      - name: Verify production image
+        run: |
+          docker run -d --name mapdesigner-smoke -p 127.0.0.1:3010:3010 -e MAPDESIGNER_TOKEN=ci-smoke-token mapdesigner:test
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:3010/api/health; then break; fi
+            sleep 1
+          done
+          test "$(docker exec mapdesigner-smoke id -u)" != "0"
+          curl -fsS http://127.0.0.1:3010/ > /tmp/index.html
+          grep -q MapDesigner /tmp/index.html
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3010/api/maps)" = "401"
+          curl -fsS -H 'Authorization: Bearer ci-smoke-token' -H 'Content-Type: application/json' -d '{"name":"Container smoke"}' http://127.0.0.1:3010/api/maps
+      - name: Verify container worker
+        env:
+          MAPDESIGNER_TOKEN: ci-smoke-token
+        run: node scripts/verify-http.mjs
+      - if: always()
+        run: docker logs mapdesigner-smoke && docker rm -f mapdesigner-smoke

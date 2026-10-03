@@ -31,7 +31,7 @@ pnpm start
 
 ```bash
 docker build -t mapdesigner:0.2.0 .
-docker run --rm -p 3010:3010 -e MAPDESIGNER_ROOT=/data -v "$(pwd)/mapdesigner-data:/data" mapdesigner:0.2.0
+docker run --rm -p 127.0.0.1:3010:3010 -e MAPDESIGNER_TOKEN=replace-with-a-long-random-token -v mapdesigner-data:/data mapdesigner:0.2.0
 ```
 
 然后访问 `http://localhost:3010`。
@@ -46,9 +46,9 @@ docker run --rm -p 3010:3010 -e MAPDESIGNER_ROOT=/data -v "$(pwd)/mapdesigner-da
 - [产品总览](./PRODUCT_OVERVIEW_0.1.0.md)
 - [版本变更记录](./CHANGELOG.md)
 
-## 当前版本
+## 当前开发分支
 
-当前公开版本为 `v0.2.0`。这一版重点改进了编辑器布局、深度缩放手感、坐标标签性能、本地存储安全性、面向 AI agent 的结构化 CLI 与导出能力，并加入了河流覆盖层的早期能力。
+本轮重构保留 0.2.0 数据契约。这一版重点改进了编辑器布局、深度缩放手感、坐标标签性能、本地存储安全性、面向 AI agent 的结构化 CLI 与导出能力，并加入了河流覆盖层的早期能力。
 
 ## 开发说明
 
@@ -62,3 +62,5 @@ Node.js 版本见 `.nvmrc`，pnpm 版本见 `package.json`。
 ## 许可证
 
 本项目采用 [GNU General Public License v3.0](./LICENSE)。
+
+重构实施与验证记录见 [实施计划](./docs/IMPLEMENTATION_PLAN.md) 和 [性能记录](./docs/research/2026-10-03/README.md)。Docker 启动后需在“连接设置”输入令牌。

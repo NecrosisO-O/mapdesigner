@@ -112,8 +112,24 @@ interface DetailPanelProps {
 export function DetailPanel(props: DetailPanelProps) {
   return (
     <aside className="detail-panel" aria-label="属性面板">
-      <div className="panel-heading"><h2>属性</h2><button className="drawer-close" aria-label="关闭属性" onClick={props.onClose}>×</button></div>
-      <div className="inspector-tabs" role="tablist" aria-label="属性类别">{(["cell", "batch", "river", "history"] as const).map(tab => <button key={tab} role="tab" aria-selected={props.activeTab === tab} onClick={() => props.onTabChange(tab)}>{{cell: "单格", batch: "批量", river: "河流", history: "历史"}[tab]}</button>)}</div>
+      <div className="panel-heading">
+        <h2>属性</h2>
+        <button className="drawer-close" aria-label="关闭属性" onClick={props.onClose}>
+          ×
+        </button>
+      </div>
+      <div className="inspector-tabs" role="tablist" aria-label="属性类别">
+        {(["cell", "batch", "river", "history"] as const).map((tab) => (
+          <button
+            key={tab}
+            role="tab"
+            aria-selected={props.activeTab === tab}
+            onClick={() => props.onTabChange(tab)}
+          >
+            {{ cell: "单格", batch: "批量", river: "河流", history: "历史" }[tab]}
+          </button>
+        ))}
+      </div>
       <section className="panel cell-editor-panel" hidden={props.activeTab !== "cell"}>
         <div className="cell-editor-heading">
           <div>
@@ -129,10 +145,17 @@ export function DetailPanel(props: DetailPanelProps) {
 
         <div className="panel-header">
           <div className="action-row action-row-inline">
-            <button className="primary-button" onClick={props.onApplyDraft} disabled={!props.selectedCell || props.pending}>
+            <button
+              className="primary-button"
+              onClick={props.onApplyDraft}
+              disabled={!props.selectedCell || props.pending}
+            >
               应用
             </button>
-            <button onClick={props.onRevertDraft} disabled={!props.selectedCell || !props.cellDirty}>
+            <button
+              onClick={props.onRevertDraft}
+              disabled={!props.selectedCell || !props.cellDirty}
+            >
               还原
             </button>
             <button onClick={props.onClearSelected} disabled={!props.selectedCell || props.pending}>
@@ -156,7 +179,9 @@ export function DetailPanel(props: DetailPanelProps) {
               <input
                 type="checkbox"
                 checked={props.formatBrushScope.terrain}
-                onChange={(event) => props.onFormatBrushScopeChange("terrain", event.target.checked)}
+                onChange={(event) =>
+                  props.onFormatBrushScopeChange("terrain", event.target.checked)
+                }
                 disabled={!props.selectedCell || props.pending}
               />
               刷地形
@@ -191,7 +216,8 @@ export function DetailPanel(props: DetailPanelProps) {
           </div>
           {props.formatBrushEnabled && props.selectedCell ? (
             <p className="format-brush-summary">
-              格式刷源格：{props.selectedCell.display_coord} | 当前刷入：{props.getFormatBrushLabel()}
+              格式刷源格：{props.selectedCell.display_coord} | 当前刷入：
+              {props.getFormatBrushLabel()}
             </p>
           ) : (
             <p className="format-brush-summary">
@@ -203,7 +229,7 @@ export function DetailPanel(props: DetailPanelProps) {
         <div className="editor-section">
           <h3>地貌</h3>
           <label>
-            Terrain 分类
+            地形分类
             <select
               value={props.terrainCategory}
               onChange={(event) => props.onTerrainCategoryChange(event.target.value)}
@@ -218,13 +244,13 @@ export function DetailPanel(props: DetailPanelProps) {
             </select>
           </label>
           <label>
-            Terrain
+            地形
             <select
               value={props.draft.terrain}
               onChange={(event) => props.onTerrainChange(event.target.value)}
               disabled={!props.selectedCell || !props.terrainCategory}
             >
-              <option value="">{props.terrainCategory ? "未设置" : "请先选择 Terrain 分类"}</option>
+              <option value="">{props.terrainCategory ? "未设置" : "请先选择 地形分类"}</option>
               {props.terrainOptions.map((entry) => (
                 <option key={entry.key} value={entry.key}>
                   {entry.label} ({entry.short})
@@ -237,7 +263,7 @@ export function DetailPanel(props: DetailPanelProps) {
         <div className="editor-section">
           <h3>生态</h3>
           <label>
-            Biome
+            生态
             <select
               value={props.draft.biome}
               onChange={(event) => props.onBiomeChange(event.target.value)}
@@ -273,7 +299,7 @@ export function DetailPanel(props: DetailPanelProps) {
         <div className="editor-section">
           <h3>备注</h3>
           <label>
-            Note
+            备注
             <textarea
               rows={6}
               value={props.draft.note}
@@ -284,38 +310,39 @@ export function DetailPanel(props: DetailPanelProps) {
         </div>
       </section>
 
-      <div hidden={props.activeTab !== "batch"}><AdvancedEditPanel
-        currentMap={props.currentMap}
-        batchModeActive={props.batchModeActive}
-        selectedCount={props.batchSelectedCount}
-        batchTagMode={props.batchTagMode} onBatchTagModeChange={props.onBatchTagModeChange}
-        batchDraft={props.batchDraft}
-        batchModes={props.batchModes}
-        onBatchFieldModeChange={props.onBatchFieldModeChange}
-        replaceTerrainDraft={props.replaceTerrainDraft}
-        replaceBiomeDraft={props.replaceBiomeDraft}
-        batchFilteredTerrainCategories={props.batchFilteredTerrainCategories}
-        batchTerrainOptions={props.batchTerrainOptions}
-        batchBiomeOptions={props.batchBiomeOptions}
-        replaceTerrainOptions={props.replaceTerrainOptions}
-        noneBiomeValue={props.noneBiomeValue}
-        onToggleBatchMode={props.onToggleBatchMode}
-        onClearBatchSelection={props.onClearBatchSelection}
-        onApplyBatchEdit={props.onApplyBatchEdit}
-        onBatchTerrainCategoryChange={props.onBatchTerrainCategoryChange}
-        onBatchTerrainChange={props.onBatchTerrainChange}
-        onBatchBiomeChange={props.onBatchBiomeChange}
-        onBatchTagChange={props.onBatchTagChange}
-        onBatchNoteChange={props.onBatchNoteChange}
-        onReplaceTerrainMatchChange={props.onReplaceTerrainMatchChange}
-        onReplacementTerrainCategoryChange={props.onReplacementTerrainCategoryChange}
-        onReplacementTerrainChange={props.onReplacementTerrainChange}
-        onApplyTerrainReplacement={props.onApplyTerrainReplacement}
-        onReplaceBiomeMatchChange={props.onReplaceBiomeMatchChange}
-        onReplacementBiomeChange={props.onReplacementBiomeChange}
-        onApplyBiomeReplacement={props.onApplyBiomeReplacement}
-      />
-
+      <div hidden={props.activeTab !== "batch"}>
+        <AdvancedEditPanel
+          currentMap={props.currentMap}
+          batchModeActive={props.batchModeActive}
+          selectedCount={props.batchSelectedCount}
+          batchTagMode={props.batchTagMode}
+          onBatchTagModeChange={props.onBatchTagModeChange}
+          batchDraft={props.batchDraft}
+          batchModes={props.batchModes}
+          onBatchFieldModeChange={props.onBatchFieldModeChange}
+          replaceTerrainDraft={props.replaceTerrainDraft}
+          replaceBiomeDraft={props.replaceBiomeDraft}
+          batchFilteredTerrainCategories={props.batchFilteredTerrainCategories}
+          batchTerrainOptions={props.batchTerrainOptions}
+          batchBiomeOptions={props.batchBiomeOptions}
+          replaceTerrainOptions={props.replaceTerrainOptions}
+          noneBiomeValue={props.noneBiomeValue}
+          onToggleBatchMode={props.onToggleBatchMode}
+          onClearBatchSelection={props.onClearBatchSelection}
+          onApplyBatchEdit={props.onApplyBatchEdit}
+          onBatchTerrainCategoryChange={props.onBatchTerrainCategoryChange}
+          onBatchTerrainChange={props.onBatchTerrainChange}
+          onBatchBiomeChange={props.onBatchBiomeChange}
+          onBatchTagChange={props.onBatchTagChange}
+          onBatchNoteChange={props.onBatchNoteChange}
+          onReplaceTerrainMatchChange={props.onReplaceTerrainMatchChange}
+          onReplacementTerrainCategoryChange={props.onReplacementTerrainCategoryChange}
+          onReplacementTerrainChange={props.onReplacementTerrainChange}
+          onApplyTerrainReplacement={props.onApplyTerrainReplacement}
+          onReplaceBiomeMatchChange={props.onReplaceBiomeMatchChange}
+          onReplacementBiomeChange={props.onReplacementBiomeChange}
+          onApplyBiomeReplacement={props.onApplyBiomeReplacement}
+        />
       </div>
       <section className="panel river-editor-panel" hidden={props.activeTab !== "river"}>
         <div className="cell-editor-heading">
@@ -328,7 +355,7 @@ export function DetailPanel(props: DetailPanelProps) {
 
         <div className="editor-section">
           <label>
-            River
+            河流
             <select
               value={props.selectedRiverId}
               onChange={(event) => props.onSelectRiver(event.target.value)}
@@ -343,7 +370,11 @@ export function DetailPanel(props: DetailPanelProps) {
             </select>
           </label>
           <div className="action-row action-row-inline">
-            <button type="button" onClick={props.onStartNewRiver} disabled={!props.currentMap || props.riverDrawingStatus === "drawing"}>
+            <button
+              type="button"
+              onClick={props.onStartNewRiver}
+              disabled={!props.currentMap || props.riverDrawingStatus === "drawing"}
+            >
               新建
             </button>
             <button
@@ -357,7 +388,11 @@ export function DetailPanel(props: DetailPanelProps) {
             <button
               type="button"
               onClick={props.onDeleteSelectedRiver}
-              disabled={!props.currentMap || !props.selectedRiverId || props.riverDrawingStatus === "drawing"}
+              disabled={
+                !props.currentMap ||
+                !props.selectedRiverId ||
+                props.riverDrawingStatus === "drawing"
+              }
             >
               删除河流
             </button>
@@ -365,7 +400,9 @@ export function DetailPanel(props: DetailPanelProps) {
           <div className="action-row action-row-inline river-draw-actions">
             <button
               type="button"
-              className={props.riverDrawingStatus === "drawing" ? "toggle-button-active" : undefined}
+              className={
+                props.riverDrawingStatus === "drawing" ? "toggle-button-active" : undefined
+              }
               aria-pressed={props.riverDrawingStatus === "drawing"}
               onClick={props.onStartRiverDrawing}
               disabled={!props.currentMap || props.riverDrawingStatus === "drawing"}
@@ -376,7 +413,11 @@ export function DetailPanel(props: DetailPanelProps) {
               type="button"
               className="primary-button"
               onClick={props.onFinishRiverDrawing}
-              disabled={!props.currentMap || props.riverDrawingStatus !== "drawing" || props.riverDrawingPointCount < 2}
+              disabled={
+                !props.currentMap ||
+                props.riverDrawingStatus !== "drawing" ||
+                props.riverDrawingPointCount < 2
+              }
             >
               完成
             </button>
@@ -396,7 +437,7 @@ export function DetailPanel(props: DetailPanelProps) {
         <div className="editor-section">
           <h3>属性</h3>
           <label>
-            Name
+            河流名称
             <input
               value={props.riverDraft.name}
               disabled={!props.currentMap || props.pending}
@@ -405,7 +446,7 @@ export function DetailPanel(props: DetailPanelProps) {
           </label>
           <div className="compact-field-grid">
             <label>
-              Color
+              颜色
               <input
                 type="color"
                 value={props.riverDraft.color}
@@ -414,7 +455,7 @@ export function DetailPanel(props: DetailPanelProps) {
               />
             </label>
             <label>
-              Opacity
+              透明度
               <input
                 type="number"
                 min="0.1"
@@ -431,7 +472,7 @@ export function DetailPanel(props: DetailPanelProps) {
         <div className="editor-section">
           <h3>路径</h3>
           <label>
-            Points
+            路径坐标
             <textarea
               rows={3}
               value={props.riverDraft.pointsText}
@@ -441,7 +482,7 @@ export function DetailPanel(props: DetailPanelProps) {
             />
           </label>
           <label>
-            Width anchors
+            宽度锚点
             <textarea
               rows={2}
               value={props.riverDraft.widthsText}
@@ -459,16 +500,25 @@ export function DetailPanel(props: DetailPanelProps) {
           <>
             <p>
               已记录 {props.mapHistory?.status.cursor ?? 0} 步 | 可重做{" "}
-              {Math.max((props.mapHistory?.status.latest ?? 0) - (props.mapHistory?.status.cursor ?? 0), 0)} 步
+              {Math.max(
+                (props.mapHistory?.status.latest ?? 0) - (props.mapHistory?.status.cursor ?? 0),
+                0
+              )}{" "}
+              步
             </p>
             {props.mapHistory && props.mapHistory.entries.length > 0 ? (
               <div className="history-list">
                 {props.mapHistory.entries.map((entry) => (
-                    <div key={`${entry.seq}-${entry.timestamp}-${entry.action}`} className="history-entry">
-                      <strong>{HISTORY_LABELS[entry.action] ?? entry.action}</strong>
-                      <span>{entry.source} · {formatDateTime(entry.timestamp)}</span>
-                    </div>
-                  ))}
+                  <div
+                    key={`${entry.seq}-${entry.timestamp}-${entry.action}`}
+                    className="history-entry"
+                  >
+                    <strong>{HISTORY_LABELS[entry.action] ?? entry.action}</strong>
+                    <span>
+                      {entry.source} · {formatDateTime(entry.timestamp)}
+                    </span>
+                  </div>
+                ))}
               </div>
             ) : (
               <p>当前地图还没有持久编辑历史。</p>

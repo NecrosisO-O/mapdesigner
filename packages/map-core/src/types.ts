@@ -97,7 +97,13 @@ export interface MapOverview {
   range: CellRange;
   bucket_size: number;
   designed_cell_count: number;
-  tiles: Array<{ row: number; col: number; count: number; terrain: TerrainKey | null; river: boolean }>;
+  tiles: Array<{
+    row: number;
+    col: number;
+    count: number;
+    terrain: TerrainKey | null;
+    river: boolean;
+  }>;
 }
 
 export interface CellRangeResult {

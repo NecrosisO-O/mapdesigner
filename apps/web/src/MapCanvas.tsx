@@ -1,5 +1,7 @@
 import {
-  buildHexLine, createCellId, getNeighborCoords,
+  buildHexLine,
+  createCellId,
+  getNeighborCoords,
   type ActiveCell,
   type CellRange,
   type GridCoordinate,
@@ -10,7 +12,8 @@ import {
   type TagKey
 } from "@mapdesigner/map-core";
 import {
-  buildMapScene, centerForCoord,
+  buildMapScene,
+  centerForCoord,
   buildCellOpacity,
   buildCellStroke,
   buildPatternOverlay,
@@ -93,7 +96,12 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
-function getViewportMetrics(width: number, height: number, sceneWidth: number, sceneHeight: number): ViewportMetrics {
+function getViewportMetrics(
+  width: number,
+  height: number,
+  sceneWidth: number,
+  sceneHeight: number
+): ViewportMetrics {
   const baseScale = Math.min(width / sceneWidth, height / sceneHeight);
   return {
     width,
@@ -106,7 +114,9 @@ function getViewportMetrics(width: number, height: number, sceneWidth: number, s
   };
 }
 
-function boundsCoordsFromSummary(summary: MapSummary | null | undefined): GridCoordinate[] | undefined {
+function boundsCoordsFromSummary(
+  summary: MapSummary | null | undefined
+): GridCoordinate[] | undefined {
   const bounds = summary?.render_bounds ?? summary?.bounds;
   if (
     !bounds ||
@@ -125,7 +135,11 @@ function boundsCoordsFromSummary(summary: MapSummary | null | undefined): GridCo
   ];
 }
 
-function scenePointToCoord(point: { x: number; y: number }, scene: { minX: number; minY: number }, size: number): GridCoordinate {
+function scenePointToCoord(
+  point: { x: number; y: number },
+  scene: { minX: number; minY: number },
+  size: number
+): GridCoordinate {
   const worldX = point.x + scene.minX;
   const worldY = point.y + scene.minY;
   const col = Math.round(worldX / (size * 1.5));
@@ -166,11 +180,20 @@ function getVisibleCoordRange(input: {
   };
 }
 
-function getNextCoordinateLabelMode(current: CoordinateLabelMode, scale: number): CoordinateLabelMode {
-  if (scale <= COORDINATE_LABEL_HIDE_SCALE || (current === "hidden" && scale < COORDINATE_LABEL_SHOW_SCALE)) {
+function getNextCoordinateLabelMode(
+  current: CoordinateLabelMode,
+  scale: number
+): CoordinateLabelMode {
+  if (
+    scale <= COORDINATE_LABEL_HIDE_SCALE ||
+    (current === "hidden" && scale < COORDINATE_LABEL_SHOW_SCALE)
+  ) {
     return "hidden";
   }
-  if (scale >= COORDINATE_LABEL_FULL_SHOW_SCALE || (current === "full" && scale >= COORDINATE_LABEL_FULL_HIDE_SCALE)) {
+  if (
+    scale >= COORDINATE_LABEL_FULL_SHOW_SCALE ||
+    (current === "full" && scale >= COORDINATE_LABEL_FULL_HIDE_SCALE)
+  ) {
     return "full";
   }
   if (
@@ -203,16 +226,24 @@ function isCellInCoordinateDensity(cell: ActiveCell, step: number): boolean {
 }
 
 function isPointInSceneBounds(point: { x: number; y: number }, bounds: SceneBounds): boolean {
-  return point.x >= bounds.left && point.x <= bounds.right && point.y >= bounds.top && point.y <= bounds.bottom;
+  return (
+    point.x >= bounds.left &&
+    point.x <= bounds.right &&
+    point.y >= bounds.top &&
+    point.y <= bounds.bottom
+  );
 }
 
-function getCellFromEventTarget(target: EventTarget | null, cellsById: Map<string, ActiveCell>): ActiveCell | null {
+function getCellFromEventTarget(
+  target: EventTarget | null,
+  cellsById: Map<string, ActiveCell>
+): ActiveCell | null {
   if (!(target instanceof Element)) {
     return null;
   }
   const cellElement = target.closest("[data-cell-id]");
   const cellId = cellElement?.getAttribute("data-cell-id");
-  return cellId ? cellsById.get(cellId) ?? null : null;
+  return cellId ? (cellsById.get(cellId) ?? null) : null;
 }
 
 function CellGroup(props: {
@@ -235,8 +266,12 @@ function CellGroup(props: {
   const patternFill = props.showPattern ? buildPatternOverlay(cell.biome) : null;
   const shorthand = props.showShorthand ? getCellShorthand(cell) : null;
   const primaryTag = getPrimaryTag(cell);
-  const primaryTagText = props.showPrimaryTag ? getPrimaryTagSymbol(primaryTag as TagKey | null) : null;
-  const stroke = props.batchSelected ? "#B66219" : buildCellStroke(cell, props.selected, props.hovered);
+  const primaryTagText = props.showPrimaryTag
+    ? getPrimaryTagSymbol(primaryTag as TagKey | null)
+    : null;
+  const stroke = props.batchSelected
+    ? "#B66219"
+    : buildCellStroke(cell, props.selected, props.hovered);
   const opacity = buildCellOpacity(cell);
   const textFill = cell.status === "designed" ? "#1D1B18" : "#6F675D";
 
@@ -252,7 +287,8 @@ function CellGroup(props: {
       tabIndex={props.selected ? 0 : -1}
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault(); event.stopPropagation();
+          event.preventDefault();
+          event.stopPropagation();
           props.onSelect();
         }
       }}
@@ -344,7 +380,9 @@ export function MapCanvas(props: MapCanvasProps) {
   } | null>(null);
   const spacePan = useRef(false);
   const pointers = useRef(new Map<number, { x: number; y: number }>());
-  const pinch = useRef<{ distance: number; zoom: number; sceneX: number; sceneY: number } | null>(null);
+  const pinch = useRef<{ distance: number; zoom: number; sceneX: number; sceneY: number } | null>(
+    null
+  );
   const stroke = useRef<Map<string, ActiveCell> | null>(null);
   const strokeLast = useRef<ActiveCell | null>(null);
   const [strokeIds, setStrokeIds] = useState<Set<string>>(new Set());
@@ -380,9 +418,15 @@ export function MapCanvas(props: MapCanvasProps) {
     [scene.layout]
   );
   const [viewportSize, setViewportSize] = useState({ width: scene.width, height: scene.height });
-  const viewportMetrics = getViewportMetrics(viewportSize.width, viewportSize.height, scene.width, scene.height);
+  const viewportMetrics = getViewportMetrics(
+    viewportSize.width,
+    viewportSize.height,
+    scene.width,
+    scene.height
+  );
   const effectiveScale = viewportMetrics.baseScale * camera.zoom;
-  const effectiveShowShorthand = props.showShorthand && effectiveScale >= SHORTHAND_VISIBILITY_SCALE;
+  const effectiveShowShorthand =
+    props.showShorthand && effectiveScale >= SHORTHAND_VISIBILITY_SCALE;
   const effectiveShowPrimaryTag = effectiveScale >= TAG_VISIBILITY_SCALE;
   const effectiveShowPattern = effectiveScale >= PATTERN_VISIBILITY_SCALE;
   const coordinateLabelStep = getCoordinateLabelStep(coordinateLabelMode);
@@ -521,7 +565,12 @@ export function MapCanvas(props: MapCanvasProps) {
         width: rect.width > 0 ? rect.width : scene.width,
         height: rect.height > 0 ? rect.height : scene.height
       };
-      const metrics = getViewportMetrics(viewport.width, viewport.height, scene.width, scene.height);
+      const metrics = getViewportMetrics(
+        viewport.width,
+        viewport.height,
+        scene.width,
+        scene.height
+      );
       const pointerX = event.clientX - rect.left;
       const pointerY = event.clientY - rect.top;
       const currentCamera = cameraRef.current;
@@ -560,7 +609,10 @@ export function MapCanvas(props: MapCanvasProps) {
 
   const handleCellAction = (cell: ActiveCell) => {
     if (props.interactionMode === "pan" || spacePan.current) return;
-    if (props.interactionMode === "brush") { props.onBrushStroke?.([cell]); return; }
+    if (props.interactionMode === "brush") {
+      props.onBrushStroke?.([cell]);
+      return;
+    }
     if (props.interactionMode === "river-draw") {
       props.onRiverPointAdd?.(cell);
       return;
@@ -574,13 +626,24 @@ export function MapCanvas(props: MapCanvasProps) {
 
   const finishDrag = (pointerId: number, target: HTMLDivElement, allowClickSelection = true) => {
     pointers.current.delete(pointerId);
-    if (pinch.current) { pinch.current = null; dragState.current = null; setIsDragging(false); return; }
+    if (pinch.current) {
+      pinch.current = null;
+      dragState.current = null;
+      setIsDragging(false);
+      return;
+    }
     if (stroke.current) {
-      const cells = [...stroke.current.values()]; stroke.current = null; strokeLast.current = null; setStrokeIds(new Set());
+      const cells = [...stroke.current.values()];
+      stroke.current = null;
+      strokeLast.current = null;
+      setStrokeIds(new Set());
       if (allowClickSelection && cells.length) props.onBrushStroke?.(cells);
       suppressNextCellClickRef.current = true;
-      window.setTimeout(() => { suppressNextCellClickRef.current = false; }, 0);
-      dragState.current = null; setIsDragging(false);
+      window.setTimeout(() => {
+        suppressNextCellClickRef.current = false;
+      }, 0);
+      dragState.current = null;
+      setIsDragging(false);
       if (target.hasPointerCapture?.(pointerId)) target.releasePointerCapture(pointerId);
       return;
     }
@@ -606,8 +669,16 @@ export function MapCanvas(props: MapCanvasProps) {
   const isEntryInLabelViewport = (entry: { centerX: number; centerY: number }) =>
     isPointInSceneBounds({ x: entry.centerX, y: entry.centerY }, labelViewportBounds);
 
-  const shouldShowCoordinatesForEntry = (entry: { cell: ActiveCell; centerX: number; centerY: number }) => {
-    if (!props.showCoordinates || coordinateLabelMode === "hidden" || !isEntryInLabelViewport(entry)) {
+  const shouldShowCoordinatesForEntry = (entry: {
+    cell: ActiveCell;
+    centerX: number;
+    centerY: number;
+  }) => {
+    if (
+      !props.showCoordinates ||
+      coordinateLabelMode === "hidden" ||
+      !isEntryInLabelViewport(entry)
+    ) {
       return false;
     }
     const focused = entry.cell.id === props.selectedCellId || entry.cell.id === hoveredCellId;
@@ -617,9 +688,12 @@ export function MapCanvas(props: MapCanvasProps) {
     tagFilter.length === 0 || tagFilter.some((tag) => cell.tags.includes(tag));
 
   function cellAtPoint(clientX: number, clientY: number): ActiveCell | null {
-    const rect = containerRef.current!.getBoundingClientRect(), scale = viewportMetrics.baseScale * cameraRef.current.zoom;
-    const point = { x: (clientX - rect.left - viewportMetrics.baseOffset.x - cameraRef.current.offset.x) / scale,
-      y: (clientY - rect.top - viewportMetrics.baseOffset.y - cameraRef.current.offset.y) / scale };
+    const rect = containerRef.current!.getBoundingClientRect(),
+      scale = viewportMetrics.baseScale * cameraRef.current.zoom;
+    const point = {
+      x: (clientX - rect.left - viewportMetrics.baseOffset.x - cameraRef.current.offset.x) / scale,
+      y: (clientY - rect.top - viewportMetrics.baseOffset.y - cameraRef.current.offset.y) / scale
+    };
     const coord = scenePointToCoord(point, scene, 36);
     return sceneCellsById.get(createCellId(coord.row, coord.col)) ?? null;
   }
@@ -630,41 +704,97 @@ export function MapCanvas(props: MapCanvasProps) {
       const target = sceneCellsById.get(createCellId(point.row, point.col));
       if (target) stroke.current.set(target.id, target);
     }
-    strokeLast.current = cell; setStrokeIds(new Set(stroke.current.keys()));
+    strokeLast.current = cell;
+    setStrokeIds(new Set(stroke.current.keys()));
   }
   function zoomAtCenter(factor: number): void {
-    const current = cameraRef.current, next = clamp(current.zoom * factor, MIN_ZOOM, MAX_ZOOM);
-    const cx = viewportSize.width / 2 - viewportMetrics.baseOffset.x, cy = viewportSize.height / 2 - viewportMetrics.baseOffset.y;
-    setCamera({ zoom: next, offset: { x: cx - (cx - current.offset.x) * next / current.zoom, y: cy - (cy - current.offset.y) * next / current.zoom } });
+    const current = cameraRef.current,
+      next = clamp(current.zoom * factor, MIN_ZOOM, MAX_ZOOM);
+    const cx = viewportSize.width / 2 - viewportMetrics.baseOffset.x,
+      cy = viewportSize.height / 2 - viewportMetrics.baseOffset.y;
+    setCamera({
+      zoom: next,
+      offset: {
+        x: cx - ((cx - current.offset.x) * next) / current.zoom,
+        y: cy - ((cy - current.offset.y) * next) / current.zoom
+      }
+    });
   }
-  useEffect(() => { stroke.current = null; pointers.current.clear(); pinch.current = null; setStrokeIds(new Set()); setKeyboardCell(null); }, [props.map.document.meta.id]);
+  useEffect(() => {
+    stroke.current = null;
+    pointers.current.clear();
+    pinch.current = null;
+    setStrokeIds(new Set());
+    setKeyboardCell(null);
+  }, [props.map.document.meta.id]);
 
   return (
     <div
       ref={containerRef}
-      tabIndex={0} role="region" aria-label="地图编辑区域"
-      onBlur={() => { spacePan.current = false; }}
-      onKeyUp={event => { if (event.key === " ") spacePan.current = false; }}
-      onKeyDown={event => {
-        if ((event.target as HTMLElement).closest("button,input,select,textarea") || event.ctrlKey || event.metaKey) return;
+      tabIndex={0}
+      role="region"
+      aria-label="地图编辑区域"
+      onBlur={() => {
+        spacePan.current = false;
+      }}
+      onKeyUp={(event) => {
+        if (event.key === " ") spacePan.current = false;
+      }}
+      onKeyDown={(event) => {
+        if (
+          (event.target as HTMLElement).closest("button,input,select,textarea") ||
+          event.ctrlKey ||
+          event.metaKey
+        )
+          return;
         const key = event.key;
-        if (key === " ") { event.preventDefault(); spacePan.current = true; }
-        if (["+", "=", "-", "f", "F"].includes(key)) { event.preventDefault(); if (key.toLowerCase() === "f") setCamera({ zoom: 1, offset: { x: 0, y: 0 } }); else zoomAtCenter(key === "-" ? 0.8 : 1.25); }
+        if (key === " ") {
+          event.preventDefault();
+          spacePan.current = true;
+        }
+        if (["+", "=", "-", "f", "F"].includes(key)) {
+          event.preventDefault();
+          if (key.toLowerCase() === "f") setCamera({ zoom: 1, offset: { x: 0, y: 0 } });
+          else zoomAtCenter(key === "-" ? 0.8 : 1.25);
+        }
         if (key.startsWith("Arrow")) {
           event.preventDefault();
           const current = keyboardCell ?? props.selectedCell ?? props.map.activeCells[0];
           if (!current) return;
-          const delta = key === "ArrowRight" ? { row: 0, col: 1 } : key === "ArrowLeft" ? { row: 0, col: -1 } : key === "ArrowUp" ? { row: 1, col: 0 } : { row: -1, col: 0 };
-          const next = sceneCellsById.get(createCellId(current.row + delta.row, current.col + delta.col));
-          if (next) { setKeyboardCell(next); setHoveredCellId(next.id); props.onHoverCellChange?.(next); }
+          const delta =
+            key === "ArrowRight"
+              ? { row: 0, col: 1 }
+              : key === "ArrowLeft"
+                ? { row: 0, col: -1 }
+                : key === "ArrowUp"
+                  ? { row: 1, col: 0 }
+                  : { row: -1, col: 0 };
+          const next = sceneCellsById.get(
+            createCellId(current.row + delta.row, current.col + delta.col)
+          );
+          if (next) {
+            setKeyboardCell(next);
+            setHoveredCellId(next.id);
+            props.onHoverCellChange?.(next);
+          }
         }
         if (key === "Enter") {
           event.preventDefault();
-          if (isRiverDrawing && !event.shiftKey && riverDrawingPointCount >= 2) props.onFinishRiverDrawing?.();
-          else { const cell = keyboardCell ?? props.selectedCell ?? props.map.activeCells[0]; if (cell) handleCellAction(cell); }
+          if (isRiverDrawing && !event.shiftKey && riverDrawingPointCount >= 2)
+            props.onFinishRiverDrawing?.();
+          else {
+            const cell = keyboardCell ?? props.selectedCell ?? props.map.activeCells[0];
+            if (cell) handleCellAction(cell);
+          }
         }
         if (key === "Escape") {
-          stroke.current = null; strokeLast.current = null; setStrokeIds(new Set()); dragState.current = null; pointers.current.clear(); pinch.current = null; setIsDragging(false);
+          stroke.current = null;
+          strokeLast.current = null;
+          setStrokeIds(new Set());
+          dragState.current = null;
+          pointers.current.clear();
+          pinch.current = null;
+          setIsDragging(false);
           if (isRiverDrawing) props.onCancelRiverDrawing?.();
         }
       }}
@@ -673,7 +803,9 @@ export function MapCanvas(props: MapCanvasProps) {
         isDragging ? "map-canvas-dragging" : "",
         isRiverDrawing ? "map-canvas-river-draw" : "",
         isBatchSelecting ? "map-canvas-batch-select" : ""
-      ].filter(Boolean).join(" ")}
+      ]
+        .filter(Boolean)
+        .join(" ")}
       onPointerDown={(event) => {
         if (event.button !== 0 && event.pointerType !== "touch") {
           return;
@@ -684,18 +816,28 @@ export function MapCanvas(props: MapCanvasProps) {
         event.currentTarget.focus({ preventScroll: true });
         pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
         if (pointers.current.size === 2) {
-          stroke.current = null; setStrokeIds(new Set());
-          const [a, b] = [...pointers.current.values()], rect = event.currentTarget.getBoundingClientRect();
-          const x = (a!.x + b!.x) / 2 - rect.left, y = (a!.y + b!.y) / 2 - rect.top;
+          stroke.current = null;
+          setStrokeIds(new Set());
+          const [a, b] = [...pointers.current.values()],
+            rect = event.currentTarget.getBoundingClientRect();
+          const x = (a!.x + b!.x) / 2 - rect.left,
+            y = (a!.y + b!.y) / 2 - rect.top;
           const scale = viewportMetrics.baseScale * cameraRef.current.zoom;
-          pinch.current = { distance: Math.max(1, Math.hypot(a!.x - b!.x, a!.y - b!.y)), zoom: cameraRef.current.zoom,
+          pinch.current = {
+            distance: Math.max(1, Math.hypot(a!.x - b!.x, a!.y - b!.y)),
+            zoom: cameraRef.current.zoom,
             sceneX: (x - viewportMetrics.baseOffset.x - cameraRef.current.offset.x) / scale,
-            sceneY: (y - viewportMetrics.baseOffset.y - cameraRef.current.offset.y) / scale };
+            sceneY: (y - viewportMetrics.baseOffset.y - cameraRef.current.offset.y) / scale
+          };
           return;
         }
         if (props.interactionMode === "brush" && !spacePan.current) {
-          stroke.current = new Map(); strokeLast.current = null;
-          addStrokeCell(getCellFromEventTarget(event.target, sceneCellsById) ?? cellAtPoint(event.clientX, event.clientY));
+          stroke.current = new Map();
+          strokeLast.current = null;
+          addStrokeCell(
+            getCellFromEventTarget(event.target, sceneCellsById) ??
+              cellAtPoint(event.clientX, event.clientY)
+          );
         }
         dragState.current = {
           pointerId: event.pointerId,
@@ -704,21 +846,46 @@ export function MapCanvas(props: MapCanvasProps) {
           startOffsetX: cameraRef.current.offset.x,
           startOffsetY: cameraRef.current.offset.y,
           moved: false,
-          startCell: spacePan.current || props.interactionMode === "pan" ? null : getCellFromEventTarget(event.target, sceneCellsById)
+          startCell:
+            spacePan.current || props.interactionMode === "pan"
+              ? null
+              : getCellFromEventTarget(event.target, sceneCellsById)
         };
         setIsDragging(true);
       }}
       onPointerMove={(event) => {
-        if (pointers.current.has(event.pointerId)) pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+        if (pointers.current.has(event.pointerId))
+          pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
         if (pinch.current && pointers.current.size >= 2) {
-          const [a, b] = [...pointers.current.values()], rect = event.currentTarget.getBoundingClientRect();
-          const zoom = clamp(pinch.current.zoom * Math.hypot(a!.x - b!.x, a!.y - b!.y) / pinch.current.distance, MIN_ZOOM, MAX_ZOOM);
+          const [a, b] = [...pointers.current.values()],
+            rect = event.currentTarget.getBoundingClientRect();
+          const zoom = clamp(
+            (pinch.current.zoom * Math.hypot(a!.x - b!.x, a!.y - b!.y)) / pinch.current.distance,
+            MIN_ZOOM,
+            MAX_ZOOM
+          );
           const scale = viewportMetrics.baseScale * zoom;
-          setCamera({ zoom, offset: { x: (a!.x + b!.x) / 2 - rect.left - viewportMetrics.baseOffset.x - pinch.current.sceneX * scale,
-            y: (a!.y + b!.y) / 2 - rect.top - viewportMetrics.baseOffset.y - pinch.current.sceneY * scale } });
+          setCamera({
+            zoom,
+            offset: {
+              x:
+                (a!.x + b!.x) / 2 -
+                rect.left -
+                viewportMetrics.baseOffset.x -
+                pinch.current.sceneX * scale,
+              y:
+                (a!.y + b!.y) / 2 -
+                rect.top -
+                viewportMetrics.baseOffset.y -
+                pinch.current.sceneY * scale
+            }
+          });
           return;
         }
-        if (stroke.current) { addStrokeCell(cellAtPoint(event.clientX, event.clientY)); return; }
+        if (stroke.current) {
+          addStrokeCell(cellAtPoint(event.clientX, event.clientY));
+          return;
+        }
         const currentDrag = dragState.current;
         if (!currentDrag || currentDrag.pointerId !== event.pointerId) {
           return;
@@ -749,13 +916,30 @@ export function MapCanvas(props: MapCanvasProps) {
         clearHover();
       }}
     >
-      <div className="canvas-zoom-controls" onPointerDown={event => event.stopPropagation()} onPointerUp={event => event.stopPropagation()}>
-        <button aria-label="缩小" onClick={() => zoomAtCenter(0.8)}>−</button><output aria-label="缩放比例">{Math.round(effectiveScale * 100)}%</output><button aria-label="放大" onClick={() => zoomAtCenter(1.25)}>+</button><button onClick={() => setCamera({ zoom: 1, offset: { x: 0, y: 0 } })}>适合画布</button>
+      <div
+        className="canvas-zoom-controls"
+        onPointerDown={(event) => event.stopPropagation()}
+        onPointerUp={(event) => event.stopPropagation()}
+      >
+        <button aria-label="缩小" onClick={() => zoomAtCenter(0.8)}>
+          −
+        </button>
+        <output aria-label="缩放比例">{Math.round(effectiveScale * 100)}%</output>
+        <button aria-label="放大" onClick={() => zoomAtCenter(1.25)}>
+          +
+        </button>
+        <button onClick={() => setCamera({ zoom: 1, offset: { x: 0, y: 0 } })}>适合画布</button>
       </div>
-      <span className="sr-only" aria-live="polite">{keyboardCell ? "当前焦点 " + keyboardCell.display_coord : "使用方向键移动焦点，回车操作单元格"}</span>
+      <span className="sr-only" aria-live="polite">
+        {keyboardCell
+          ? "当前焦点 " + keyboardCell.display_coord
+          : "使用方向键移动焦点，回车操作单元格"}
+      </span>
       {props.selectedCell ? (
         <div className="canvas-selection-overlay" aria-label="当前选中信息">
-          <span>{props.selectedCell.display_coord} | {props.selectedCell.status}</span>
+          <span>
+            {props.selectedCell.display_coord} | {props.selectedCell.status}
+          </span>
         </div>
       ) : null}
       {isRiverDrawing ? (
@@ -782,11 +966,13 @@ export function MapCanvas(props: MapCanvasProps) {
         </div>
       ) : null}
       <div className="canvas-help-overlay" aria-hidden="true">
-        {props.overview ? "全图概览 · 放大后编辑单元格" : isRiverDrawing
-          ? "河流绘制 · 点击单元格添加路径点"
-          : isBatchSelecting
-            ? "批量选择 · 点击单元格加入或移除"
-            : "滚轮缩放 · 拖拽平移"}
+        {props.overview
+          ? "全图概览 · 放大后编辑单元格"
+          : isRiverDrawing
+            ? "河流绘制 · 点击单元格添加路径点"
+            : isBatchSelecting
+              ? "批量选择 · 点击单元格加入或移除"
+              : "滚轮缩放 · 拖拽平移"}
       </div>
       <svg
         width="100%"
@@ -802,12 +988,38 @@ export function MapCanvas(props: MapCanvasProps) {
         <g
           transform={`translate(${viewportMetrics.baseOffset.x + camera.offset.x} ${viewportMetrics.baseOffset.y + camera.offset.y}) scale(${viewportMetrics.baseScale * camera.zoom})`}
         >
-          {props.overview && <g aria-label="地图概览">{props.overview.tiles.map(tile => {
-            const step = props.overview!.bucket_size;
-            const points = [{row:tile.row,col:tile.col},{row:tile.row+step,col:tile.col},{row:tile.row+step,col:tile.col+step},{row:tile.row,col:tile.col+step}]
-              .map(coord => { const p = centerForCoord(coord, scene.options.size); return (p.x-scene.minX) + "," + (p.y-scene.minY); }).join(" ");
-            return <polygon key={tile.row + "," + tile.col} points={points} fill={tile.river ? "#4e9bb9" : getTerrainColor(tile.terrain)} opacity={tile.river ? 0.8 : Math.max(0.28, Math.min(1, tile.count / (step * step)))}><title>{tile.count} 格{tile.river ? " · 河流" : ""}</title></polygon>;
-          })}</g>}
+          {props.overview && (
+            <g aria-label="地图概览">
+              {props.overview.tiles.map((tile) => {
+                const step = props.overview!.bucket_size;
+                const points = [
+                  { row: tile.row, col: tile.col },
+                  { row: tile.row + step, col: tile.col },
+                  { row: tile.row + step, col: tile.col + step },
+                  { row: tile.row, col: tile.col + step }
+                ]
+                  .map((coord) => {
+                    const p = centerForCoord(coord, scene.options.size);
+                    return p.x - scene.minX + "," + (p.y - scene.minY);
+                  })
+                  .join(" ");
+                return (
+                  <polygon
+                    key={tile.row + "," + tile.col}
+                    points={points}
+                    fill={tile.river ? "#4e9bb9" : getTerrainColor(tile.terrain)}
+                    opacity={
+                      tile.river ? 0.8 : Math.max(0.28, Math.min(1, tile.count / (step * step)))
+                    }
+                  >
+                    <title>
+                      {tile.count} 格{tile.river ? " · 河流" : ""}
+                    </title>
+                  </polygon>
+                );
+              })}
+            </g>
+          )}
           {scene.layout.map((entry) => (
             <g
               key={entry.cell.id}
@@ -826,7 +1038,9 @@ export function MapCanvas(props: MapCanvasProps) {
                 centerX={entry.centerX}
                 centerY={entry.centerY}
                 selected={props.selectedCellId === entry.cell.id}
-                batchSelected={batchSelectedCellIds.has(entry.cell.id) || strokeIds.has(entry.cell.id)}
+                batchSelected={
+                  batchSelectedCellIds.has(entry.cell.id) || strokeIds.has(entry.cell.id)
+                }
                 hovered={hoveredCellId === entry.cell.id}
                 showCoordinates={shouldShowCoordinatesForEntry(entry)}
                 showShorthand={effectiveShowShorthand && isEntryInLabelViewport(entry)}
@@ -846,7 +1060,7 @@ export function MapCanvas(props: MapCanvasProps) {
           ))}
           {scene.riverBodies.length > 0 || scene.riverControlPoints.length > 0 ? (
             <g className="river-layer" pointerEvents="none" aria-hidden="true">
-              {scene.riverBodies.map((body) => (
+              {scene.riverBodies.map((body) =>
                 body.bankPath ? (
                   <path
                     key={`${body.id}-bank`}
@@ -860,7 +1074,7 @@ export function MapCanvas(props: MapCanvasProps) {
                     opacity={Math.min(0.5, body.opacity * 0.42)}
                   />
                 ) : null
-              ))}
+              )}
               {scene.riverBodies.map((body) => (
                 <path
                   key={`${body.id}-body`}
@@ -874,7 +1088,7 @@ export function MapCanvas(props: MapCanvasProps) {
                   opacity={body.preview ? Math.min(0.52, body.opacity * 0.66) : body.opacity}
                 />
               ))}
-              {scene.riverBodies.map((body) => (
+              {scene.riverBodies.map((body) =>
                 body.highlightPath ? (
                   <path
                     key={`${body.id}-highlight`}
@@ -892,8 +1106,8 @@ export function MapCanvas(props: MapCanvasProps) {
                     opacity={Math.min(0.28, body.opacity * 0.3)}
                   />
                 ) : null
-              ))}
-              {scene.riverBodies.map((body) => (
+              )}
+              {scene.riverBodies.map((body) =>
                 body.preview ? (
                   <path
                     key={`${body.id}-preview-center`}
@@ -912,7 +1126,7 @@ export function MapCanvas(props: MapCanvasProps) {
                     opacity={Math.min(0.82, body.opacity)}
                   />
                 ) : null
-              ))}
+              )}
               {scene.riverControlPoints.map((point) => (
                 <g
                   key={point.id}

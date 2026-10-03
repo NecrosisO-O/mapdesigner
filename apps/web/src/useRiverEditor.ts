@@ -31,7 +31,9 @@ function parseCoordToken(value: string): { row: number; col: number } | null {
   return parseDisplayCoord(value.trim());
 }
 
-function parseWidthAnchors(value: string): Map<string, { coord: { row: number; col: number }; width: number }> {
+function parseWidthAnchors(
+  value: string
+): Map<string, { coord: { row: number; col: number }; width: number }> {
   const widths = new Map<string, { coord: { row: number; col: number }; width: number }>();
   if (!value.trim()) {
     return widths;
@@ -75,7 +77,9 @@ function parseRiverPoints(pointsText: string, widthsText: string): RiverPoint[] 
     let inserted = false;
     for (let index = 0; index < points.length - 1; index += 1) {
       const line = buildHexLine(points[index]!, points[index + 1]!);
-      const lineIndex = line.findIndex((coord) => coord.row === anchor.coord.row && coord.col === anchor.coord.col);
+      const lineIndex = line.findIndex(
+        (coord) => coord.row === anchor.coord.row && coord.col === anchor.coord.col
+      );
       if (lineIndex > 0 && lineIndex < line.length - 1) {
         points.splice(index + 1, 0, { ...anchor.coord, width: anchor.width });
         inserted = true;
@@ -83,7 +87,9 @@ function parseRiverPoints(pointsText: string, widthsText: string): RiverPoint[] 
       }
     }
     if (!inserted) {
-      throw new Error(`宽度锚点 ${createDisplayCoord(anchor.coord.row, anchor.coord.col)} 不在河流路径上`);
+      throw new Error(
+        `宽度锚点 ${createDisplayCoord(anchor.coord.row, anchor.coord.col)} 不在河流路径上`
+      );
     }
   }
   return points;
@@ -92,7 +98,8 @@ function parseRiverPoints(pointsText: string, widthsText: string): RiverPoint[] 
 function draftFromRiver(river: RiverFeature | null): RiverDraft {
   return {
     name: river?.name ?? "",
-    pointsText: river?.points.map((point) => createDisplayCoord(point.row, point.col)).join(", ") ?? "",
+    pointsText:
+      river?.points.map((point) => createDisplayCoord(point.row, point.col)).join(", ") ?? "",
     widthsText:
       river?.points
         .filter((point) => typeof point.width === "number")
@@ -195,11 +202,14 @@ export function useRiverEditor(
       return;
     }
     const current = pointsRef.current;
-    if (current.some(point => point.row === cell.row && point.col === cell.col)) {
+    if (current.some((point) => point.row === cell.row && point.col === cell.col)) {
       setMessage(cell.display_coord + " 已在当前河流路径中");
       return;
     }
-    const next: RiverPoint[] = [...current, { row: cell.row, col: cell.col, ...(current.length ? {} : { width: DEFAULT_RIVER_WIDTH }) }];
+    const next: RiverPoint[] = [
+      ...current,
+      { row: cell.row, col: cell.col, ...(current.length ? {} : { width: DEFAULT_RIVER_WIDTH }) }
+    ];
     pointsRef.current = next;
     setDrawingPoints(next);
     syncDrawingDraft(next);
@@ -229,39 +239,45 @@ export function useRiverEditor(
       return false;
     }
 
-    const existingIds = new Set(rivers.map((river) => river.id));
+    const nextId =
+      selectedRiver?.id ??
+      "river-" +
+        [...crypto.getRandomValues(new Uint32Array(4))]
+          .map((value) => value.toString(16).padStart(8, "0"))
+          .join("");
     const submitted = draft;
-    const result = await task.run(() => applyCommands([
-      selectedRiver
-        ? {
-            action: "update_river",
-            source: "webui",
-            river_id: selectedRiver.id,
-            changes: {
-              name: draft.name,
-              points,
-              color: draft.color || null,
-              opacity
+    const result = await task.run(() =>
+      applyCommands([
+        selectedRiver
+          ? {
+              action: "update_river",
+              source: "webui",
+              river_id: selectedRiver.id,
+              changes: {
+                name: draft.name,
+                points,
+                color: draft.color || null,
+                opacity
+              }
             }
-          }
-        : {
-            action: "create_river",
-            source: "webui",
-            river: {
-              name: draft.name,
-              points,
-              color: draft.color || null,
-              opacity
+          : {
+              action: "create_river",
+              source: "webui",
+              river: {
+                id: nextId,
+                name: draft.name,
+                points,
+                color: draft.color || null,
+                opacity
+              }
             }
-          }
-    ]));
+      ])
+    );
     if (!result) {
       return false;
     }
     if (latest.current.selectedRiverId !== selectedRiverId) return false;
-    const nextRiver = selectedRiver
-      ? result.document.features.rivers.find((river) => river.id === selectedRiver.id) ?? null
-      : result.document.features.rivers.find((river) => !existingIds.has(river.id)) ?? null;
+    const nextRiver = result.document.features.rivers.find((river) => river.id === nextId) ?? null;
     setSelectedRiverId(nextRiver?.id ?? "");
     setSelectedRiver(nextRiver);
     if (latest.current.draft === submitted) setDraft(draftFromRiver(nextRiver));
@@ -292,17 +308,32 @@ export function useRiverEditor(
     if (!currentMap || !selectedRiver) {
       return;
     }
-    const result = await task.run(() => applyCommands([{
-      action: "delete_river",
-      source: "webui",
-      river_id: selectedRiver.id
-    }]));
+    const result = await task.run(() =>
+      applyCommands([
+        {
+          action: "delete_river",
+          source: "webui",
+          river_id: selectedRiver.id
+        }
+      ])
+    );
     if (!result) {
       return;
     }
     startNewRiver();
     setDrawingStatus("idle");
     setMessage("河流已删除并保存到服务器");
+  }
+
+  function acceptConfirmedFeatures(features: { rivers: RiverFeature[] }): void {
+    if (!selectedRiverId) return;
+    const river = features.rivers.find((item) => item.id === selectedRiverId);
+    if (!river) {
+      startNewRiver();
+      return;
+    }
+    setSelectedRiver(river);
+    if (!riverDirty) setDraft(draftFromRiver(river));
   }
 
   const riverPreview =
@@ -316,15 +347,22 @@ export function useRiverEditor(
         }
       : null;
 
-  useEffect(() => { startNewRiver(); }, [currentMap?.document.meta.id]);
+  useEffect(() => {
+    startNewRiver();
+  }, [currentMap?.document.meta.id]);
   useEffect(() => {
     if (!selectedRiverId || riverDirty || task.pending) return;
-    const river = rivers.find(entry => entry.id === selectedRiverId);
-    if (river && river !== selectedRiver) { setSelectedRiver(river); setDraft(draftFromRiver(river)); }
+    const river = rivers.find((entry) => entry.id === selectedRiverId);
+    if (river && river !== selectedRiver) {
+      setSelectedRiver(river);
+      setDraft(draftFromRiver(river));
+    }
   }, [rivers, selectedRiverId, riverDirty, task.pending]);
 
   return {
-    pending: task.pending, ensureCanLeaveRiver,
+    pending: task.pending,
+    ensureCanLeaveRiver,
+    acceptConfirmedFeatures,
     selectedRiverId,
     selectedRiver,
     riverDraft: draft,

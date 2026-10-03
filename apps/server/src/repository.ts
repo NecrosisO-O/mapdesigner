@@ -1,33 +1,33 @@
 import {
-createCellId,
-createDisplayCoord,
-createEmptyDocument,
-expandRiverPath,
-getNeighborCoords,
-normalizeDocument,
-parseDocument,
-type ActiveCell,
-type CellRange,
-type CellRangeResult,
-type DesignedCellRecord,
-type GridConfig,
-type HistorySource,
-type MapBounds,
-type MapCommand,
-type MapDocument,
-type MapFeaturePage,
-type MapFeatures,
-type MapMeta,
-type MapSummary,
-type RiverFeature
+  createCellId,
+  createDisplayCoord,
+  createEmptyDocument,
+  expandRiverPath,
+  getNeighborCoords,
+  normalizeDocument,
+  parseDocument,
+  type ActiveCell,
+  type CellRange,
+  type CellRangeResult,
+  type DesignedCellRecord,
+  type GridConfig,
+  type HistorySource,
+  type MapBounds,
+  type MapCommand,
+  type MapDocument,
+  type MapFeaturePage,
+  type MapFeatures,
+  type MapMeta,
+  type MapSummary,
+  type RiverFeature
 } from "@mapdesigner/map-core";
 import type Database from "better-sqlite3";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { MAP_STORAGE_DIR } from "./config.js";
 import { getDatabase } from "./db.js";
-import { badRequest,notFound,storageError } from "./errors.js";
-import { assertSafeMapId,mapFilePath,writeFileAtomicStream } from "./storage.js";
+import { badRequest, notFound, storageError } from "./errors.js";
+import { assertSafeMapId, mapFilePath, writeFileAtomicStream } from "./storage.js";
 import { createMapId } from "./utils.js";
 
 interface MapRow {
@@ -158,19 +158,23 @@ const SQLITE_IMPORT_BATCH_SIZE = 1_000;
 /** Prepare legacy I/O before opening a transaction. No asynchronous work may escape this callback. */
 export async function withMapTransaction<T>(id: string, callback: () => T): Promise<T> {
   await ensureMapInDatabase(id);
-  return getDatabase().transaction(() => {
-    const result = callback();
-    if (result && typeof result === "object" && "then" in result) {
-      throw new TypeError("map transaction callback must be synchronous");
-    }
-    return result;
-  }).immediate();
+  return getDatabase()
+    .transaction(() => {
+      const result = callback();
+      if (result && typeof result === "object" && "then" in result) {
+        throw new TypeError("map transaction callback must be synchronous");
+      }
+      return result;
+    })
+    .immediate();
 }
 
 function safeJsonArray(value: string): string[] {
   try {
     const parsed = JSON.parse(value) as unknown;
-    return Array.isArray(parsed) ? parsed.filter((entry): entry is string => typeof entry === "string") : [];
+    return Array.isArray(parsed)
+      ? parsed.filter((entry): entry is string => typeof entry === "string")
+      : [];
   } catch {
     return [];
   }
@@ -314,7 +318,9 @@ function assertRange(range: CellRange): CellRange {
   return range;
 }
 
-function normalizeFeaturePageOptions(options: FeaturePageOptions = {}): Required<FeaturePageOptions> {
+function normalizeFeaturePageOptions(
+  options: FeaturePageOptions = {}
+): Required<FeaturePageOptions> {
   const limit = options.limit ?? DEFAULT_FEATURE_PAGE_LIMIT;
   const offset = options.offset ?? 0;
   if (!Number.isInteger(limit) || limit < 1 || limit > MAX_FEATURE_PAGE_LIMIT) {
@@ -327,17 +333,35 @@ function normalizeFeaturePageOptions(options: FeaturePageOptions = {}): Required
 }
 
 function isWithinRange(coord: { row: number; col: number }, range: CellRange): boolean {
-  return coord.row >= range.minRow && coord.row <= range.maxRow && coord.col >= range.minCol && coord.col <= range.maxCol;
+  return (
+    coord.row >= range.minRow &&
+    coord.row <= range.maxRow &&
+    coord.col >= range.minCol &&
+    coord.col <= range.maxCol
+  );
 }
 
 function doRangesOverlap(left: CellRange, right: CellRange): boolean {
-  return left.minRow <= right.maxRow && left.maxRow >= right.minRow && left.minCol <= right.maxCol && left.maxCol >= right.minCol;
+  return (
+    left.minRow <= right.maxRow &&
+    left.maxRow >= right.minRow &&
+    left.minCol <= right.maxCol &&
+    left.maxCol >= right.minCol
+  );
 }
 
 function coordRangeForRiver(river: RiverFeature): CellRange | null {
   if (!river.points.length) return null;
-  let minRow = Infinity, maxRow = -Infinity, minCol = Infinity, maxCol = -Infinity;
-  for (const point of river.points) { minRow = Math.min(minRow, point.row); maxRow = Math.max(maxRow, point.row); minCol = Math.min(minCol, point.col); maxCol = Math.max(maxCol, point.col); }
+  let minRow = Infinity,
+    maxRow = -Infinity,
+    minCol = Infinity,
+    maxCol = -Infinity;
+  for (const point of river.points) {
+    minRow = Math.min(minRow, point.row);
+    maxRow = Math.max(maxRow, point.row);
+    minCol = Math.min(minCol, point.col);
+    maxCol = Math.max(maxCol, point.col);
+  }
   return { minRow, maxRow, minCol, maxCol };
 }
 
@@ -368,11 +392,21 @@ function getMapRowOrThrow(db: Database.Database, id: string): MapRow {
 }
 
 function mapSummaryFromRow(db: Database.Database, row: MapRow): MapSummary {
-  const riverCount = db.prepare("SELECT COUNT(*) AS count, MIN(bounds_min_row) AS min_row, MAX(bounds_max_row) AS max_row, MIN(bounds_min_col) AS min_col, MAX(bounds_max_col) AS max_col FROM features WHERE map_id = ? AND kind = 'river'").get(row.id) as { count: number } & MapBounds;
+  const riverCount = db
+    .prepare(
+      "SELECT COUNT(*) AS count, MIN(bounds_min_row) AS min_row, MAX(bounds_max_row) AS max_row, MIN(bounds_min_col) AS min_col, MAX(bounds_max_col) AS max_col FROM features WHERE map_id = ? AND kind = 'river'"
+    )
+    .get(row.id) as { count: number } & MapBounds;
   const renderBounds = mapRowToBounds(row);
   for (const key of ["min_row", "max_row", "min_col", "max_col"] as const) {
     const value = riverCount[key];
-    if (value !== null) renderBounds[key] = renderBounds[key] === null ? value : key.startsWith("min") ? Math.min(renderBounds[key]!, value) : Math.max(renderBounds[key]!, value);
+    if (value !== null)
+      renderBounds[key] =
+        renderBounds[key] === null
+          ? value
+          : key.startsWith("min")
+            ? Math.min(renderBounds[key]!, value)
+            : Math.max(renderBounds[key]!, value);
   }
   return {
     meta: mapRowToMeta(row),
@@ -398,14 +432,33 @@ function readFeatureRows(db: Database.Database, id: string): FeatureRow[] {
     .all(id) as FeatureRow[];
 }
 
-function readFeaturePage(db: Database.Database, id: string, range: CellRange, options: Required<FeaturePageOptions>): MapFeaturePage {
-  const where = "map_id = ? AND kind = 'river' AND bounds_min_row <= ? AND bounds_max_row >= ? AND bounds_min_col <= ? AND bounds_max_col >= ?";
+function readFeaturePage(
+  db: Database.Database,
+  id: string,
+  range: CellRange,
+  options: Required<FeaturePageOptions>
+): MapFeaturePage {
+  const where =
+    "map_id = ? AND kind = 'river' AND bounds_min_row <= ? AND bounds_max_row >= ? AND bounds_min_col <= ? AND bounds_max_col >= ?";
   const params = [id, range.maxRow, range.minRow, range.maxCol, range.minCol];
-  const total = (db.prepare("SELECT COUNT(*) AS total FROM features WHERE " + where).get(...params) as { total: number }).total;
-  const rows = db.prepare("SELECT json FROM features WHERE " + where + " ORDER BY feature_id LIMIT ? OFFSET ?")
+  const total = (
+    db.prepare("SELECT COUNT(*) AS total FROM features WHERE " + where).get(...params) as {
+      total: number;
+    }
+  ).total;
+  const rows = db
+    .prepare("SELECT json FROM features WHERE " + where + " ORDER BY feature_id LIMIT ? OFFSET ?")
     .all(...params, options.limit, options.offset) as Array<{ json: string }>;
-  return { rivers: rows.map(row => JSON.parse(row.json) as RiverFeature),
-    page: { total, limit: options.limit, offset: options.offset, returned: rows.length, has_more: options.offset + rows.length < total } };
+  return {
+    rivers: rows.map((row) => JSON.parse(row.json) as RiverFeature),
+    page: {
+      total,
+      limit: options.limit,
+      offset: options.offset,
+      returned: rows.length,
+      has_more: options.offset + rows.length < total
+    }
+  };
 }
 
 function featureRowsToFeatures(rows: FeatureRow[]): MapFeatures {
@@ -463,19 +516,35 @@ function backfillMissingFeatureBounds(db: Database.Database, id: string): void {
 }
 
 function readCells(db: Database.Database, id: string): DesignedCellRecord[] {
-  return (db
-    .prepare("SELECT map_id, row, col, terrain, biome, tags_json, note FROM cells WHERE map_id = ? ORDER BY row, col")
-    .all(id) as CellRow[]).map(cellRowToDesignedCell);
+  return (
+    db
+      .prepare(
+        "SELECT map_id, row, col, terrain, biome, tags_json, note FROM cells WHERE map_id = ? ORDER BY row, col"
+      )
+      .all(id) as CellRow[]
+  ).map(cellRowToDesignedCell);
 }
 
-function readCellAt(db: Database.Database, id: string, row: number, col: number): DesignedCellRecord | null {
+function readCellAt(
+  db: Database.Database,
+  id: string,
+  row: number,
+  col: number
+): DesignedCellRecord | null {
   const found = db
-    .prepare("SELECT map_id, row, col, terrain, biome, tags_json, note FROM cells WHERE map_id = ? AND row = ? AND col = ?")
+    .prepare(
+      "SELECT map_id, row, col, terrain, biome, tags_json, note FROM cells WHERE map_id = ? AND row = ? AND col = ?"
+    )
     .get(id, row, col) as CellRow | undefined;
   return found ? cellRowToDesignedCell(found) : null;
 }
 
-function updateMapCellAggregate(db: Database.Database, id: string, revisionIncrement: number, projected: MapSummary): MapRow {
+function updateMapCellAggregate(
+  db: Database.Database,
+  id: string,
+  revisionIncrement: number,
+  projected: MapSummary
+): MapRow {
   const row = getMapRowOrThrow(db, id);
   db.prepare(
     `UPDATE maps
@@ -644,7 +713,11 @@ function upsertMapRow(db: Database.Database, document: MapDocument, bounds: MapB
   });
 }
 
-function writeDocumentBatched(db: Database.Database, document: MapDocument, beforeCommit?: () => void): void {
+function writeDocumentBatched(
+  db: Database.Database,
+  document: MapDocument,
+  beforeCommit?: () => void
+): void {
   const bounds = normalizeBounds(document.cells);
   const insertCell = db.prepare(
     `INSERT INTO cells (map_id, row, col, terrain, biome, tags_json, note)
@@ -656,7 +729,8 @@ function writeDocumentBatched(db: Database.Database, document: MapDocument, befo
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
   );
   const write = db.transaction(() => {
-    if (db.prepare("SELECT id FROM maps WHERE id = ?").get(document.meta.id)) throw badRequest("meta.id conflict for " + document.meta.id);
+    if (db.prepare("SELECT id FROM maps WHERE id = ?").get(document.meta.id))
+      throw badRequest("meta.id conflict for " + document.meta.id);
     upsertMapRow(db, document, bounds);
     db.prepare("DELETE FROM cells WHERE map_id = ?").run(document.meta.id);
     db.prepare("DELETE FROM features WHERE map_id = ?").run(document.meta.id);
@@ -675,7 +749,11 @@ function writeDocumentBatched(db: Database.Database, document: MapDocument, befo
       }
     }
 
-    for (let start = 0; start < document.features.rivers.length; start += SQLITE_IMPORT_BATCH_SIZE) {
+    for (
+      let start = 0;
+      start < document.features.rivers.length;
+      start += SQLITE_IMPORT_BATCH_SIZE
+    ) {
       for (const river of document.features.rivers.slice(start, start + SQLITE_IMPORT_BATCH_SIZE)) {
         const range = coordRangeForRiver(river);
         insertFeature.run(
@@ -710,15 +788,14 @@ function rowToStoredOperation(row: OperationRow): StoredOperation {
 
 function readHistoryCursor(db: Database.Database, mapId: string): number {
   const row = db.prepare("SELECT history_cursor FROM maps WHERE id = ?").get(mapId) as
-    | { history_cursor: number }
-    | undefined;
+    { history_cursor: number } | undefined;
   return row?.history_cursor ?? 0;
 }
 
 function readLatestOperationSeq(db: Database.Database, mapId: string): number {
-  const row = db.prepare("SELECT COALESCE(MAX(seq), 0) AS latest FROM operations WHERE map_id = ?").get(mapId) as
-    | { latest: number }
-    | undefined;
+  const row = db
+    .prepare("SELECT COALESCE(MAX(seq), 0) AS latest FROM operations WHERE map_id = ?")
+    .get(mapId) as { latest: number } | undefined;
   return row?.latest ?? 0;
 }
 
@@ -760,7 +837,12 @@ export async function importLegacyJsonFiles(): Promise<void> {
   try {
     files = (await fs.readdir(MAP_STORAGE_DIR)).filter((file) => file.endsWith(".json"));
   } catch (error) {
-    if (error && typeof error === "object" && "code" in error && (error as { code?: unknown }).code === "ENOENT") {
+    if (
+      error &&
+      typeof error === "object" &&
+      "code" in error &&
+      (error as { code?: unknown }).code === "ENOENT"
+    ) {
       return;
     }
     throw storageError("failed to scan legacy map files", error);
@@ -861,7 +943,9 @@ export async function writeMapDocumentJsonExport(id: string, filePath: string): 
   };
   const grid = mapRowToGrid(row);
   const cellRows = db
-    .prepare("SELECT map_id, row, col, terrain, biome, tags_json, note FROM cells WHERE map_id = ? ORDER BY row, col")
+    .prepare(
+      "SELECT map_id, row, col, terrain, biome, tags_json, note FROM cells WHERE map_id = ? ORDER BY row, col"
+    )
     .iterate(row.id) as Iterable<CellRow>;
   const riverRows = db
     .prepare(
@@ -950,7 +1034,9 @@ export function applyFeatureWriteChangesSync(
     if (changes.length === 0) {
       return row;
     }
-    const deleteFeature = db.prepare("DELETE FROM features WHERE map_id = ? AND kind = ? AND feature_id = ?");
+    const deleteFeature = db.prepare(
+      "DELETE FROM features WHERE map_id = ? AND kind = ? AND feature_id = ?"
+    );
     const upsertFeature = db.prepare(
       `INSERT INTO features (
         map_id, kind, feature_id, json, bounds_min_row, bounds_max_row, bounds_min_col, bounds_max_col
@@ -1002,14 +1088,22 @@ export async function applyCellAndFeatureWriteChanges(
   id: string,
   cellChanges: CellWriteChange[],
   featureChanges: FeatureWriteChange[],
-  options: { dryRun?: boolean; cellRevisionIncrement?: number; featureRevisionIncrement?: number } = {}
+  options: {
+    dryRun?: boolean;
+    cellRevisionIncrement?: number;
+    featureRevisionIncrement?: number;
+  } = {}
 ): Promise<MapSummary> {
   return withMapTransaction(id, () => {
     const db = getDatabase();
     db.exec("SAVEPOINT mixed_write");
     try {
-      applyCellWriteChangesSync(id, cellChanges, { revisionIncrement: options.cellRevisionIncrement ?? 0 });
-      const result = applyFeatureWriteChangesSync(id, featureChanges, { revisionIncrement: options.featureRevisionIncrement ?? 0 });
+      applyCellWriteChangesSync(id, cellChanges, {
+        revisionIncrement: options.cellRevisionIncrement ?? 0
+      });
+      const result = applyFeatureWriteChangesSync(id, featureChanges, {
+        revisionIncrement: options.featureRevisionIncrement ?? 0
+      });
       if (options.dryRun) db.exec("ROLLBACK TO mixed_write");
       db.exec("RELEASE mixed_write");
       return result;
@@ -1050,34 +1144,55 @@ export function getDesignedCellsAtSync(
   return cells;
 }
 
-export async function getDesignedCellsByTerrain(id: string, terrain: DesignedCellRecord["terrain"]): Promise<DesignedCellRecord[]> {
+export async function getDesignedCellsByTerrain(
+  id: string,
+  terrain: DesignedCellRecord["terrain"]
+): Promise<DesignedCellRecord[]> {
   await ensureMapInDatabase(id);
   return getDesignedCellsByTerrainSync(id, terrain);
 }
 
-export function getDesignedCellsByTerrainSync(id: string, terrain: DesignedCellRecord["terrain"]): DesignedCellRecord[] {
+export function getDesignedCellsByTerrainSync(
+  id: string,
+  terrain: DesignedCellRecord["terrain"]
+): DesignedCellRecord[] {
   const db = getDatabase();
   const row = getMapRowOrThrow(db, id);
-  return (db
-    .prepare("SELECT map_id, row, col, terrain, biome, tags_json, note FROM cells WHERE map_id = ? AND terrain = ? ORDER BY row, col")
-    .all(row.id, terrain) as CellRow[]).map(cellRowToDesignedCell);
+  return (
+    db
+      .prepare(
+        "SELECT map_id, row, col, terrain, biome, tags_json, note FROM cells WHERE map_id = ? AND terrain = ? ORDER BY row, col"
+      )
+      .all(row.id, terrain) as CellRow[]
+  ).map(cellRowToDesignedCell);
 }
 
-export async function getDesignedCellsByBiome(id: string, biome: DesignedCellRecord["biome"]): Promise<DesignedCellRecord[]> {
+export async function getDesignedCellsByBiome(
+  id: string,
+  biome: DesignedCellRecord["biome"]
+): Promise<DesignedCellRecord[]> {
   await ensureMapInDatabase(id);
   return getDesignedCellsByBiomeSync(id, biome);
 }
 
-export function getDesignedCellsByBiomeSync(id: string, biome: DesignedCellRecord["biome"]): DesignedCellRecord[] {
+export function getDesignedCellsByBiomeSync(
+  id: string,
+  biome: DesignedCellRecord["biome"]
+): DesignedCellRecord[] {
   const db = getDatabase();
   const row = getMapRowOrThrow(db, id);
-  const rows = biome === null
-    ? db
-        .prepare("SELECT map_id, row, col, terrain, biome, tags_json, note FROM cells WHERE map_id = ? AND biome IS NULL ORDER BY row, col")
-        .all(row.id)
-    : db
-        .prepare("SELECT map_id, row, col, terrain, biome, tags_json, note FROM cells WHERE map_id = ? AND biome = ? ORDER BY row, col")
-        .all(row.id, biome);
+  const rows =
+    biome === null
+      ? db
+          .prepare(
+            "SELECT map_id, row, col, terrain, biome, tags_json, note FROM cells WHERE map_id = ? AND biome IS NULL ORDER BY row, col"
+          )
+          .all(row.id)
+      : db
+          .prepare(
+            "SELECT map_id, row, col, terrain, biome, tags_json, note FROM cells WHERE map_id = ? AND biome = ? ORDER BY row, col"
+          )
+          .all(row.id, biome);
   return (rows as CellRow[]).map(cellRowToDesignedCell);
 }
 
@@ -1086,7 +1201,7 @@ export function previewCellChangesSync(id: string, changes: CellWriteChange[]): 
   const db = getDatabase();
   const summary = getMapSummarySync(id);
   if (!changes.length) return summary;
-  const unique = new Map(changes.map(c => [createCellId(c.row, c.col), c]));
+  const unique = new Map(changes.map((c) => [createCellId(c.row, c.col), c]));
   let membershipChanged = false;
   for (const change of unique.values()) {
     const existed = !!readCellAt(db, id, change.row, change.col);
@@ -1099,17 +1214,28 @@ export function previewCellChangesSync(id: string, changes: CellWriteChange[]): 
   if (!membershipChanged) return summary;
   const bounds: MapBounds = { min_row: null, max_row: null, min_col: null, max_col: null };
   for (const [key, column, direction] of [
-    ["min_row", "row", "ASC"], ["max_row", "row", "DESC"],
-    ["min_col", "col", "ASC"], ["max_col", "col", "DESC"]
+    ["min_row", "row", "ASC"],
+    ["max_row", "row", "DESC"],
+    ["min_col", "col", "ASC"],
+    ["max_col", "col", "DESC"]
   ] as const) {
-    for (const raw of db.prepare("SELECT row, col FROM cells WHERE map_id = ? ORDER BY " + column + " " + direction).iterate(id)) {
+    for (const raw of db
+      .prepare("SELECT row, col FROM cells WHERE map_id = ? ORDER BY " + column + " " + direction)
+      .iterate(id)) {
       const cell = raw as { row: number; col: number };
-      if (!unique.has(createCellId(cell.row, cell.col))) { bounds[key] = cell[column]; break; }
+      if (!unique.has(createCellId(cell.row, cell.col))) {
+        bounds[key] = cell[column];
+        break;
+      }
     }
     for (const { cell } of unique.values()) {
       if (!cell) continue;
-      bounds[key] = bounds[key] === null ? cell[column]
-        : direction === "ASC" ? Math.min(bounds[key]!, cell[column]) : Math.max(bounds[key]!, cell[column]);
+      bounds[key] =
+        bounds[key] === null
+          ? cell[column]
+          : direction === "ASC"
+            ? Math.min(bounds[key]!, cell[column])
+            : Math.max(bounds[key]!, cell[column]);
     }
   }
   summary.bounds = bounds;
@@ -1221,7 +1347,10 @@ export function saveMapDocumentSync(document: MapDocument): MapDocument {
   return normalized;
 }
 
-export async function importMapDocument(document: MapDocument, beforeCommit?: () => void): Promise<MapDocument> {
+export async function importMapDocument(
+  document: MapDocument,
+  beforeCommit?: () => void
+): Promise<MapDocument> {
   const normalized = normalizeDocument(document);
   writeDocumentBatched(getDatabase(), normalized, beforeCommit);
   return normalized;
@@ -1254,7 +1383,10 @@ export function getMapSummarySync(id: string): MapSummary {
   return mapSummaryFromRow(db, row);
 }
 
-export async function recordOperation(mapId: string, input: OperationInput): Promise<StoredOperation> {
+export async function recordOperation(
+  mapId: string,
+  input: OperationInput
+): Promise<StoredOperation> {
   await ensureMapInDatabase(mapId);
   return recordOperationSync(mapId, input);
 }
@@ -1301,8 +1433,12 @@ export function getHistoryStatusSync(mapId: string): HistoryStatus {
   const db = getDatabase();
   const cursor = readHistoryCursor(db, normalizedId);
   const latest = readLatestOperationSeq(db, normalizedId);
-  const undoExists = db.prepare("SELECT 1 FROM operations WHERE map_id = ? AND seq = ?").get(normalizedId, cursor);
-  const redoExists = db.prepare("SELECT 1 FROM operations WHERE map_id = ? AND seq = ?").get(normalizedId, cursor + 1);
+  const undoExists = db
+    .prepare("SELECT 1 FROM operations WHERE map_id = ? AND seq = ?")
+    .get(normalizedId, cursor);
+  const redoExists = db
+    .prepare("SELECT 1 FROM operations WHERE map_id = ? AND seq = ?")
+    .get(normalizedId, cursor + 1);
   return {
     canUndo: cursor > 0 && Boolean(undoExists),
     canRedo: Boolean(redoExists),
@@ -1327,11 +1463,11 @@ export async function getMapHistory(mapId: string, limit = 5): Promise<MapHistor
        LIMIT ?`
     )
     .all(normalizedId, status.cursor, limit) as Array<{
-      seq: number;
-      source: HistorySource;
-      action: string;
-      timestamp: string;
-    }>;
+    seq: number;
+    source: HistorySource;
+    action: string;
+    timestamp: string;
+  }>;
   return {
     status,
     entries: rows.map((row) => ({
@@ -1355,9 +1491,9 @@ export function getUndoOperationSync(mapId: string): StoredOperation | null {
   if (cursor <= 0) {
     return null;
   }
-  const row = db.prepare("SELECT * FROM operations WHERE map_id = ? AND seq = ?").get(normalizedId, cursor) as
-    | OperationRow
-    | undefined;
+  const row = db
+    .prepare("SELECT * FROM operations WHERE map_id = ? AND seq = ?")
+    .get(normalizedId, cursor) as OperationRow | undefined;
   return row ? rowToStoredOperation(row) : null;
 }
 
@@ -1370,9 +1506,9 @@ export function getRedoOperationSync(mapId: string): StoredOperation | null {
   const normalizedId = assertSafeMapId(mapId);
   const db = getDatabase();
   const cursor = readHistoryCursor(db, normalizedId);
-  const row = db.prepare("SELECT * FROM operations WHERE map_id = ? AND seq = ?").get(normalizedId, cursor + 1) as
-    | OperationRow
-    | undefined;
+  const row = db
+    .prepare("SELECT * FROM operations WHERE map_id = ? AND seq = ?")
+    .get(normalizedId, cursor + 1) as OperationRow | undefined;
   return row ? rowToStoredOperation(row) : null;
 }
 
@@ -1386,7 +1522,9 @@ export function moveHistoryCursorSync(mapId: string, cursor: number): void {
   if (!Number.isInteger(cursor) || cursor < 0) {
     throw badRequest("history cursor must be a non-negative integer");
   }
-  getDatabase().prepare("UPDATE maps SET history_cursor = ? WHERE id = ?").run(cursor, normalizedId);
+  getDatabase()
+    .prepare("UPDATE maps SET history_cursor = ? WHERE id = ?")
+    .run(cursor, normalizedId);
 }
 
 export async function getCellsInRange(
@@ -1404,7 +1542,13 @@ export async function getCellsInRange(
        WHERE map_id = ? AND row BETWEEN ? AND ? AND col BETWEEN ? AND ?
        ORDER BY row, col`
     )
-    .all(map.id, range.minRow - 1, range.maxRow + 1, range.minCol - 1, range.maxCol + 1) as CellRow[];
+    .all(
+      map.id,
+      range.minRow - 1,
+      range.maxRow + 1,
+      range.minCol - 1,
+      range.maxCol + 1
+    ) as CellRow[];
   const designed = new Map<string, ActiveCell>();
   const activeCoords = new Map<string, { row: number; col: number }>();
 
@@ -1432,7 +1576,11 @@ export async function getCellsInRange(
   }
 
   const cells = [...activeCoords.values()]
-    .map((coord) => designed.get(createCellId(coord.row, coord.col)) ?? undesignedCell(coord, map.designed_cell_count === 0))
+    .map(
+      (coord) =>
+        designed.get(createCellId(coord.row, coord.col)) ??
+        undesignedCell(coord, map.designed_cell_count === 0)
+    )
     .sort(compareActiveCells);
 
   return {

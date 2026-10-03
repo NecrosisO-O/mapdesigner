@@ -10,5 +10,9 @@ export function downloadUrl(fileName: string): string {
 export function validDownloadTicket(url: string): boolean {
   const parsed = new URL(url, "http://localhost");
   const ticket = tickets.get(parsed.searchParams.get("ticket") ?? "");
-  return !!ticket && ticket.expires > Date.now() && parsed.pathname === "/api/exports/" + encodeURIComponent(ticket.fileName);
+  return (
+    !!ticket &&
+    ticket.expires > Date.now() &&
+    parsed.pathname === "/api/exports/" + encodeURIComponent(ticket.fileName)
+  );
 }

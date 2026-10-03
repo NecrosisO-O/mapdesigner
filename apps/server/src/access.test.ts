@@ -22,13 +22,31 @@ afterEach(async () => {
 
 it("rejects foreign origins, malformed origins and rebinding hosts before writes", async () => {
   app = await (await import("./api.js")).createServer();
-  for (const headers of [{ origin: "https://example.invalid" }, { origin: "invalid" }, { host: "example.invalid" }]) {
-    const response = await app.inject({ method: "POST", url: "/api/maps", headers, payload: { name: "Forbidden" } });
+  for (const headers of [
+    { origin: "https://example.invalid" },
+    { origin: "invalid" },
+    { host: "example.invalid" }
+  ]) {
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/maps",
+      headers,
+      payload: { name: "Forbidden" }
+    });
     expect(response.statusCode).toBe(403);
     expect(response.json().ok).toBe(false);
   }
   expect((await app.inject({ method: "GET", url: "/api/maps" })).json().result).toEqual([]);
-  expect((await app.inject({ method: "POST", url: "/api/maps", headers: { origin: "http://localhost:5173" }, payload: { name: "Local" } })).statusCode).toBe(200);
+  expect(
+    (
+      await app.inject({
+        method: "POST",
+        url: "/api/maps",
+        headers: { origin: "http://localhost:5173" },
+        payload: { name: "Local" }
+      })
+    ).statusCode
+  ).toBe(200);
 });
 
 it("requires the configured token and keeps health checks available", async () => {
@@ -39,8 +57,24 @@ it("requires the configured token and keeps health checks available", async () =
   app = await (await import("./api.js")).createServer();
   expect((await app.inject({ method: "GET", url: "/api/health" })).statusCode).toBe(200);
   expect((await app.inject({ method: "GET", url: "/api/maps" })).statusCode).toBe(401);
-  expect((await app.inject({ method: "GET", url: "/api/maps", headers: { authorization: "Bearer wrong" } })).statusCode).toBe(401);
-  expect((await app.inject({ method: "GET", url: "/api/maps", headers: { authorization: "Bearer test-token-for-private-network" } })).statusCode).toBe(200);
+  expect(
+    (
+      await app.inject({
+        method: "GET",
+        url: "/api/maps",
+        headers: { authorization: "Bearer wrong" }
+      })
+    ).statusCode
+  ).toBe(401);
+  expect(
+    (
+      await app.inject({
+        method: "GET",
+        url: "/api/maps",
+        headers: { authorization: "Bearer test-token-for-private-network" }
+      })
+    ).statusCode
+  ).toBe(200);
 });
 
 it("requires explicit authorization for network listening", async () => {

@@ -1,5 +1,13 @@
 import { sameCoord } from "./coords.js";
-import type { ActiveCell, DesignedCellRecord, GridCoordinate, RiverFeature, RiverPathSample, RiverPoint, TerrainKey } from "./types.js";
+import type {
+  ActiveCell,
+  DesignedCellRecord,
+  GridCoordinate,
+  RiverFeature,
+  RiverPathSample,
+  RiverPoint,
+  TerrainKey
+} from "./types.js";
 
 export const DEFAULT_RIVER_WIDTH = 4;
 export const MIN_RIVER_WIDTH = 0.5;
@@ -64,7 +72,8 @@ export function getHexDistance(left: GridCoordinate, right: GridCoordinate): num
 
 export function buildHexLine(start: GridCoordinate, end: GridCoordinate): GridCoordinate[] {
   const distance = getHexDistance(start, end);
-  if (!Number.isSafeInteger(distance) || distance > 500_000) throw new Error("hex line exceeds the 500000 cell budget");
+  if (!Number.isSafeInteger(distance) || distance > 500_000)
+    throw new Error("hex line exceeds the 500000 cell budget");
   if (distance === 0) {
     return [{ row: start.row, col: start.col }];
   }
@@ -100,15 +109,22 @@ function normalizeRiverWidth(value: number | null | undefined): number | null {
 }
 
 function pointWidths(points: RiverPoint[]): number[] {
-  const widths = points.map(point => normalizeRiverWidth(point.width));
+  const widths = points.map((point) => normalizeRiverWidth(point.width));
   const next = new Array<number>(points.length).fill(-1);
   let following = -1;
-  for (let i = points.length - 1; i >= 0; i--) { if (widths[i] !== null) following = i; next[i] = following; }
+  for (let i = points.length - 1; i >= 0; i--) {
+    if (widths[i] !== null) following = i;
+    next[i] = following;
+  }
   let previous = -1;
   return widths.map((width, i) => {
-    if (width !== null) { previous = i; return width!; }
+    if (width !== null) {
+      previous = i;
+      return width!;
+    }
     const after = next[i]!;
-    if (previous >= 0 && after >= 0) return lerp(widths[previous]!, widths[after]!, (i - previous) / (after - previous));
+    if (previous >= 0 && after >= 0)
+      return lerp(widths[previous]!, widths[after]!, (i - previous) / (after - previous));
     return previous >= 0 ? widths[previous]! : after >= 0 ? widths[after]! : DEFAULT_RIVER_WIDTH;
   });
 }
@@ -159,8 +175,13 @@ export function expandRiverPath(river: RiverFeature): RiverPathSample[] {
   return samples;
 }
 
-export function findRiversAtCell(rivers: RiverFeature[], target: GridCoordinate): RiverPathSample[] {
-  return rivers.flatMap((river) => expandRiverPath(river).filter((sample) => sameCoord(sample, target)));
+export function findRiversAtCell(
+  rivers: RiverFeature[],
+  target: GridCoordinate
+): RiverPathSample[] {
+  return rivers.flatMap((river) =>
+    expandRiverPath(river).filter((sample) => sameCoord(sample, target))
+  );
 }
 
 export function isRiverWaterEndpointCell(

@@ -1,4 +1,12 @@
-import type { ActiveCell, CellRange, ExportRenderOptions, GridCoordinate, MapRuntimeState, RiverFeature, TagKey } from "@mapdesigner/map-core";
+import type {
+  ActiveCell,
+  CellRange,
+  ExportRenderOptions,
+  GridCoordinate,
+  MapRuntimeState,
+  RiverFeature,
+  TagKey
+} from "@mapdesigner/map-core";
 
 export interface HexLayoutOptions {
   size: number;

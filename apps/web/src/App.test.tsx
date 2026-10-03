@@ -1,7 +1,13 @@
 /* @vitest-environment jsdom */
 
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { applyCommand, createRuntimeState, type CellRange, type MapCommand, type MapRuntimeState } from "@mapdesigner/map-core";
+import {
+  applyCommand,
+  createRuntimeState,
+  type CellRange,
+  type MapCommand,
+  type MapRuntimeState
+} from "@mapdesigner/map-core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App.js";
 
@@ -36,13 +42,90 @@ const sampleMap: MapRuntimeState = {
     ]
   },
   activeCells: [
-    { id: "cell@-1,0", display_coord: "R-1C0", row: -1, col: 0, status: "undesigned", terrain: null, biome: null, tags: [], note: "", is_seed: false },
-    { id: "cell@-1,1", display_coord: "R-1C1", row: -1, col: 1, status: "undesigned", terrain: null, biome: null, tags: [], note: "", is_seed: false },
-    { id: "cell@0,-1", display_coord: "R0C-1", row: 0, col: -1, status: "undesigned", terrain: null, biome: null, tags: [], note: "", is_seed: false },
-    { id: "cell@0,0", display_coord: "R0C0", row: 0, col: 0, status: "designed", terrain: "plain", biome: "grassland", tags: [], note: "", is_seed: false },
-    { id: "cell@0,1", display_coord: "R0C1", row: 0, col: 1, status: "undesigned", terrain: null, biome: null, tags: [], note: "", is_seed: false },
-    { id: "cell@1,0", display_coord: "R1C0", row: 1, col: 0, status: "undesigned", terrain: null, biome: null, tags: [], note: "", is_seed: false },
-    { id: "cell@1,1", display_coord: "R1C1", row: 1, col: 1, status: "undesigned", terrain: null, biome: null, tags: [], note: "", is_seed: false }
+    {
+      id: "cell@-1,0",
+      display_coord: "R-1C0",
+      row: -1,
+      col: 0,
+      status: "undesigned",
+      terrain: null,
+      biome: null,
+      tags: [],
+      note: "",
+      is_seed: false
+    },
+    {
+      id: "cell@-1,1",
+      display_coord: "R-1C1",
+      row: -1,
+      col: 1,
+      status: "undesigned",
+      terrain: null,
+      biome: null,
+      tags: [],
+      note: "",
+      is_seed: false
+    },
+    {
+      id: "cell@0,-1",
+      display_coord: "R0C-1",
+      row: 0,
+      col: -1,
+      status: "undesigned",
+      terrain: null,
+      biome: null,
+      tags: [],
+      note: "",
+      is_seed: false
+    },
+    {
+      id: "cell@0,0",
+      display_coord: "R0C0",
+      row: 0,
+      col: 0,
+      status: "designed",
+      terrain: "plain",
+      biome: "grassland",
+      tags: [],
+      note: "",
+      is_seed: false
+    },
+    {
+      id: "cell@0,1",
+      display_coord: "R0C1",
+      row: 0,
+      col: 1,
+      status: "undesigned",
+      terrain: null,
+      biome: null,
+      tags: [],
+      note: "",
+      is_seed: false
+    },
+    {
+      id: "cell@1,0",
+      display_coord: "R1C0",
+      row: 1,
+      col: 0,
+      status: "undesigned",
+      terrain: null,
+      biome: null,
+      tags: [],
+      note: "",
+      is_seed: false
+    },
+    {
+      id: "cell@1,1",
+      display_coord: "R1C1",
+      row: 1,
+      col: 1,
+      status: "undesigned",
+      terrain: null,
+      biome: null,
+      tags: [],
+      note: "",
+      is_seed: false
+    }
   ],
   history: {
     past: [],
@@ -220,65 +303,70 @@ function configureEditableMapMock(initialMap: typeof sampleMap): void {
     warnings: [],
     errors: []
   }));
-  apiMock.applyCommands.mockImplementation(async (
-    _id: string,
-    commands: MapCommand[],
-    options: { dryRun?: boolean; includeMap?: boolean } = {}
-  ) => {
-    const dryRun = options.dryRun ?? false;
-    const before = structuredClone(runtime.document);
-    let next = runtime;
-    const warnings = [];
-    for (const command of commands) {
-      const result = applyCommand(next, command);
-      if (!result.ok) {
-        return {
-          ok: false,
-          warnings: result.warnings,
-          errors: result.errors
-        };
-      }
-      warnings.push(...result.warnings);
-      next = createRuntimeState(result.map.document);
-    }
-    if (!dryRun) {
-      runtime = next;
-      historyEntries = historyEntries.slice(0, historyCursor);
-      historyEntries.push({
-        seq: historyEntries.length + 1,
-        action: commands.length === 1 ? commands[0]?.action ?? "commands" : "commands",
-        source: commands.find((command) => command.source)?.source ?? "system",
-        timestamp: new Date().toISOString(),
-        before,
-        after: structuredClone(runtime.document)
-      });
-      historyCursor = historyEntries.length;
-    }
-    return {
-      ok: true,
-      result: {
-        ...(options.includeMap === false ? {} : { map: next }),
-        summary: createMockSummary(next),
-        features: next.document.features,
-        dryRun,
-        warnings,
-        stats: {
-          command_count: commands.length,
-          changed_count: 0,
-          created_count: 0,
-          updated_count: 0,
-          cleared_count: 0,
-          feature_stats: {
-            river_created_count: commands.filter((command) => command.action === "create_river").length,
-            river_updated_count: commands.filter((command) => command.action === "update_river").length,
-            river_deleted_count: commands.filter((command) => command.action === "delete_river").length
-          }
+  apiMock.applyCommands.mockImplementation(
+    async (
+      _id: string,
+      commands: MapCommand[],
+      options: { dryRun?: boolean; includeMap?: boolean } = {}
+    ) => {
+      const dryRun = options.dryRun ?? false;
+      const before = structuredClone(runtime.document);
+      let next = runtime;
+      const warnings = [];
+      for (const command of commands) {
+        const result = applyCommand(next, command);
+        if (!result.ok) {
+          return {
+            ok: false,
+            warnings: result.warnings,
+            errors: result.errors
+          };
         }
-      },
-      warnings,
-      errors: []
-    };
-  });
+        warnings.push(...result.warnings);
+        next = createRuntimeState(result.map.document);
+      }
+      if (!dryRun) {
+        runtime = next;
+        historyEntries = historyEntries.slice(0, historyCursor);
+        historyEntries.push({
+          seq: historyEntries.length + 1,
+          action: commands.length === 1 ? (commands[0]?.action ?? "commands") : "commands",
+          source: commands.find((command) => command.source)?.source ?? "system",
+          timestamp: new Date().toISOString(),
+          before,
+          after: structuredClone(runtime.document)
+        });
+        historyCursor = historyEntries.length;
+      }
+      return {
+        ok: true,
+        result: {
+          ...(options.includeMap === false ? {} : { map: next }),
+          summary: createMockSummary(next),
+          features: next.document.features,
+          dryRun,
+          warnings,
+          stats: {
+            command_count: commands.length,
+            changed_count: 0,
+            created_count: 0,
+            updated_count: 0,
+            cleared_count: 0,
+            feature_stats: {
+              river_created_count: commands.filter((command) => command.action === "create_river")
+                .length,
+              river_updated_count: commands.filter((command) => command.action === "update_river")
+                .length,
+              river_deleted_count: commands.filter((command) => command.action === "delete_river")
+                .length
+            }
+          }
+        },
+        warnings,
+        errors: []
+      };
+    }
+  );
   apiMock.undoMap.mockImplementation(async () => {
     if (historyCursor <= 0) {
       return { ok: true, result: null, warnings: [], errors: [] };
@@ -342,9 +430,7 @@ function getViewportTransform(): SVGGElement {
 
 function parseViewportTransform() {
   const transform = getViewportTransform().getAttribute("transform") ?? "";
-  const match = transform.match(
-    /translate\(([-\d.eE]+)\s+([-\d.eE]+)\)\s+scale\(([-\d.eE]+)\)/
-  );
+  const match = transform.match(/translate\(([-\d.eE]+)\s+([-\d.eE]+)\)\s+scale\(([-\d.eE]+)\)/);
 
   expect(match).toBeTruthy();
 
@@ -596,11 +682,13 @@ describe("App", () => {
 
     await waitFor(() => expect(apiMock.importMap).toHaveBeenCalled());
     await waitFor(() => expect(apiMock.getMapSummary).toHaveBeenCalledWith("imported-map"));
-    await waitFor(() => expect(apiMock.getMapFeaturesInRange).toHaveBeenCalledWith(
-      "imported-map",
-      expect.any(Object),
-      { limit: 1000 }
-    ));
+    await waitFor(() =>
+      expect(apiMock.getMapFeaturesInRange).toHaveBeenCalledWith(
+        "imported-map",
+        expect.any(Object),
+        { limit: 1000 }
+      )
+    );
     expect(await screen.findByText("导入成功")).toBeTruthy();
   });
 
@@ -608,20 +696,24 @@ describe("App", () => {
     render(<App />);
     await screen.findByText("已打开 Sample Map");
     await waitFor(() => expect(apiMock.getCellsInRange).toHaveBeenCalled());
-    const initialRange = (apiMock.getCellsInRange.mock.calls.at(-1)?.[1] ?? null) as CellRange | null;
+    const initialRange = (apiMock.getCellsInRange.mock.calls.at(-1)?.[1] ??
+      null) as CellRange | null;
     expect(initialRange).toBeTruthy();
 
-    fireEvent.click(getCellButton("R0C0", "designed"));
-    fireEvent.change(screen.getByLabelText("Terrain 分类"), { target: { value: "upland" } });
-    fireEvent.change(screen.getByLabelText("Terrain"), { target: { value: "hill" } });
-    const terrainField = screen.getByLabelText("Terrain");
+    await act(async () => {
+      fireEvent.click(getCellButton("R0C0", "designed"));
+    });
+    fireEvent.change(screen.getByLabelText("地形分类"), { target: { value: "upland" } });
+    fireEvent.change(screen.getByLabelText("地形"), { target: { value: "hill" } });
+    const terrainField = screen.getByLabelText("地形");
     const cellPanel = terrainField.closest("section");
     expect(cellPanel).toBeTruthy();
     fireEvent.click(within(cellPanel as HTMLElement).getByRole("button", { name: "应用" }));
 
     await screen.findByText("单元格修改已保存到服务器");
     await waitFor(() => expect(apiMock.getCellsInRange.mock.calls.length).toBeGreaterThan(1));
-    const refreshedRange = (apiMock.getCellsInRange.mock.calls.at(-1)?.[1] ?? null) as CellRange | null;
+    const refreshedRange = (apiMock.getCellsInRange.mock.calls.at(-1)?.[1] ??
+      null) as CellRange | null;
     expect(refreshedRange).toEqual(initialRange);
   });
 
@@ -644,7 +736,8 @@ describe("App", () => {
       errors: [
         {
           code: "map_not_found",
-          message: "ENOENT: no such file or directory, open '/root/WorkSpace/MapDesigner/apps/server/storage/maps/.json'",
+          message:
+            "ENOENT: no such file or directory, open '/root/WorkSpace/MapDesigner/apps/server/storage/maps/.json'",
           severity: "invalid"
         }
       ]
@@ -660,13 +753,15 @@ describe("App", () => {
   it("selects a cell and shows its metadata", async () => {
     render(<App />);
     await screen.findByText("已打开 Sample Map");
-    fireEvent.click(getCellButton("R0C0", "designed"));
+    await act(async () => {
+      fireEvent.click(getCellButton("R0C0", "designed"));
+    });
     expect(await screen.findByLabelText("当前选中信息")).toBeTruthy();
     expect(screen.getByLabelText("当前选中信息").textContent).toContain("R0C0 | designed");
     expect(screen.queryByRole("heading", { name: "当前选中" })).toBeNull();
-    const terrainCategoryField = screen.getByLabelText("Terrain 分类") as HTMLSelectElement;
+    const terrainCategoryField = screen.getByLabelText("地形分类") as HTMLSelectElement;
     expect(terrainCategoryField.value).toBe("plain");
-    const terrainField = screen.getByLabelText("Terrain") as HTMLSelectElement;
+    const terrainField = screen.getByLabelText("地形") as HTMLSelectElement;
     expect(terrainField.value).toBe("plain");
     const cellPanel = terrainField.closest("section");
     expect(cellPanel).toBeTruthy();
@@ -682,17 +777,23 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("tab", { name: "河流" }));
     const riverPanel = screen.getByRole("heading", { name: "河流覆盖层" }).closest("section");
     expect(riverPanel).toBeTruthy();
-    fireEvent.change(within(riverPanel as HTMLElement).getByLabelText("Name"), { target: { value: "Main River" } });
-    fireEvent.change(within(riverPanel as HTMLElement).getByLabelText("Points"), { target: { value: "R0C0, R0C2" } });
-    fireEvent.change(within(riverPanel as HTMLElement).getByLabelText("Width anchors"), {
+    fireEvent.change(within(riverPanel as HTMLElement).getByLabelText("河流名称"), {
+      target: { value: "Main River" }
+    });
+    fireEvent.change(within(riverPanel as HTMLElement).getByLabelText("路径坐标"), {
+      target: { value: "R0C0, R0C2" }
+    });
+    fireEvent.change(within(riverPanel as HTMLElement).getByLabelText("宽度锚点"), {
       target: { value: "R0C0:2, R0C1:5, R0C2:8" }
     });
     fireEvent.click(within(riverPanel as HTMLElement).getByRole("button", { name: "应用河流" }));
 
     expect(await screen.findByText("河流修改已保存到服务器")).toBeTruthy();
-    expect(within(riverPanel as HTMLElement).getByRole("option", { name: "Main River (main-river)" })).toBeTruthy();
+    expect(
+      within(riverPanel as HTMLElement).getByRole("option", { name: /^Main River / })
+    ).toBeTruthy();
     const svg = screen.getByLabelText("Map canvas");
-    expect(svg.querySelector('[data-river-id="main-river"]')).toBeTruthy();
+    expect(svg.querySelector("[data-river-id]")).toBeTruthy();
   });
 
   it("draws a river from canvas clicks and returns to cell selection", async () => {
@@ -703,29 +804,45 @@ describe("App", () => {
     const riverPanel = screen.getByRole("heading", { name: "河流覆盖层" }).closest("section");
     expect(riverPanel).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "河流" }));
-    await waitFor(() => expect(screen.getByRole("button", { name: "河流" }).getAttribute("aria-pressed")).toBe("true"));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "河流" }).getAttribute("aria-pressed")).toBe("true")
+    );
     expect(screen.getByRole("button", { name: "河流" }).getAttribute("aria-pressed")).toBe("true");
     expect(screen.getByLabelText("河流绘制工具")).toBeTruthy();
 
-    fireEvent.click(getCellButton("R0C0", "designed"));
+    await act(async () => {
+      fireEvent.click(getCellButton("R0C0", "designed"));
+    });
     expect(await screen.findByText("路径点：1")).toBeTruthy();
     expect(screen.getByLabelText("河流绘制工具").textContent).toContain("路径点 1");
     expect(screen.queryByLabelText("当前选中信息")).toBeNull();
 
-    fireEvent.click(getCellButton("R0C1", "undesigned"));
+    await act(async () => {
+      fireEvent.click(getCellButton("R0C1", "undesigned"));
+    });
     expect(await screen.findByText("路径点：2")).toBeTruthy();
     expect(screen.getByLabelText("河流绘制工具").textContent).toContain("路径点 2");
-    expect(screen.getByLabelText("Map canvas").querySelector('[data-river-preview="true"]')).toBeTruthy();
-    expect(screen.getByLabelText("Map canvas").querySelector('[data-river-control-point="start"]')).toBeTruthy();
-    expect(screen.getByLabelText("Map canvas").querySelector('[data-river-control-point="end"]')).toBeTruthy();
+    expect(
+      screen.getByLabelText("Map canvas").querySelector('[data-river-preview="true"]')
+    ).toBeTruthy();
+    expect(
+      screen.getByLabelText("Map canvas").querySelector('[data-river-control-point="start"]')
+    ).toBeTruthy();
+    expect(
+      screen.getByLabelText("Map canvas").querySelector('[data-river-control-point="end"]')
+    ).toBeTruthy();
 
-    fireEvent.click(within(screen.getByLabelText("河流绘制工具")).getByRole("button", { name: "完成" }));
+    fireEvent.click(
+      within(screen.getByLabelText("河流绘制工具")).getByRole("button", { name: "完成" })
+    );
 
     expect(await screen.findByText("河流修改已保存到服务器")).toBeTruthy();
     expect(screen.getByRole("button", { name: "选择" }).getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getByLabelText("Map canvas").querySelector('[data-river-id="river-1"]')).toBeTruthy();
+    expect(screen.getByLabelText("Map canvas").querySelector("[data-river-id]")).toBeTruthy();
 
-    fireEvent.click(getCellButton("R0C1", "undesigned"));
+    await act(async () => {
+      fireEvent.click(getCellButton("R0C1", "undesigned"));
+    });
     expect(await screen.findByLabelText("当前选中信息")).toBeTruthy();
     expect(screen.getByLabelText("当前选中信息").textContent).toContain("R0C1 | undesigned");
   });
@@ -734,7 +851,9 @@ describe("App", () => {
     render(<App />);
     await screen.findByText("已打开 Sample Map");
 
-    fireEvent.click(getCellButton("R0C0", "designed"));
+    await act(async () => {
+      fireEvent.click(getCellButton("R0C0", "designed"));
+    });
     const brushButton = screen.getByRole("button", { name: "格式刷" });
     expect((brushButton as HTMLButtonElement).disabled).toBe(false);
 
@@ -743,21 +862,33 @@ describe("App", () => {
     expect(brushButton.getAttribute("aria-pressed")).toBe("true");
 
     fireEvent.click(brushButton);
-    expect(await screen.findByText("选中已设计单元格后可进入格式刷模式；再次点击按钮即可退出。")).toBeTruthy();
+    expect(
+      await screen.findByText("选中已设计单元格后可进入格式刷模式；再次点击按钮即可退出。")
+    ).toBeTruthy();
     expect(brushButton.getAttribute("aria-pressed")).toBe("false");
 
-    fireEvent.click(getCellButton("R0C1", "undesigned"));
-    expect((screen.getByRole("button", { name: "格式刷" }) as HTMLButtonElement).disabled).toBe(true);
+    await act(async () => {
+      fireEvent.click(getCellButton("R0C1", "undesigned"));
+    });
+    expect((screen.getByRole("button", { name: "格式刷" }) as HTMLButtonElement).disabled).toBe(
+      true
+    );
   });
 
   it("brushes terrain only onto an undesigned cell", async () => {
     render(<App />);
     await screen.findByText("已打开 Sample Map");
 
-    fireEvent.click(getCellButton("R0C0", "designed"));
+    await act(async () => {
+      fireEvent.click(getCellButton("R0C0", "designed"));
+    });
     fireEvent.click(screen.getByLabelText("刷生态"));
-    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "格式刷" })); });
-    fireEvent.click(getCellButton("R0C1", "undesigned"));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "格式刷" }));
+    });
+    await act(async () => {
+      fireEvent.click(getCellButton("R0C1", "undesigned"));
+    });
 
     await waitFor(() => {
       const statusBar = screen.getByLabelText("当前状态");
@@ -766,24 +897,30 @@ describe("App", () => {
     });
     expect(screen.getByText("已将地形应用到 1 个格子")).toBeTruthy();
 
-    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "格式刷" })); });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "格式刷" }));
+    });
     await waitFor(() => expect(getCellButton("R0C1", "designed")).toBeTruthy());
-    fireEvent.click(getCellButton("R0C1", "designed"));
+    await act(async () => {
+      fireEvent.click(getCellButton("R0C1", "designed"));
+    });
 
     expect(await screen.findByLabelText("当前选中信息")).toBeTruthy();
     expect(screen.getByLabelText("当前选中信息").textContent).toContain("R0C1 | designed");
-    expect((screen.getByLabelText("Terrain") as HTMLSelectElement).value).toBe("plain");
-    expect((screen.getByLabelText("Biome") as HTMLSelectElement).value).toBe("");
+    expect((screen.getByLabelText("地形") as HTMLSelectElement).value).toBe("plain");
+    expect((screen.getByLabelText("生态") as HTMLSelectElement).value).toBe("");
   });
 
   it("brushes biome only onto an already designed cell", async () => {
     render(<App />);
     await screen.findByText("已打开 Sample Map");
 
-    fireEvent.click(getCellButton("R0C1", "undesigned"));
-    fireEvent.change(screen.getByLabelText("Terrain 分类"), { target: { value: "plain" } });
-    fireEvent.change(screen.getByLabelText("Terrain"), { target: { value: "plain" } });
-    const terrainField = screen.getByLabelText("Terrain");
+    await act(async () => {
+      fireEvent.click(getCellButton("R0C1", "undesigned"));
+    });
+    fireEvent.change(screen.getByLabelText("地形分类"), { target: { value: "plain" } });
+    fireEvent.change(screen.getByLabelText("地形"), { target: { value: "plain" } });
+    const terrainField = screen.getByLabelText("地形");
     const cellPanel = terrainField.closest("section");
     expect(cellPanel).toBeTruthy();
     fireEvent.click(within(cellPanel as HTMLElement).getByRole("button", { name: "应用" }));
@@ -791,32 +928,44 @@ describe("App", () => {
     await waitFor(() => expect(getCellButton("R0C0", "designed")).toBeTruthy());
     await waitFor(() => expect(getCellButton("R0C1", "designed")).toBeTruthy());
 
-    fireEvent.click(getCellButton("R0C0", "designed"));
+    await act(async () => {
+      fireEvent.click(getCellButton("R0C0", "designed"));
+    });
     fireEvent.click(screen.getByLabelText("刷地形"));
-    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "格式刷" })); });
-    fireEvent.click(getCellButton("R0C1", "designed"));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "格式刷" }));
+    });
+    await act(async () => {
+      fireEvent.click(getCellButton("R0C1", "designed"));
+    });
 
     expect(await screen.findByText("已将生态应用到 1 个格子")).toBeTruthy();
 
-    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "格式刷" })); });
-    fireEvent.click(getCellButton("R0C1", "designed"));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "格式刷" }));
+    });
+    await act(async () => {
+      fireEvent.click(getCellButton("R0C1", "designed"));
+    });
 
     expect(screen.getByLabelText("当前选中信息").textContent).toContain("R0C1 | designed");
-    expect((screen.getByLabelText("Terrain") as HTMLSelectElement).value).toBe("plain");
-    expect((screen.getByLabelText("Biome") as HTMLSelectElement).value).toBe("grassland");
+    expect((screen.getByLabelText("地形") as HTMLSelectElement).value).toBe("plain");
+    expect((screen.getByLabelText("生态") as HTMLSelectElement).value).toBe("grassland");
   });
 
   it("brushes tags and notes when those format brush scopes are enabled", async () => {
     render(<App />);
     await screen.findByText("已打开 Sample Map");
 
-    fireEvent.click(getCellButton("R0C0", "designed"));
-    const terrainField = screen.getByLabelText("Terrain");
+    await act(async () => {
+      fireEvent.click(getCellButton("R0C0", "designed"));
+    });
+    const terrainField = screen.getByLabelText("地形");
     const cellPanel = terrainField.closest("section");
     expect(cellPanel).toBeTruthy();
 
     fireEvent.click(within(cellPanel as HTMLElement).getByLabelText("山峰"));
-    fireEvent.change(within(cellPanel as HTMLElement).getByLabelText("Note"), {
+    fireEvent.change(within(cellPanel as HTMLElement).getByLabelText("备注"), {
       target: { value: "source note" }
     });
     fireEvent.click(within(cellPanel as HTMLElement).getByRole("button", { name: "应用" }));
@@ -824,16 +973,28 @@ describe("App", () => {
 
     fireEvent.click(within(cellPanel as HTMLElement).getByLabelText("刷标签"));
     fireEvent.click(within(cellPanel as HTMLElement).getByLabelText("刷备注"));
-    await act(async () => { fireEvent.click(within(cellPanel as HTMLElement).getByRole("button", { name: "格式刷" })); });
-    fireEvent.click(getCellButton("R0C1", "undesigned"));
+    await act(async () => {
+      fireEvent.click(within(cellPanel as HTMLElement).getByRole("button", { name: "格式刷" }));
+    });
+    await act(async () => {
+      fireEvent.click(getCellButton("R0C1", "undesigned"));
+    });
 
     expect(await screen.findByText("已将地形 + 生态 + 标签 + 备注应用到 1 个格子")).toBeTruthy();
 
-    await act(async () => { fireEvent.click(within(cellPanel as HTMLElement).getByRole("button", { name: "格式刷" })); });
-    fireEvent.click(getCellButton("R0C1", "designed"));
+    await act(async () => {
+      fireEvent.click(within(cellPanel as HTMLElement).getByRole("button", { name: "格式刷" }));
+    });
+    await act(async () => {
+      fireEvent.click(getCellButton("R0C1", "designed"));
+    });
 
-    expect((within(cellPanel as HTMLElement).getByLabelText("山峰") as HTMLInputElement).checked).toBe(true);
-    expect((within(cellPanel as HTMLElement).getByLabelText("Note") as HTMLTextAreaElement).value).toBe("source note");
+    expect(
+      (within(cellPanel as HTMLElement).getByLabelText("山峰") as HTMLInputElement).checked
+    ).toBe(true);
+    expect(
+      (within(cellPanel as HTMLElement).getByLabelText("备注") as HTMLTextAreaElement).value
+    ).toBe("source note");
   });
 
   it("batch-selects cells and applies set_cells through the advanced editor", async () => {
@@ -845,41 +1006,55 @@ describe("App", () => {
     expect(advancedPanel).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "批量" }));
-    await waitFor(() => expect(screen.getByRole("button", { name: "批量" }).getAttribute("aria-pressed")).toBe("true"));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "批量" }).getAttribute("aria-pressed")).toBe("true")
+    );
     expect(screen.getByRole("button", { name: "批量" }).getAttribute("aria-pressed")).toBe("true");
 
-    fireEvent.click(getCellButton("R0C1", "undesigned"));
-    fireEvent.click(getCellButton("R1C0", "undesigned"));
+    await act(async () => {
+      fireEvent.click(getCellButton("R0C1", "undesigned"));
+    });
+    await act(async () => {
+      fireEvent.click(getCellButton("R1C0", "undesigned"));
+    });
 
     expect(within(advancedPanel as HTMLElement).getByText("已选 2 格")).toBeTruthy();
 
-    fireEvent.change(within(advancedPanel as HTMLElement).getByLabelText("批量 Terrain 分类"), {
+    fireEvent.change(within(advancedPanel as HTMLElement).getByLabelText("批量地形分类"), {
       target: { value: "upland" }
     });
-    fireEvent.change(within(advancedPanel as HTMLElement).getByLabelText("批量 Terrain"), {
+    fireEvent.change(within(advancedPanel as HTMLElement).getByLabelText("批量地形"), {
       target: { value: "hill" }
     });
-    fireEvent.change(within(advancedPanel as HTMLElement).getByLabelText("批量 Biome"), {
+    fireEvent.change(within(advancedPanel as HTMLElement).getByLabelText("批量生态"), {
       target: { value: "grassland" }
     });
     fireEvent.click(within(advancedPanel as HTMLElement).getByLabelText("山峰"));
-    fireEvent.change(within(advancedPanel as HTMLElement).getByLabelText("批量 Note"), {
+    fireEvent.change(within(advancedPanel as HTMLElement).getByLabelText("批量备注"), {
       target: { value: "batch note" }
     });
-    fireEvent.click(within(advancedPanel as HTMLElement).getByRole("button", { name: "应用到选中格" }));
+    fireEvent.click(
+      within(advancedPanel as HTMLElement).getByRole("button", { name: "应用到选中格" })
+    );
 
     expect(await screen.findByText("已批量设置 2 个单元格并保存到服务器")).toBeTruthy();
     expect(within(advancedPanel as HTMLElement).getByText("已选 2 格")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "选择" }));
-    await waitFor(() => expect(screen.getByRole("button", { name: "选择" }).getAttribute("aria-pressed")).toBe("true"));
-    fireEvent.click(getCellButton("R0C1", "designed"));
-    const cellPanel = screen.getByLabelText("Terrain").closest("section");
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "选择" }).getAttribute("aria-pressed")).toBe("true")
+    );
+    await act(async () => {
+      fireEvent.click(getCellButton("R0C1", "designed"));
+    });
+    const cellPanel = screen.getByLabelText("地形").closest("section");
     expect(cellPanel).toBeTruthy();
-    expect((screen.getByLabelText("Terrain") as HTMLSelectElement).value).toBe("hill");
-    expect((screen.getByLabelText("Biome") as HTMLSelectElement).value).toBe("grassland");
-    expect((within(cellPanel as HTMLElement).getByLabelText("山峰") as HTMLInputElement).checked).toBe(true);
-    expect((screen.getByLabelText("Note") as HTMLTextAreaElement).value).toBe("batch note");
+    expect((screen.getByLabelText("地形") as HTMLSelectElement).value).toBe("hill");
+    expect((screen.getByLabelText("生态") as HTMLSelectElement).value).toBe("grassland");
+    expect(
+      (within(cellPanel as HTMLElement).getByLabelText("山峰") as HTMLInputElement).checked
+    ).toBe(true);
+    expect((screen.getByLabelText("备注") as HTMLTextAreaElement).value).toBe("batch note");
   });
 
   it("replaces terrain and biome from the advanced editor", async () => {
@@ -890,13 +1065,13 @@ describe("App", () => {
     const advancedPanel = screen.getByRole("heading", { name: "高级编辑" }).closest("section");
     expect(advancedPanel).toBeTruthy();
 
-    fireEvent.change(within(advancedPanel as HTMLElement).getByLabelText("匹配 Terrain"), {
+    fireEvent.change(within(advancedPanel as HTMLElement).getByLabelText("匹配地形"), {
       target: { value: "plain" }
     });
-    fireEvent.change(within(advancedPanel as HTMLElement).getByLabelText("目标 Terrain 分类"), {
+    fireEvent.change(within(advancedPanel as HTMLElement).getByLabelText("目标地形分类"), {
       target: { value: "upland" }
     });
-    fireEvent.change(within(advancedPanel as HTMLElement).getByLabelText("目标 Terrain"), {
+    fireEvent.change(within(advancedPanel as HTMLElement).getByLabelText("目标地形"), {
       target: { value: "hill" }
     });
     fireEvent.click(within(advancedPanel as HTMLElement).getByRole("button", { name: "替换地形" }));
@@ -904,10 +1079,10 @@ describe("App", () => {
 
     expect(await screen.findByText("地形替换已保存到服务器")).toBeTruthy();
 
-    fireEvent.change(within(advancedPanel as HTMLElement).getByLabelText("匹配 Biome"), {
+    fireEvent.change(within(advancedPanel as HTMLElement).getByLabelText("匹配生态"), {
       target: { value: "grassland" }
     });
-    fireEvent.change(within(advancedPanel as HTMLElement).getByLabelText("目标 Biome"), {
+    fireEvent.change(within(advancedPanel as HTMLElement).getByLabelText("目标生态"), {
       target: { value: "shrubland" }
     });
     fireEvent.click(within(advancedPanel as HTMLElement).getByRole("button", { name: "替换生态" }));
@@ -915,9 +1090,11 @@ describe("App", () => {
 
     expect(await screen.findByText("生态替换已保存到服务器")).toBeTruthy();
 
-    fireEvent.click(getCellButton("R0C0", "designed"));
-    expect((screen.getByLabelText("Terrain") as HTMLSelectElement).value).toBe("hill");
-    expect((screen.getByLabelText("Biome") as HTMLSelectElement).value).toBe("shrubland");
+    await act(async () => {
+      fireEvent.click(getCellButton("R0C0", "designed"));
+    });
+    expect((screen.getByLabelText("地形") as HTMLSelectElement).value).toBe("hill");
+    expect((screen.getByLabelText("生态") as HTMLSelectElement).value).toBe("shrubland");
     expect(await screen.findByText("已记录 2 步 | 可重做 0 步")).toBeTruthy();
   });
 
@@ -925,10 +1102,18 @@ describe("App", () => {
     render(<App />);
     await screen.findByText("已打开 Sample Map");
 
-    fireEvent.click(getCellButton("R0C0", "designed"));
-    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "格式刷" })); });
-    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "格式刷" })); });
-    fireEvent.click(getCellButton("R0C1", "undesigned"));
+    await act(async () => {
+      fireEvent.click(getCellButton("R0C0", "designed"));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "格式刷" }));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "格式刷" }));
+    });
+    await act(async () => {
+      fireEvent.click(getCellButton("R0C1", "undesigned"));
+    });
 
     expect(await screen.findByLabelText("当前选中信息")).toBeTruthy();
     expect(screen.getByLabelText("当前选中信息").textContent).toContain("R0C1 | undesigned");
@@ -937,11 +1122,13 @@ describe("App", () => {
   it("filters terrain options by the selected terrain category", async () => {
     render(<App />);
     await screen.findByText("已打开 Sample Map");
-    fireEvent.click(getCellButton("R0C0", "designed"));
+    await act(async () => {
+      fireEvent.click(getCellButton("R0C0", "designed"));
+    });
 
-    const terrainCategoryField = screen.getByLabelText("Terrain 分类") as HTMLSelectElement;
-    const terrainField = screen.getByLabelText("Terrain") as HTMLSelectElement;
-    const biomeField = screen.getByLabelText("Biome") as HTMLSelectElement;
+    const terrainCategoryField = screen.getByLabelText("地形分类") as HTMLSelectElement;
+    const terrainField = screen.getByLabelText("地形") as HTMLSelectElement;
+    const biomeField = screen.getByLabelText("生态") as HTMLSelectElement;
 
     fireEvent.change(biomeField, { target: { value: "" } });
 
@@ -956,11 +1143,13 @@ describe("App", () => {
   it("filters biome options after selecting a terrain", async () => {
     render(<App />);
     await screen.findByText("已打开 Sample Map");
-    fireEvent.click(getCellButton("R0C0", "designed"));
+    await act(async () => {
+      fireEvent.click(getCellButton("R0C0", "designed"));
+    });
 
-    const terrainCategoryField = screen.getByLabelText("Terrain 分类") as HTMLSelectElement;
-    const terrainField = screen.getByLabelText("Terrain") as HTMLSelectElement;
-    const biomeField = screen.getByLabelText("Biome") as HTMLSelectElement;
+    const terrainCategoryField = screen.getByLabelText("地形分类") as HTMLSelectElement;
+    const terrainField = screen.getByLabelText("地形") as HTMLSelectElement;
+    const biomeField = screen.getByLabelText("生态") as HTMLSelectElement;
 
     fireEvent.change(biomeField, { target: { value: "" } });
     fireEvent.change(terrainCategoryField, { target: { value: "water" } });
@@ -978,11 +1167,13 @@ describe("App", () => {
   it("filters terrain categories and terrain options after selecting a biome", async () => {
     render(<App />);
     await screen.findByText("已打开 Sample Map");
-    fireEvent.click(getCellButton("R0C0", "designed"));
+    await act(async () => {
+      fireEvent.click(getCellButton("R0C0", "designed"));
+    });
 
-    const terrainCategoryField = screen.getByLabelText("Terrain 分类") as HTMLSelectElement;
-    const terrainField = screen.getByLabelText("Terrain") as HTMLSelectElement;
-    const biomeField = screen.getByLabelText("Biome") as HTMLSelectElement;
+    const terrainCategoryField = screen.getByLabelText("地形分类") as HTMLSelectElement;
+    const terrainField = screen.getByLabelText("地形") as HTMLSelectElement;
+    const biomeField = screen.getByLabelText("生态") as HTMLSelectElement;
 
     fireEvent.change(terrainField, { target: { value: "" } });
     fireEvent.change(biomeField, { target: { value: "marine" } });
@@ -990,7 +1181,11 @@ describe("App", () => {
     expect(biomeField.value).toBe("marine");
     expect(terrainCategoryField.value).toBe("");
     expect(terrainField.value).toBe("");
-    expect(Array.from(terrainCategoryField.options).map((option) => option.value)).toEqual(["", "water", "coast"]);
+    expect(Array.from(terrainCategoryField.options).map((option) => option.value)).toEqual([
+      "",
+      "water",
+      "coast"
+    ]);
 
     fireEvent.change(terrainCategoryField, { target: { value: "coast" } });
 
@@ -1190,7 +1385,7 @@ describe("App", () => {
     fireEvent.change(screen.getByLabelText("预设"), {
       target: { value: "reference" }
     });
-    fireEvent.change(screen.getByLabelText("Scale"), {
+    fireEvent.change(screen.getByLabelText("缩放倍率"), {
       target: { value: "3" }
     });
     fireEvent.click(screen.getByText("导出图片"));
@@ -1209,7 +1404,11 @@ describe("App", () => {
             minCol: expect.any(Number),
             maxCol: expect.any(Number)
           })
-        }), expect.objectContaining({ signal: expect.any(AbortSignal), onProgress: expect.any(Function) })
+        }),
+        expect.objectContaining({
+          signal: expect.any(AbortSignal),
+          onProgress: expect.any(Function)
+        })
       )
     );
     expect(clickSpy).toHaveBeenCalledTimes(1);
@@ -1265,7 +1464,11 @@ describe("App", () => {
         "sample-map",
         expect.objectContaining({
           background: "transparent"
-        }), expect.objectContaining({ signal: expect.any(AbortSignal), onProgress: expect.any(Function) })
+        }),
+        expect.objectContaining({
+          signal: expect.any(AbortSignal),
+          onProgress: expect.any(Function)
+        })
       )
     );
   });
@@ -1286,7 +1489,11 @@ describe("App", () => {
         "sample-map",
         expect.objectContaining({
           range: null
-        }), expect.objectContaining({ signal: expect.any(AbortSignal), onProgress: expect.any(Function) })
+        }),
+        expect.objectContaining({
+          signal: expect.any(AbortSignal),
+          onProgress: expect.any(Function)
+        })
       )
     );
   });
@@ -1300,12 +1507,18 @@ describe("App", () => {
     fireEvent.click(within(tagFilterPanel).getByLabelText("山峰"));
 
     const svg = screen.getByLabelText("Map canvas");
-    expect(svg.querySelector('[data-cell-id="cell@0,0"]')?.getAttribute("data-filter-match")).toBe("true");
-    expect(svg.querySelector('[data-cell-id="cell@0,1"]')?.getAttribute("data-filter-match")).toBe("false");
+    expect(svg.querySelector('[data-cell-id="cell@0,0"]')?.getAttribute("data-filter-match")).toBe(
+      "true"
+    );
+    expect(svg.querySelector('[data-cell-id="cell@0,1"]')?.getAttribute("data-filter-match")).toBe(
+      "false"
+    );
 
     fireEvent.click(within(tagFilterPanel).getByRole("button", { name: "清除" }));
 
-    expect(svg.querySelector('[data-cell-id="cell@0,1"]')?.getAttribute("data-filter-match")).toBe("true");
+    expect(svg.querySelector('[data-cell-id="cell@0,1"]')?.getAttribute("data-filter-match")).toBe(
+      "true"
+    );
   });
 
   it("can collapse the export panel after opening it", async () => {
@@ -1335,8 +1548,10 @@ describe("App", () => {
     render(<App />);
     await screen.findByText("已打开 Sample Map");
 
-    fireEvent.click(getCellButton("R0C0", "designed"));
-    const noteField = screen.getByLabelText("Note");
+    await act(async () => {
+      fireEvent.click(getCellButton("R0C0", "designed"));
+    });
+    const noteField = screen.getByLabelText("备注");
     fireEvent.change(noteField, {
       target: { value: "history-note" }
     });

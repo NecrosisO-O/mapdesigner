@@ -1,66 +1,73 @@
 import {
-createCellId,
-createDisplayCoord,
-createRuntimeState,
-findRiversAtCell,
-getNeighborCoords,
-parseDocument,
-type ActiveCell,
-type AreaInspectionResult,
-type CellInspectionResult,
-type CellRange,
-type CellRangeResult,
-type ExportRenderOptions,
-type GridCoordinate,
-type MapCommand,
-type MapDocument,
-type MapFeaturePage,
-type MapRuntimeState,
-type MapSummary,
-type NeighborInspectionResult,
-type ValidationIssue
+  createCellId,
+  createDisplayCoord,
+  createRuntimeState,
+  findRiversAtCell,
+  getNeighborCoords,
+  parseDocument,
+  type ActiveCell,
+  type AreaInspectionResult,
+  type CellInspectionResult,
+  type CellRange,
+  type CellRangeResult,
+  type ExportRenderOptions,
+  type GridCoordinate,
+  type MapCommand,
+  type MapDocument,
+  type MapFeaturePage,
+  type MapRuntimeState,
+  type MapSummary,
+  type NeighborInspectionResult,
+  type ValidationIssue
 } from "@mapdesigner/map-core";
-import { buildExportScene,buildMapScene,renderSvgString } from "@mapdesigner/map-render";
+import { buildExportScene, buildMapScene, renderSvgString } from "@mapdesigner/map-render";
 import fs from "node:fs/promises";
 import sharp from "sharp";
 import { randomUUID } from "node:crypto";
 import { MAX_IMPORT_BYTES, assertImportBudget, assertPixelBudget } from "./resource-limits.js";
-import { executeCommands,moveHistory } from "./command-executor.js";
-import type { ApplyCommandsOptions,ApplyCommandsResult,HistoryMoveResult,LightweightApplyCommandsResult,LightweightHistoryMoveResult } from "./command-types.js";
-import { EXPORT_STORAGE_DIR,MAP_STORAGE_DIR } from "./config.js";
-import { badRequest,revisionConflict,storageError } from "./errors.js";
+import { executeCommands, moveHistory } from "./command-executor.js";
+import type {
+  ApplyCommandsOptions,
+  ApplyCommandsResult,
+  HistoryMoveResult,
+  LightweightApplyCommandsResult,
+  LightweightHistoryMoveResult
+} from "./command-types.js";
+import { EXPORT_STORAGE_DIR, MAP_STORAGE_DIR } from "./config.js";
+import { badRequest, revisionConflict, storageError } from "./errors.js";
 import {
-createMapDocument,
-deleteMapDocument,
-getMapDocument,
-getMapSummarySync,
-getCellsInRange as getRepositoryCellsInRange,
-getHistoryStatus as getRepositoryHistoryStatus,
-getMapFeatures as getRepositoryMapFeatures,
-getMapFeaturesInRange as getRepositoryMapFeaturesInRange,
-getMapHistory as getRepositoryMapHistory,
-getMapSummary as getRepositoryMapSummary,
-importMapDocument,
-listMapRows,
-mapExists,
-saveMapDocument,
-saveMapDocumentSync,updateMapMetadataSync,
-withMapTransaction,
-writeMapDocumentJsonExport,
-type FeaturePageOptions,
-type HistoryStatus,
-type MapHistory,
-type MapListItem
+  createMapDocument,
+  deleteMapDocument,
+  getMapDocument,
+  getMapSummarySync,
+  getCellsInRange as getRepositoryCellsInRange,
+  getHistoryStatus as getRepositoryHistoryStatus,
+  getMapFeatures as getRepositoryMapFeatures,
+  getMapFeaturesInRange as getRepositoryMapFeaturesInRange,
+  getMapHistory as getRepositoryMapHistory,
+  getMapSummary as getRepositoryMapSummary,
+  importMapDocument,
+  listMapRows,
+  mapExists,
+  saveMapDocument,
+  saveMapDocumentSync,
+  updateMapMetadataSync,
+  withMapTransaction,
+  writeMapDocumentJsonExport,
+  type FeaturePageOptions,
+  type HistoryStatus,
+  type MapHistory,
+  type MapListItem
 } from "./repository.js";
 import {
-assertSafeMapId,
-exportFilePath,
-MAX_INSPECT_AREA_RADIUS,
-normalizeExportOptions,
-validateDocumentForWrite,
-writeFileAtomic
+  assertSafeMapId,
+  exportFilePath,
+  MAX_INSPECT_AREA_RADIUS,
+  normalizeExportOptions,
+  validateDocumentForWrite,
+  writeFileAtomic
 } from "./storage.js";
-import { createMapId,slugify } from "./utils.js";
+import { createMapId, slugify } from "./utils.js";
 
 const PNG_EXPORT_TIMEOUT_SECONDS = 20;
 const MAX_WHOLE_MAP_PNG_EXPORT_CELLS = 10_000;
@@ -87,7 +94,16 @@ export interface UpdateMapMetadataInput {
   tags?: string[];
 }
 
-export type { ApplyChangeStats,ApplyCommandsOptions,ApplyCommandsResult,ApplyValueSummary,CommandExecutionReport,HistoryMoveResult,LightweightApplyCommandsResult,LightweightHistoryMoveResult } from "./command-types.js";
+export type {
+  ApplyChangeStats,
+  ApplyCommandsOptions,
+  ApplyCommandsResult,
+  ApplyValueSummary,
+  CommandExecutionReport,
+  HistoryMoveResult,
+  LightweightApplyCommandsResult,
+  LightweightHistoryMoveResult
+} from "./command-types.js";
 
 async function ensureDirectories(): Promise<void> {
   try {
@@ -131,7 +147,10 @@ async function buildRangeRuntime(id: string, range: CellRange): Promise<MapRunti
   const features = { rivers: [...firstPage.rivers] };
   let page = firstPage;
   while (page.page.has_more) {
-    page = await getMapFeaturesInRange(id, range, { offset: page.page.offset + page.page.returned, limit: 1000 });
+    page = await getMapFeaturesInRange(id, range, {
+      offset: page.page.offset + page.page.returned,
+      limit: 1000
+    });
     features.rivers.push(...page.rivers);
   }
   const document: MapDocument = {
@@ -221,7 +240,11 @@ async function getRangeCellsById(id: string, range: CellRange): Promise<Map<stri
   return new Map(result.cells.map((cell) => [cell.id, cell]));
 }
 
-async function buildAreaCellsFromRange(id: string, center: GridCoordinate, radius: number): Promise<ActiveCell[]> {
+async function buildAreaCellsFromRange(
+  id: string,
+  center: GridCoordinate,
+  radius: number
+): Promise<ActiveCell[]> {
   const cellsById = await getRangeCellsById(id, {
     minRow: center.row - radius,
     maxRow: center.row + radius,
@@ -268,10 +291,21 @@ export async function saveMap(input: SaveMapInput): Promise<MapRuntimeState> {
   return withMapTransaction(normalizedId, () => {
     const current = getMapSummarySync(normalizedId);
     if (current.meta.revision !== input.expectedRevision) {
-      throw revisionConflict("revision conflict: expected " + input.expectedRevision + ", current is " + current.meta.revision);
+      throw revisionConflict(
+        "revision conflict: expected " +
+          input.expectedRevision +
+          ", current is " +
+          current.meta.revision
+      );
     }
-    const document = saveMapDocumentSync({ ...input.document, meta: { ...input.document.meta,
-      revision: current.meta.revision + 1, updated_at: new Date().toISOString() } });
+    const document = saveMapDocumentSync({
+      ...input.document,
+      meta: {
+        ...input.document.meta,
+        revision: current.meta.revision + 1,
+        updated_at: new Date().toISOString()
+      }
+    });
     return runtimeFromDocument(document);
   });
 }
@@ -283,7 +317,9 @@ export async function saveMapAs(input: SaveMapAsInput): Promise<MapRuntimeState>
   if (await mapExists(nextId)) {
     throw badRequest(`map id ${nextId} already exists`);
   }
-  const sourceDocument = input.document ?? (input.sourceId ? await getMapDocument(assertSafeMapId(input.sourceId)) : null);
+  const sourceDocument =
+    input.document ??
+    (input.sourceId ? await getMapDocument(assertSafeMapId(input.sourceId)) : null);
   if (!sourceDocument) {
     throw badRequest("document or sourceId is required");
   }
@@ -310,10 +346,20 @@ export async function updateMapMeta(input: UpdateMapMetadataInput): Promise<MapS
   return withMapTransaction(normalizedId, () => {
     const current = getMapSummarySync(normalizedId);
     if (current.meta.revision !== input.expectedRevision) {
-      throw revisionConflict("revision conflict: expected " + input.expectedRevision + ", current is " + current.meta.revision);
+      throw revisionConflict(
+        "revision conflict: expected " +
+          input.expectedRevision +
+          ", current is " +
+          current.meta.revision
+      );
     }
-    if (input.name !== undefined && !input.name.trim()) throw badRequest("name must be a non-empty string");
-    return updateMapMetadataSync(normalizedId, { name: input.name?.trim(), description: input.description, tags: input.tags });
+    if (input.name !== undefined && !input.name.trim())
+      throw badRequest("name must be a non-empty string");
+    return updateMapMetadataSync(normalizedId, {
+      name: input.name?.trim(),
+      description: input.description,
+      tags: input.tags
+    });
   });
 }
 
@@ -349,7 +395,8 @@ export async function importMap(input: {
   beforeCommit?: () => void;
 }): Promise<{ map?: MapRuntimeState; summary: MapSummary; warnings: ValidationIssue[] }> {
   await ensureDirectories();
-  if (Buffer.byteLength(input.content) > MAX_IMPORT_BYTES) throw badRequest("导入文件超过 64 MiB 限制");
+  if (Buffer.byteLength(input.content) > MAX_IMPORT_BYTES)
+    throw badRequest("导入文件超过 64 MiB 限制");
   input.progress?.("正在校验地图");
   const parsed = parseDocument(input.content);
   if (!parsed.document) {
@@ -421,7 +468,9 @@ export async function exportPng(
       `whole-map PNG export is limited to ${MAX_WHOLE_MAP_PNG_EXPORT_CELLS} designed cells; use a range for large maps`
     );
   }
-  const runtime = resolved.range ? await buildRangeRuntime(normalizedId, resolved.range) : await getMap(normalizedId);
+  const runtime = resolved.range
+    ? await buildRangeRuntime(normalizedId, resolved.range)
+    : await getMap(normalizedId);
   const scene = buildExportScene({
     map: runtime,
     options: resolved
@@ -433,20 +482,30 @@ export async function exportPng(
   const temporary = filePath + ".tmp";
   try {
     await sharp(Buffer.from(svg), { limitInputPixels: 40_000_000 })
-    .timeout({ seconds: PNG_EXPORT_TIMEOUT_SECONDS })
-    .png()
-    .toFile(temporary);
+      .timeout({ seconds: PNG_EXPORT_TIMEOUT_SECONDS })
+      .png()
+      .toFile(temporary);
     await fs.rename(temporary, filePath);
-  } finally { await fs.rm(temporary, { force: true }); }
+  } finally {
+    await fs.rm(temporary, { force: true });
+  }
   return { fileName, path: filePath };
 }
 
-export async function applyCommands(id: string, commands: MapCommand[], options: ApplyCommandsOptions = {}): Promise<ApplyCommandsResult> {
+export async function applyCommands(
+  id: string,
+  commands: MapCommand[],
+  options: ApplyCommandsOptions = {}
+): Promise<ApplyCommandsResult> {
   const result = await executeCommands(id, commands, options, true);
   return { ...result, map: result.map! };
 }
 
-export async function applyCommandsLight(id: string, commands: MapCommand[], options: ApplyCommandsOptions = {}): Promise<LightweightApplyCommandsResult> {
+export async function applyCommandsLight(
+  id: string,
+  commands: MapCommand[],
+  options: ApplyCommandsOptions = {}
+): Promise<LightweightApplyCommandsResult> {
   return executeCommands(id, commands, options);
 }
 
@@ -500,7 +559,10 @@ export async function getCellsInRange(
   return getRepositoryCellsInRange(assertSafeMapId(id), range, options);
 }
 
-export async function inspectCell(id: string, target: GridCoordinate): Promise<CellInspectionResult> {
+export async function inspectCell(
+  id: string,
+  target: GridCoordinate
+): Promise<CellInspectionResult> {
   const normalizedId = assertSafeMapId(id);
   const neighbors = getNeighborCoords(target);
   const cellsById = await getRangeCellsById(normalizedId, {
@@ -542,7 +604,10 @@ export async function inspectArea(
   };
 }
 
-export async function getNeighbors(id: string, center: GridCoordinate): Promise<NeighborInspectionResult> {
+export async function getNeighbors(
+  id: string,
+  center: GridCoordinate
+): Promise<NeighborInspectionResult> {
   const normalizedId = assertSafeMapId(id);
   const neighbors = getNeighborCoords(center);
   const cellsById = await getRangeCellsById(normalizedId, {

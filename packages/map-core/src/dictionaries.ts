@@ -1,10 +1,4 @@
-import type {
-  BiomeKey,
-  DictionaryEntry,
-  TagEntry,
-  TagKey,
-  TerrainKey
-} from "./types.js";
+import type { BiomeKey, DictionaryEntry, TagEntry, TagKey, TerrainKey } from "./types.js";
 
 export const TERRAIN_CATEGORY_LABELS = {
   water: "水域",
@@ -74,16 +68,41 @@ export const BIOME_ENTRIES: Record<BiomeKey, DictionaryEntry> = {
   grassland: { key: "grassland", label: "草原", short: "GRS", category: "vegetation" },
   steppe: { key: "steppe", label: "干草原", short: "STP", category: "vegetation" },
   savanna: { key: "savanna", label: "稀树草原", short: "SAV", category: "vegetation" },
-  deciduous_forest: { key: "deciduous_forest", label: "温带落叶林", short: "DFR", category: "forest" },
+  deciduous_forest: {
+    key: "deciduous_forest",
+    label: "温带落叶林",
+    short: "DFR",
+    category: "forest"
+  },
   mixed_forest: { key: "mixed_forest", label: "温带混交林", short: "MFR", category: "forest" },
   conifer_forest: { key: "conifer_forest", label: "针叶林", short: "CFR", category: "forest" },
-  temperate_rainforest: { key: "temperate_rainforest", label: "温带雨林", short: "TRF", category: "forest" },
-  tropical_rainforest: { key: "tropical_rainforest", label: "热带雨林", short: "RNF", category: "forest" },
+  temperate_rainforest: {
+    key: "temperate_rainforest",
+    label: "温带雨林",
+    short: "TRF",
+    category: "forest"
+  },
+  tropical_rainforest: {
+    key: "tropical_rainforest",
+    label: "热带雨林",
+    short: "RNF",
+    category: "forest"
+  },
   monsoon_forest: { key: "monsoon_forest", label: "季雨林", short: "MSF", category: "forest" },
   cloud_forest: { key: "cloud_forest", label: "云雾林", short: "CLD", category: "forest" },
   shrubland: { key: "shrubland", label: "灌丛", short: "SHB", category: "vegetation" },
-  mediterranean: { key: "mediterranean", label: "地中海生态", short: "MED", category: "vegetation" },
-  xeric_shrubland: { key: "xeric_shrubland", label: "旱灌丛", short: "XSH", category: "vegetation" },
+  mediterranean: {
+    key: "mediterranean",
+    label: "地中海生态",
+    short: "MED",
+    category: "vegetation"
+  },
+  xeric_shrubland: {
+    key: "xeric_shrubland",
+    label: "旱灌丛",
+    short: "XSH",
+    category: "vegetation"
+  },
   arid: { key: "arid", label: "荒漠生态", short: "ARD", category: "dry" },
   semi_arid: { key: "semi_arid", label: "半干旱生态", short: "SAR", category: "dry" },
   tundra: { key: "tundra", label: "苔原", short: "TND", category: "cold" },
@@ -142,18 +161,77 @@ export const ALLOWED_BIOMES_BY_TERRAIN: Record<TerrainKey, BiomeKey[]> = {
   salt_lake: ["brackish", "arid", "bare"],
   river: ["freshwater", "reedbed", "marsh", "bog"],
   delta: ["freshwater", "brackish", "marsh", "swamp", "reedbed", "mangrove", "grassland"],
-  plain: ["grassland", "steppe", "savanna", "shrubland", "deciduous_forest", "mixed_forest", "conifer_forest", "semi_arid"],
-  alluvial_plain: ["grassland", "deciduous_forest", "mixed_forest", "freshwater", "marsh", "reedbed", "shrubland"],
-  floodplain: ["grassland", "deciduous_forest", "mixed_forest", "freshwater", "marsh", "swamp", "reedbed", "bog"],
+  plain: [
+    "grassland",
+    "steppe",
+    "savanna",
+    "shrubland",
+    "deciduous_forest",
+    "mixed_forest",
+    "conifer_forest",
+    "semi_arid"
+  ],
+  alluvial_plain: [
+    "grassland",
+    "deciduous_forest",
+    "mixed_forest",
+    "freshwater",
+    "marsh",
+    "reedbed",
+    "shrubland"
+  ],
+  floodplain: [
+    "grassland",
+    "deciduous_forest",
+    "mixed_forest",
+    "freshwater",
+    "marsh",
+    "swamp",
+    "reedbed",
+    "bog"
+  ],
   wetland: ["freshwater", "marsh", "swamp", "bog", "reedbed"],
-  hill: ["grassland", "steppe", "shrubland", "deciduous_forest", "mixed_forest", "conifer_forest", "semi_arid"],
-  foothill: ["grassland", "shrubland", "deciduous_forest", "mixed_forest", "conifer_forest", "cloud_forest"],
+  hill: [
+    "grassland",
+    "steppe",
+    "shrubland",
+    "deciduous_forest",
+    "mixed_forest",
+    "conifer_forest",
+    "semi_arid"
+  ],
+  foothill: [
+    "grassland",
+    "shrubland",
+    "deciduous_forest",
+    "mixed_forest",
+    "conifer_forest",
+    "cloud_forest"
+  ],
   mountain: ["bare", "conifer_forest", "alpine", "tundra", "cloud_forest", "polar"],
   plateau: ["grassland", "steppe", "shrubland", "semi_arid", "arid", "bare", "alpine"],
   basin: ["grassland", "steppe", "shrubland", "semi_arid", "arid", "freshwater", "marsh", "bare"],
-  valley: ["grassland", "deciduous_forest", "mixed_forest", "conifer_forest", "freshwater", "marsh", "reedbed", "shrubland"],
+  valley: [
+    "grassland",
+    "deciduous_forest",
+    "mixed_forest",
+    "conifer_forest",
+    "freshwater",
+    "marsh",
+    "reedbed",
+    "shrubland"
+  ],
   canyon: ["bare", "shrubland", "steppe", "semi_arid", "arid", "grassland"],
-  rift_valley: ["grassland", "savanna", "shrubland", "steppe", "semi_arid", "freshwater", "marsh", "swamp"],
+  rift_valley: [
+    "grassland",
+    "savanna",
+    "shrubland",
+    "steppe",
+    "semi_arid",
+    "freshwater",
+    "marsh",
+    "swamp"
+  ],
   dune: ["arid", "semi_arid", "xeric_shrubland", "bare"],
   gravel_desert: ["arid", "semi_arid", "xeric_shrubland", "bare"],
   salt_flat: ["arid", "bare", "brackish"],
@@ -176,7 +254,9 @@ export function getTerrainCategoryKey(terrain: TerrainKey): TerrainCategoryKey {
   return TERRAIN_ENTRIES[terrain].category as TerrainCategoryKey;
 }
 
-export function getTerrainEntriesByCategory(category: string): Array<typeof TERRAIN_ENTRIES[TerrainKey]> {
+export function getTerrainEntriesByCategory(
+  category: string
+): Array<(typeof TERRAIN_ENTRIES)[TerrainKey]> {
   if (!isTerrainCategoryKey(category)) {
     return [];
   }
@@ -196,7 +276,9 @@ export function getAllowedTerrainsForBiome(biome: string): TerrainKey[] {
   if (!(biome in BIOME_ENTRIES)) {
     return [];
   }
-  return TERRAIN_KEYS.filter((terrain) => ALLOWED_BIOMES_BY_TERRAIN[terrain].includes(biome as BiomeKey));
+  return TERRAIN_KEYS.filter((terrain) =>
+    ALLOWED_BIOMES_BY_TERRAIN[terrain].includes(biome as BiomeKey)
+  );
 }
 
 export function getAllowedTerrainCategoriesForBiome(biome: string): TerrainCategoryKey[] {
@@ -205,15 +287,22 @@ export function getAllowedTerrainCategoriesForBiome(biome: string): TerrainCateg
   }
   return TERRAIN_CATEGORY_ORDER.filter((category) =>
     TERRAIN_KEYS.some(
-      (terrain) => getTerrainCategoryKey(terrain) === category && ALLOWED_BIOMES_BY_TERRAIN[terrain].includes(biome as BiomeKey)
+      (terrain) =>
+        getTerrainCategoryKey(terrain) === category &&
+        ALLOWED_BIOMES_BY_TERRAIN[terrain].includes(biome as BiomeKey)
     )
   );
 }
 
-export function getFilteredTerrainEntries(category: string, biome?: string): Array<typeof TERRAIN_ENTRIES[TerrainKey]> {
+export function getFilteredTerrainEntries(
+  category: string,
+  biome?: string
+): Array<(typeof TERRAIN_ENTRIES)[TerrainKey]> {
   const entries = getTerrainEntriesByCategory(category);
   if (!biome || !(biome in BIOME_ENTRIES)) {
     return entries;
   }
-  return entries.filter((entry) => ALLOWED_BIOMES_BY_TERRAIN[entry.key as TerrainKey].includes(biome as BiomeKey));
+  return entries.filter((entry) =>
+    ALLOWED_BIOMES_BY_TERRAIN[entry.key as TerrainKey].includes(biome as BiomeKey)
+  );
 }

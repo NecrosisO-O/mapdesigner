@@ -137,8 +137,7 @@ JSON 导入导出与 PNG 导出。百万格地图的耗时、内存和长时间�
 手动迁移或备份时，先停止服务，再复制整个 `storage` 目录。
 
 `docs/deployment.md`、`docs/docker.md` 和用户手册的部分段落仍按旧 JSON 存储描述，
-`PRODUCT_OVERVIEW_0.1.0.md` 是历史版本说明。旧部署文档和 Dockerfile 仍使用 Node.js 20，
-需要在容器验证时与本次已验证的 Node.js 24 开发基线统一。
+`PRODUCT_OVERVIEW_0.1.0.md` 是历史版本说明。部署文档和 Dockerfile 已与 Node.js 24 基线对齐，生产镜像由 CI 验证。
 
 `docs/NEXT_WORK_PLAN.md` 已标记为历史计划。当前服务端已有 SQLite 操作日志、
 持久撤销/重做和范围读取；核心包中也保留了运行时快照历史。

@@ -54,7 +54,12 @@ async function sendWebIndex(indexPath: string, reply: FastifyReply) {
   return reply.send(await fs.readFile(indexPath, "utf8"));
 }
 
-function sendError(reply: FastifyReply, fallbackCode: string, error: unknown, fallbackStatus = 400) {
+function sendError(
+  reply: FastifyReply,
+  fallbackCode: string,
+  error: unknown,
+  fallbackStatus = 400
+) {
   const serviceError = isServiceError(error) ? error : null;
   reply.status(serviceError?.statusCode ?? fallbackStatus);
   return createEnvelope({
@@ -76,7 +81,11 @@ function assertRecord(value: unknown, message: string): Record<string, unknown> 
   return value as Record<string, unknown>;
 }
 
-function readStringField(body: Record<string, unknown>, key: string, required = true): string | undefined {
+function readStringField(
+  body: Record<string, unknown>,
+  key: string,
+  required = true
+): string | undefined {
   const value = body[key];
   if (value === undefined) {
     if (required) {
@@ -124,7 +133,12 @@ function readIncludeMapQuery(value: unknown): boolean {
   throw badRequest("includeMap must be true or false");
 }
 
-async function applyCommandRequest(id: string, bodyInput: unknown, dryRun = false, includeMap = true) {
+async function applyCommandRequest(
+  id: string,
+  bodyInput: unknown,
+  dryRun = false,
+  includeMap = true
+) {
   const body = assertRecord(bodyInput, "request body is required");
   if (!Array.isArray(body.commands)) {
     throw badRequest("commands must be an array");
@@ -202,27 +216,43 @@ async function lightHistoryMoveResponse(result: Awaited<ReturnType<typeof undoMa
 export async function createServer(): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
   registerAccessGuard(app);
-  await app.register(cors, { origin: (origin, callback) => callback(null, !origin || allowedOrigin(origin)) });
+  await app.register(cors, {
+    origin: (origin, callback) => callback(null, !origin || allowedOrigin(origin))
+  });
   app.setErrorHandler((error, _request, reply) => {
-    const failure = error instanceof Error ? error as Error & { statusCode?: number; code?: string } : new Error("request failed");
-    const status = "statusCode" in failure && typeof failure.statusCode === "number" ? failure.statusCode : 500;
-    reply.code(status).send(createEnvelope({ errors: [{
-      code: "code" in failure ? String(failure.code) : "request_failed", message: status < 500 ? failure.message : "request failed", severity: "invalid"
-    }] }));
+    const failure =
+      error instanceof Error
+        ? (error as Error & { statusCode?: number; code?: string })
+        : new Error("request failed");
+    const status =
+      "statusCode" in failure && typeof failure.statusCode === "number" ? failure.statusCode : 500;
+    reply.code(status).send(
+      createEnvelope({
+        errors: [
+          {
+            code: "code" in failure ? String(failure.code) : "request_failed",
+            message: status < 500 ? failure.message : "request failed",
+            severity: "invalid"
+          }
+        ]
+      })
+    );
   });
   await registerJobs(app);
   const webIndexPath = path.join(WEB_DIST_DIR, "index.html");
   const webAssetsDir = path.join(WEB_DIST_DIR, "assets");
   const hasWebBuild = await fileExists(webIndexPath);
 
-  if (hasWebBuild && await fileExists(webAssetsDir)) {
+  if (hasWebBuild && (await fileExists(webAssetsDir))) {
     await app.register(fastifyStatic, {
       root: webAssetsDir,
       prefix: "/assets/"
     });
   }
 
-  app.get("/api/health", async () => createEnvelope({ result: { status: "ok", port: SERVER_PORT } }));
+  app.get("/api/health", async () =>
+    createEnvelope({ result: { status: "ok", port: SERVER_PORT } })
+  );
 
   app.get("/api/maps", async () => createEnvelope({ result: await listMaps() }));
 
@@ -242,10 +272,18 @@ export async function createServer(): Promise<FastifyInstance> {
     }
   });
 
-  app.get<{ Params: { id: string }; Querystring: Record<string, string> }>("/api/maps/:id/overview", async request => createEnvelope({ result: await getOverview(request.params.id, {
-    minRow: readIntegerQuery(request.query.minRow, "minRow"), maxRow: readIntegerQuery(request.query.maxRow, "maxRow"),
-    minCol: readIntegerQuery(request.query.minCol, "minCol"), maxCol: readIntegerQuery(request.query.maxCol, "maxCol")
-  }) }));
+  app.get<{ Params: { id: string }; Querystring: Record<string, string> }>(
+    "/api/maps/:id/overview",
+    async (request) =>
+      createEnvelope({
+        result: await getOverview(request.params.id, {
+          minRow: readIntegerQuery(request.query.minRow, "minRow"),
+          maxRow: readIntegerQuery(request.query.maxRow, "maxRow"),
+          minCol: readIntegerQuery(request.query.minCol, "minCol"),
+          maxCol: readIntegerQuery(request.query.maxCol, "maxCol")
+        })
+      })
+  );
 
   app.get<{ Params: { id: string } }>("/api/maps/:id/features", async (request, reply) => {
     try {
@@ -257,7 +295,14 @@ export async function createServer(): Promise<FastifyInstance> {
 
   app.get<{
     Params: { id: string };
-    Querystring: { minRow?: string; maxRow?: string; minCol?: string; maxCol?: string; limit?: string; offset?: string };
+    Querystring: {
+      minRow?: string;
+      maxRow?: string;
+      minCol?: string;
+      maxCol?: string;
+      limit?: string;
+      offset?: string;
+    };
   }>("/api/maps/:id/features/range", async (request, reply) => {
     try {
       return createEnvelope({
@@ -270,8 +315,14 @@ export async function createServer(): Promise<FastifyInstance> {
             maxCol: readIntegerQuery(request.query.maxCol, "maxCol")
           },
           {
-            limit: request.query.limit === undefined ? undefined : readIntegerQuery(request.query.limit, "limit"),
-            offset: request.query.offset === undefined ? undefined : readIntegerQuery(request.query.offset, "offset")
+            limit:
+              request.query.limit === undefined
+                ? undefined
+                : readIntegerQuery(request.query.limit, "limit"),
+            offset:
+              request.query.offset === undefined
+                ? undefined
+                : readIntegerQuery(request.query.offset, "offset")
           }
         )
       });
@@ -282,7 +333,13 @@ export async function createServer(): Promise<FastifyInstance> {
 
   app.get<{
     Params: { id: string };
-    Querystring: { minRow?: string; maxRow?: string; minCol?: string; maxCol?: string; includeUndesigned?: string };
+    Querystring: {
+      minRow?: string;
+      maxRow?: string;
+      minCol?: string;
+      maxCol?: string;
+      includeUndesigned?: string;
+    };
   }>("/api/maps/:id/cells", async (request, reply) => {
     try {
       return createEnvelope({
@@ -302,48 +359,55 @@ export async function createServer(): Promise<FastifyInstance> {
     }
   });
 
-  app.post<{ Body: { name: string; description?: string; id?: string } }>("/api/maps", async (request, reply) => {
-    try {
-      const body = assertRecord(request.body, "request body is required");
-      return createEnvelope({
-        result: await createMap({
-          name: readStringField(body, "name")!,
-          description: readStringField(body, "description", false),
-          id: readStringField(body, "id", false)
-        })
-      });
-    } catch (error) {
-      return sendError(reply, "create_failed", error);
-    }
-  });
-
-  app.put<{ Params: { id: string }; Body: { document: Awaited<ReturnType<typeof getMap>>["document"]; expectedRevision: number } }>(
-    "/api/maps/:id",
+  app.post<{ Body: { name: string; description?: string; id?: string } }>(
+    "/api/maps",
     async (request, reply) => {
       try {
         const body = assertRecord(request.body, "request body is required");
-        const document = body.document as Awaited<ReturnType<typeof getMap>>["document"];
-        const expectedRevision = body.expectedRevision;
-        if (!document || typeof document !== "object") {
-          throw badRequest("document is required");
-        }
-        if (!Number.isInteger(expectedRevision)) {
-          throw badRequest("expectedRevision must be an integer");
-        }
-        if (!document.meta || typeof document.meta !== "object" || request.params.id !== document.meta.id) {
-          throw badRequest("path id and document.meta.id must match");
-        }
         return createEnvelope({
-          result: await saveMap({
-            document,
-            expectedRevision: expectedRevision as number
+          result: await createMap({
+            name: readStringField(body, "name")!,
+            description: readStringField(body, "description", false),
+            id: readStringField(body, "id", false)
           })
         });
       } catch (error) {
-        return sendError(reply, "save_failed", error, 409);
+        return sendError(reply, "create_failed", error);
       }
     }
   );
+
+  app.put<{
+    Params: { id: string };
+    Body: { document: Awaited<ReturnType<typeof getMap>>["document"]; expectedRevision: number };
+  }>("/api/maps/:id", async (request, reply) => {
+    try {
+      const body = assertRecord(request.body, "request body is required");
+      const document = body.document as Awaited<ReturnType<typeof getMap>>["document"];
+      const expectedRevision = body.expectedRevision;
+      if (!document || typeof document !== "object") {
+        throw badRequest("document is required");
+      }
+      if (!Number.isInteger(expectedRevision)) {
+        throw badRequest("expectedRevision must be an integer");
+      }
+      if (
+        !document.meta ||
+        typeof document.meta !== "object" ||
+        request.params.id !== document.meta.id
+      ) {
+        throw badRequest("path id and document.meta.id must match");
+      }
+      return createEnvelope({
+        result: await saveMap({
+          document,
+          expectedRevision: expectedRevision as number
+        })
+      });
+    } catch (error) {
+      return sendError(reply, "save_failed", error, 409);
+    }
+  });
 
   app.post<{ Params: { id: string } }>("/api/maps/:id/duplicate", async (request, reply) => {
     try {
@@ -360,7 +424,12 @@ export async function createServer(): Promise<FastifyInstance> {
     try {
       const body = assertRecord(request.body, "request body is required");
       const document = body.document as Awaited<ReturnType<typeof getMap>>["document"] | undefined;
-      if (document !== undefined && (!document.meta || typeof document.meta !== "object" || request.params.id !== document.meta.id)) {
+      if (
+        document !== undefined &&
+        (!document.meta ||
+          typeof document.meta !== "object" ||
+          request.params.id !== document.meta.id)
+      ) {
         throw badRequest("path id and document.meta.id must match");
       }
       return createEnvelope({
@@ -387,7 +456,10 @@ export async function createServer(): Promise<FastifyInstance> {
         throw badRequest("expectedRevision must be an integer");
       }
       const tags = body.tags;
-      if (tags !== undefined && (!Array.isArray(tags) || tags.some((entry) => typeof entry !== "string"))) {
+      if (
+        tags !== undefined &&
+        (!Array.isArray(tags) || tags.some((entry) => typeof entry !== "string"))
+      ) {
         throw badRequest("tags must be an array of strings");
       }
       return createEnvelope({
@@ -413,9 +485,10 @@ export async function createServer(): Promise<FastifyInstance> {
     }
   });
 
-  app.post<{ Querystring: { includeMap?: string }; Body: { content: string; generateNewId?: boolean } }>(
-    "/api/maps/import",
-    async (request, reply) => {
+  app.post<{
+    Querystring: { includeMap?: string };
+    Body: { content: string; generateNewId?: boolean };
+  }>("/api/maps/import", async (request, reply) => {
     try {
       const body = assertRecord(request.body, "request body is required");
       const content = readStringField(body, "content")!;
@@ -428,12 +501,14 @@ export async function createServer(): Promise<FastifyInstance> {
         generateNewId: body.generateNewId as boolean | undefined,
         includeMap
       });
-      return createEnvelope({ result: includeMap ? result.map : { summary: result.summary }, warnings: result.warnings });
+      return createEnvelope({
+        result: includeMap ? result.map : { summary: result.summary },
+        warnings: result.warnings
+      });
     } catch (error) {
       return sendError(reply, "import_failed", error);
     }
-    }
-  );
+  });
 
   app.post<{ Params: { id: string } }>("/api/maps/:id/export-json", async (request, reply) => {
     try {
@@ -463,47 +538,80 @@ export async function createServer(): Promise<FastifyInstance> {
     }
   });
 
-  app.post<{ Params: { id: string }; Body: Partial<ExportRenderOptions> }>("/api/maps/:id/export-png", async (request, reply) => {
-    try {
-      const body = request.body === undefined ? {} : assertRecord(request.body, "request body must be an object");
-      const result = await exportPng(request.params.id, normalizeExportOptions(body as Partial<ExportRenderOptions>));
-      return createEnvelope({
-        result: {
-          ...result,
-          downloadUrl: downloadUrl(result.fileName)
-        }
-      });
-    } catch (error) {
-      return sendError(reply, "export_png_failed", error);
+  app.post<{ Params: { id: string }; Body: Partial<ExportRenderOptions> }>(
+    "/api/maps/:id/export-png",
+    async (request, reply) => {
+      try {
+        const body =
+          request.body === undefined
+            ? {}
+            : assertRecord(request.body, "request body must be an object");
+        const result = await exportPng(
+          request.params.id,
+          normalizeExportOptions(body as Partial<ExportRenderOptions>)
+        );
+        return createEnvelope({
+          result: {
+            ...result,
+            downloadUrl: downloadUrl(result.fileName)
+          }
+        });
+      } catch (error) {
+        return sendError(reply, "export_png_failed", error);
+      }
     }
-  });
+  );
 
-  app.post<{ Params: { id: string }; Querystring: { includeMap?: string }; Body: { commands: MapCommand[] } }>("/api/maps/:id/apply", async (request, reply) => {
+  app.post<{
+    Params: { id: string };
+    Querystring: { includeMap?: string };
+    Body: { commands: MapCommand[] };
+  }>("/api/maps/:id/apply", async (request, reply) => {
     try {
-      return await applyCommandRequest(request.params.id, request.body, false, readIncludeMapQuery(request.query.includeMap));
+      return await applyCommandRequest(
+        request.params.id,
+        request.body,
+        false,
+        readIncludeMapQuery(request.query.includeMap)
+      );
     } catch (error) {
       return sendError(reply, "apply_failed", error);
     }
   });
 
-  app.post<{ Params: { id: string }; Querystring: { includeMap?: string }; Body: { commands: MapCommand[] } }>("/api/maps/:id/commands", async (request, reply) => {
+  app.post<{
+    Params: { id: string };
+    Querystring: { includeMap?: string };
+    Body: { commands: MapCommand[] };
+  }>("/api/maps/:id/commands", async (request, reply) => {
     try {
-      return await applyCommandRequest(request.params.id, request.body, false, readIncludeMapQuery(request.query.includeMap));
+      return await applyCommandRequest(
+        request.params.id,
+        request.body,
+        false,
+        readIncludeMapQuery(request.query.includeMap)
+      );
     } catch (error) {
       return sendError(reply, "commands_failed", error);
     }
   });
 
-  app.post<{ Params: { id: string }; Querystring: { includeMap?: string }; Body: { commands: MapCommand[] } }>(
-    "/api/maps/:id/commands/dry-run",
-    async (request, reply) => {
-      try {
-        return await applyCommandRequest(request.params.id, request.body, true, readIncludeMapQuery(request.query.includeMap));
-      } catch (error) {
-        return sendError(reply, "commands_dry_run_failed", error);
-      }
+  app.post<{
+    Params: { id: string };
+    Querystring: { includeMap?: string };
+    Body: { commands: MapCommand[] };
+  }>("/api/maps/:id/commands/dry-run", async (request, reply) => {
+    try {
+      return await applyCommandRequest(
+        request.params.id,
+        request.body,
+        true,
+        readIncludeMapQuery(request.query.includeMap)
+      );
+    } catch (error) {
+      return sendError(reply, "commands_dry_run_failed", error);
     }
-  );
+  });
 
   app.get<{ Params: { id: string } }>("/api/maps/:id/history-status", async (request, reply) => {
     try {
@@ -513,36 +621,48 @@ export async function createServer(): Promise<FastifyInstance> {
     }
   });
 
-  app.get<{ Params: { id: string }; Querystring: { limit?: string } }>("/api/maps/:id/history", async (request, reply) => {
-    try {
-      const limit = request.query.limit === undefined ? undefined : readIntegerQuery(request.query.limit, "limit");
-      return createEnvelope({ result: await getMapHistory(request.params.id, limit) });
-    } catch (error) {
-      return sendError(reply, "history_failed", error, 404);
+  app.get<{ Params: { id: string }; Querystring: { limit?: string } }>(
+    "/api/maps/:id/history",
+    async (request, reply) => {
+      try {
+        const limit =
+          request.query.limit === undefined
+            ? undefined
+            : readIntegerQuery(request.query.limit, "limit");
+        return createEnvelope({ result: await getMapHistory(request.params.id, limit) });
+      } catch (error) {
+        return sendError(reply, "history_failed", error, 404);
+      }
     }
-  });
+  );
 
-  app.post<{ Params: { id: string }; Querystring: { includeMap?: string } }>("/api/maps/:id/undo", async (request, reply) => {
-    try {
-      const includeMap = readIncludeMapQuery(request.query.includeMap);
-      return includeMap
-        ? historyMoveResponse(await undoMap(request.params.id), includeMap)
-        : lightHistoryMoveResponse(await undoMapLight(request.params.id));
-    } catch (error) {
-      return sendError(reply, "undo_failed", error);
+  app.post<{ Params: { id: string }; Querystring: { includeMap?: string } }>(
+    "/api/maps/:id/undo",
+    async (request, reply) => {
+      try {
+        const includeMap = readIncludeMapQuery(request.query.includeMap);
+        return includeMap
+          ? historyMoveResponse(await undoMap(request.params.id), includeMap)
+          : lightHistoryMoveResponse(await undoMapLight(request.params.id));
+      } catch (error) {
+        return sendError(reply, "undo_failed", error);
+      }
     }
-  });
+  );
 
-  app.post<{ Params: { id: string }; Querystring: { includeMap?: string } }>("/api/maps/:id/redo", async (request, reply) => {
-    try {
-      const includeMap = readIncludeMapQuery(request.query.includeMap);
-      return includeMap
-        ? historyMoveResponse(await redoMap(request.params.id), includeMap)
-        : lightHistoryMoveResponse(await redoMapLight(request.params.id));
-    } catch (error) {
-      return sendError(reply, "redo_failed", error);
+  app.post<{ Params: { id: string }; Querystring: { includeMap?: string } }>(
+    "/api/maps/:id/redo",
+    async (request, reply) => {
+      try {
+        const includeMap = readIncludeMapQuery(request.query.includeMap);
+        return includeMap
+          ? historyMoveResponse(await redoMap(request.params.id), includeMap)
+          : lightHistoryMoveResponse(await redoMapLight(request.params.id));
+      } catch (error) {
+        return sendError(reply, "redo_failed", error);
+      }
     }
-  });
+  );
 
   if (hasWebBuild) {
     app.get("/", async (_request, reply) => sendWebIndex(webIndexPath, reply));

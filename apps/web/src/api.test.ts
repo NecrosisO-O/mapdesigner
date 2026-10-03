@@ -34,7 +34,9 @@ describe("web api client", () => {
 
 it("normalizes framework errors and network failures", async () => {
   const fetchMock = vi.spyOn(globalThis, "fetch");
-  fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ statusCode: 413, message: "Too large" }), { status: 413 }));
+  fetchMock.mockResolvedValueOnce(
+    new Response(JSON.stringify({ statusCode: 413, message: "Too large" }), { status: 413 })
+  );
   const oversized = await api.listMaps();
   expect(oversized.ok).toBe(false);
   expect(oversized.errors[0]?.message).toBe("Too large");

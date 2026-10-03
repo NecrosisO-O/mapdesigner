@@ -5,8 +5,12 @@ import { fileURLToPath } from "node:url";
 export const SERVER_PORT = Number(process.env.PORT ?? 3010);
 export const SERVER_HOST = process.env.HOST ?? "127.0.0.1";
 export const API_TOKEN = process.env.MAPDESIGNER_TOKEN?.trim() ?? "";
-export const ALLOWED_ORIGINS = new Set((process.env.MAPDESIGNER_ALLOWED_ORIGINS ?? "")
-  .split(",").map(value => value.trim()).filter(Boolean));
+export const ALLOWED_ORIGINS = new Set(
+  (process.env.MAPDESIGNER_ALLOWED_ORIGINS ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean)
+);
 export const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
 
 export function validateListenConfig(): void {
