@@ -834,19 +834,22 @@ describe("App", () => {
   });
 
   it("draws a river from canvas clicks and returns to cell selection", async () => {
-    render(<App />);
+    // Finish the asynchronous map open and its reset effects before choosing a tool.
+    await act(async () => {
+      render(<App />);
+    });
     await screen.findByText("已打开 Sample Map");
 
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "河流" }));
     });
-    const riverPanel = screen.getByRole("heading", { name: "节点与河宽" }).closest("section");
-    expect(riverPanel).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "河流" }));
     await waitFor(() =>
       expect(screen.getByRole("button", { name: "河流" }).getAttribute("aria-pressed")).toBe("true")
     );
-    expect(screen.getByRole("button", { name: "河流" }).getAttribute("aria-pressed")).toBe("true");
+    const riverPanel = (await screen.findByRole("heading", { name: "节点与河宽" })).closest(
+      "section"
+    );
+    expect(riverPanel).toBeTruthy();
     expect(screen.getByLabelText("河流绘制工具")).toBeTruthy();
 
     await act(async () => {
