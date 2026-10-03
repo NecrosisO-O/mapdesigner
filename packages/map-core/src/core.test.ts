@@ -133,11 +133,17 @@ describe("validation", () => {
     expect(getAllowedTerrainsForBiome("marine")).toContain("ocean");
     expect(getAllowedTerrainsForBiome("marine")).not.toContain("plain");
     expect(getAllowedTerrainCategoriesForBiome("marine")).toEqual(["water", "coast"]);
-    expect(getFilteredTerrainEntries("coast", "marine").map((entry) => entry.key)).toContain("reef");
-    expect(getFilteredTerrainEntries("coast", "marine").map((entry) => entry.key)).not.toContain("plain");
+    expect(getFilteredTerrainEntries("coast", "marine").map((entry) => entry.key)).toContain(
+      "reef"
+    );
+    expect(getFilteredTerrainEntries("coast", "marine").map((entry) => entry.key)).not.toContain(
+      "plain"
+    );
     expect(getAllowedBiomesForTerrain("plain")).toContain("grassland");
     expect(getAllowedBiomesForTerrain("plain")).not.toContain("marine");
-    expect(getAllowedTerrainCategoriesForBiome("")).toEqual(expect.arrayContaining(["water", "coast", "plain"]));
+    expect(getAllowedTerrainCategoriesForBiome("")).toEqual(
+      expect.arrayContaining(["water", "coast", "plain"])
+    );
     expect(BIOME_KEYS).toContain("grassland");
   });
 
@@ -513,4 +519,66 @@ describe("serialization", () => {
     expect(parsed.document).toBeUndefined();
     expect(parsed.errors.some((entry) => entry.code === "duplicate_cell")).toBe(true);
   });
+});
+
+describe("field patches", () => {
+  it("preserves omitted values, explicitly clears values and supports undo", () => {
+    const doc = createEmptyDocument({ id: "patch", name: "Patch" });
+    doc.cells = [
+      { row: 0, col: 0, terrain: "plain", biome: "grassland", tags: ["peak"], note: "keep" }
+    ];
+    const initial = createRuntimeState(doc);
+    const changed = applyCommand(initial, {
+      action: "patch_cells",
+      targets: [{ row: 0, col: 0 }],
+      changes: { terrain: "hill" }
+    });
+    expect(changed.map.document.cells[0]).toEqual({ ...doc.cells[0], terrain: "hill" });
+    const cleared = applyCommand(changed.map, {
+      action: "patch_cells",
+      targets: [{ row: 0, col: 0 }],
+      changes: { biome: null, tags: [], note: "" }
+    });
+    expect(cleared.map.document.cells[0]).toEqual({
+      ...doc.cells[0],
+      terrain: "hill",
+      biome: null,
+      tags: [],
+      note: ""
+    });
+    expect(undo(cleared.map).document.cells).toEqual(changed.map.document.cells);
+  });
+  it("rejects the entire batch when one target would be invalid", () => {
+    const doc = createEmptyDocument({ id: "patch-invalid", name: "Patch" });
+    doc.cells = [{ row: 0, col: 0, terrain: "plain", biome: "grassland", tags: [], note: "keep" }];
+    const initial = createRuntimeState(doc);
+    const result = applyCommand(initial, {
+      action: "patch_cells",
+      targets: [
+        { row: 0, col: 0 },
+        { row: 0, col: 2 }
+      ],
+      changes: { note: "new" }
+    });
+    expect(result.ok).toBe(false);
+    expect(result.map).toBe(initial);
+  });
+});
+it("adds and removes selected tags while retaining other cell data", () => {
+  const doc = createEmptyDocument({ id: "tags", name: "Tags" });
+  doc.cells = [{ row: 0, col: 0, terrain: "plain", biome: null, tags: ["peak"], note: "preserve" }];
+  const result = applyCommand(createRuntimeState(doc), {
+    action: "patch_cells",
+    targets: [{ row: 0, col: 0 }],
+    tagMode: "remove",
+    changes: { tags: ["peak"] }
+  });
+  expect(result.map.document.cells[0]).toEqual({ ...doc.cells[0], tags: [] });
+  const added = applyCommand(result.map, {
+    action: "patch_cells",
+    targets: [{ row: 0, col: 0 }],
+    tagMode: "add",
+    changes: { tags: ["peak", "peak"] }
+  });
+  expect(added.map.document.cells).toEqual(doc.cells);
 });

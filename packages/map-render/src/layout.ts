@@ -9,6 +9,23 @@ export function centerForCoord(coord: GridCoordinate, size: number): { x: number
   return { x, y };
 }
 
+/** Round cube coordinates together so every point snaps to its nearest hex. */
+export function coordForPoint(point: { x: number; y: number }, size = 36): GridCoordinate {
+  const x = point.x / (size * 1.5),
+    z = -point.y / (size * SQRT3) - x / 2,
+    y = -x - z;
+  let col = Math.round(x),
+    row = Math.round(z),
+    third = Math.round(y);
+  const dx = Math.abs(col - x),
+    dz = Math.abs(row - z),
+    dy = Math.abs(third - y);
+  if (dx > dy && dx > dz) col = -third - row;
+  else if (dy > dz) third = -col - row;
+  else row = -col - third;
+  return { row: row || 0, col: col || 0 };
+}
+
 function centerForCell(cell: ActiveCell, size: number): { x: number; y: number } {
   return centerForCoord(cell, size);
 }
@@ -39,10 +56,17 @@ export function buildHexLayout(
     ...(options.boundsCoords ?? []).map((coord) => centerForCoord(coord, size))
   ];
 
-  const minCenterX = Math.min(...boundsCenters.map((entry) => entry.x), 0);
-  const maxCenterX = Math.max(...boundsCenters.map((entry) => entry.x), 0);
-  const minCenterY = Math.min(...boundsCenters.map((entry) => entry.y), 0);
-  const maxCenterY = Math.max(...boundsCenters.map((entry) => entry.y), 0);
+  let minCenterX = Infinity,
+    maxCenterX = -Infinity,
+    minCenterY = Infinity,
+    maxCenterY = -Infinity;
+  for (const center of boundsCenters) {
+    minCenterX = Math.min(minCenterX, center.x);
+    maxCenterX = Math.max(maxCenterX, center.x);
+    minCenterY = Math.min(minCenterY, center.y);
+    maxCenterY = Math.max(maxCenterY, center.y);
+  }
+  if (!boundsCenters.length) minCenterX = maxCenterX = minCenterY = maxCenterY = 0;
 
   const minX = minCenterX - size - padding;
   const maxX = maxCenterX + size + padding;

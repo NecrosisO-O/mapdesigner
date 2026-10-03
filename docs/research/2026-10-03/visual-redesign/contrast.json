@@ -1,0 +1,90 @@
+{
+  "light": [
+    {
+      "foreground": "text",
+      "background": "surface",
+      "ratio": 12.03,
+      "passes45": true
+    },
+    {
+      "foreground": "muted",
+      "background": "surface",
+      "ratio": 5.55,
+      "passes45": true
+    },
+    {
+      "foreground": "muted",
+      "background": "subtle",
+      "ratio": 5.1,
+      "passes45": true
+    },
+    {
+      "foreground": "on-accent",
+      "background": "accent",
+      "ratio": 7.64,
+      "passes45": true
+    },
+    {
+      "foreground": "accent",
+      "background": "accent-soft",
+      "ratio": 6.28,
+      "passes45": true
+    },
+    {
+      "foreground": "warning",
+      "background": "warning-soft",
+      "ratio": 5.14,
+      "passes45": true
+    },
+    {
+      "foreground": "danger",
+      "background": "surface",
+      "ratio": 6.44,
+      "passes45": true
+    }
+  ],
+  "dark": [
+    {
+      "foreground": "text",
+      "background": "surface",
+      "ratio": 10.79,
+      "passes45": true
+    },
+    {
+      "foreground": "muted",
+      "background": "surface",
+      "ratio": 7.43,
+      "passes45": true
+    },
+    {
+      "foreground": "muted",
+      "background": "subtle",
+      "ratio": 8.68,
+      "passes45": true
+    },
+    {
+      "foreground": "on-accent",
+      "background": "accent",
+      "ratio": 8.18,
+      "passes45": true
+    },
+    {
+      "foreground": "accent",
+      "background": "accent-soft",
+      "ratio": 5.07,
+      "passes45": true
+    },
+    {
+      "foreground": "warning",
+      "background": "warning-soft",
+      "ratio": 6.95,
+      "passes45": true
+    },
+    {
+      "foreground": "danger",
+      "background": "surface",
+      "ratio": 7.53,
+      "passes45": true
+    }
+  ]
+}

@@ -2,7 +2,12 @@ import fs from "node:fs/promises";
 import { createWriteStream } from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
-import type { CellRange, ExportRenderOptions, MapDocument, ValidationIssue } from "@mapdesigner/map-core";
+import type {
+  CellRange,
+  ExportRenderOptions,
+  MapDocument,
+  ValidationIssue
+} from "@mapdesigner/map-core";
 import { validateMapDocument } from "@mapdesigner/map-core";
 import { badRequest, storageError, validationFailed } from "./errors.js";
 
@@ -25,7 +30,9 @@ export function assertSafeMapId(id: string): string {
     throw badRequest("map id is required");
   }
   if (!MAP_ID_PATTERN.test(normalized)) {
-    throw badRequest("map id may only contain letters, numbers, CJK ideographs, underscores, and hyphens");
+    throw badRequest(
+      "map id may only contain letters, numbers, CJK ideographs, underscores, and hyphens"
+    );
   }
   return normalized;
 }
@@ -91,8 +98,13 @@ export async function writeFileAtomicStream(
     `.${path.basename(filePath)}.${process.pid}.${crypto.randomBytes(6).toString("hex")}.tmp`
   );
   const stream = createWriteStream(temporaryPath);
+  let streamError: Error | null = null;
+  stream.on("error", (error) => {
+    streamError = error;
+  });
   let closed = false;
   const closeStream = async (): Promise<void> => {
+    if (streamError) throw streamError;
     if (closed) {
       return;
     }
@@ -107,6 +119,10 @@ export async function writeFileAtomicStream(
     await writeContent(
       (chunk) =>
         new Promise<void>((resolve, reject) => {
+          if (streamError) {
+            reject(streamError);
+            return;
+          }
           stream.write(chunk, (error) => {
             if (error) {
               reject(error);
@@ -135,10 +151,24 @@ export function validateDocumentForWrite(document: MapDocument): ValidationIssue
   return issues.filter((entry) => entry.severity === "warning");
 }
 
-function readBooleanOption(input: Partial<ExportRenderOptions>, key: keyof Pick<
-  ExportRenderOptions,
-  "includeCoordinates" | "includeShorthand" | "includeGrid" | "includeUndesigned"
->): boolean | undefined {
+function readBooleanOption(
+  input: Partial<ExportRenderOptions>,
+  key: keyof Pick<
+    ExportRenderOptions,
+    | "includeCoordinates"
+    | "includeShorthand"
+    | "includeGrid"
+    | "includeUndesigned"
+    | "includeTerrain"
+    | "includeTerrainSymbols"
+    | "includeBiomes"
+    | "includeRivers"
+    | "includeTags"
+    | "includeLegend"
+    | "northArrow"
+    | "gridScale"
+  >
+): boolean | undefined {
   const value = input[key];
   if (value === undefined) {
     return undefined;
@@ -192,7 +222,9 @@ function normalizeExportRange(value: unknown): CellRange | undefined {
   }
   const cellCount = (range.maxRow - range.minRow + 1) * (range.maxCol - range.minCol + 1);
   if (cellCount > MAX_PNG_EXPORT_RANGE_CELLS) {
-    throw badRequest(`range covers too many cells for PNG export; maximum is ${MAX_PNG_EXPORT_RANGE_CELLS}`);
+    throw badRequest(
+      `range covers too many cells for PNG export; maximum is ${MAX_PNG_EXPORT_RANGE_CELLS}`
+    );
   }
   return range;
 }
@@ -224,10 +256,14 @@ export function normalizeExportOptions(
       throw badRequest("background must be a #RRGGBB color or transparent");
     }
     const background = input.background.trim();
-    if (!HEX_COLOR_PATTERN.test(background) && background.toLowerCase() !== TRANSPARENT_BACKGROUND) {
+    if (
+      !HEX_COLOR_PATTERN.test(background) &&
+      background.toLowerCase() !== TRANSPARENT_BACKGROUND
+    ) {
       throw badRequest("background must be a #RRGGBB color or transparent");
     }
-    normalized.background = background.toLowerCase() === TRANSPARENT_BACKGROUND ? TRANSPARENT_BACKGROUND : background;
+    normalized.background =
+      background.toLowerCase() === TRANSPARENT_BACKGROUND ? TRANSPARENT_BACKGROUND : background;
   }
 
   const includeCoordinates = readBooleanOption(input, "includeCoordinates");
@@ -250,6 +286,35 @@ export function normalizeExportOptions(
     normalized.includeUndesigned = includeUndesigned;
   }
 
+  for (const key of [
+    "includeTerrain",
+    "includeTerrainSymbols",
+    "includeBiomes",
+    "includeRivers",
+    "includeTags",
+    "includeLegend",
+    "northArrow",
+    "gridScale"
+  ] as const) {
+    const value = readBooleanOption(input, key);
+    if (value !== undefined) normalized[key] = value;
+  }
+  for (const [key, limit] of [
+    ["title", 120],
+    ["caption", 500]
+  ] as const) {
+    const value = input[key];
+    if (value !== undefined) {
+      if (typeof value !== "string" || value.length > limit)
+        throw badRequest(key + " exceeds its text limit");
+      normalized[key] = value;
+    }
+  }
+  if (input.expectedRevision !== undefined) {
+    if (!Number.isSafeInteger(input.expectedRevision) || input.expectedRevision < 1)
+      throw badRequest("invalid expectedRevision");
+    normalized.expectedRevision = input.expectedRevision;
+  }
   const range = normalizeExportRange(input.range);
   if (range !== undefined) {
     normalized.range = range;

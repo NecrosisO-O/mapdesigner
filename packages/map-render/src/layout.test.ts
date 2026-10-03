@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { applyCommand, createEmptyDocument, createRuntimeState } from "@mapdesigner/map-core";
 import { buildHexLayout } from "./layout.js";
 import { buildExportScene, buildMapScene, renderSvgString } from "./scene.js";
-import type { ActiveCell } from "@mapdesigner/map-core";
+import type { ActiveCell, RiverFeature } from "@mapdesigner/map-core";
 
 function makeCell(row: number, col: number): ActiveCell {
   return {
@@ -20,10 +20,10 @@ function makeCell(row: number, col: number): ActiveCell {
 
 describe("buildHexLayout", () => {
   it("places positive rows upward and positive columns to the right", () => {
-    const result = buildHexLayout(
-      [makeCell(0, 0), makeCell(1, 1), makeCell(-1, 1)],
-      { size: 36, padding: 48 }
-    );
+    const result = buildHexLayout([makeCell(0, 0), makeCell(1, 1), makeCell(-1, 1)], {
+      size: 36,
+      padding: 48
+    });
 
     const origin = result.layout.find((entry) => entry.cell.row === 0 && entry.cell.col === 0);
     const upperRight = result.layout.find((entry) => entry.cell.row === 1 && entry.cell.col === 1);
@@ -45,14 +45,12 @@ describe("buildHexLayout", () => {
       { row: 5, col: -5 },
       { row: 5, col: 5 }
     ];
-    const full = buildHexLayout(
-      [makeCell(0, 0), makeCell(2, 2)],
-      { size: 36, padding: 48, boundsCoords }
-    );
-    const subset = buildHexLayout(
-      [makeCell(2, 2)],
-      { size: 36, padding: 48, boundsCoords }
-    );
+    const full = buildHexLayout([makeCell(0, 0), makeCell(2, 2)], {
+      size: 36,
+      padding: 48,
+      boundsCoords
+    });
+    const subset = buildHexLayout([makeCell(2, 2)], { size: 36, padding: 48, boundsCoords });
     const fullCell = full.layout.find((entry) => entry.cell.row === 2 && entry.cell.col === 2);
     const subsetCell = subset.layout.find((entry) => entry.cell.row === 2 && entry.cell.col === 2);
 
@@ -66,8 +64,77 @@ describe("buildHexLayout", () => {
 });
 
 describe("river rendering", () => {
+  it.each(["high", "low"] as const)(
+    "keeps disconnected viewport fragments on the original %s-detail path",
+    (riverDetail) => {
+      const document = createEmptyDocument({ id: "clipped-river", name: "Clipped river" });
+      document.features.rivers = [
+        {
+          id: "loop",
+          name: "Loop",
+          points: [
+            { row: -2, col: -2, width: 10 },
+            { row: -2, col: 8, width: 10 },
+            { row: 8, col: 8, width: 10 },
+            { row: 8, col: 0, width: 10 },
+            { row: 0, col: 0, width: 10 }
+          ]
+        }
+      ];
+      const runtime = createRuntimeState(document);
+      const full = buildMapScene(runtime, {
+        riverDetail,
+        riverClipRange: { minRow: -10, maxRow: 12, minCol: -10, maxCol: 12 }
+      });
+      const clipped = buildMapScene(runtime, {
+        riverDetail,
+        riverClipRange: { minRow: -2, maxRow: 2, minCol: -2, maxCol: 2 }
+      });
+      const coordinates = (scene: ReturnType<typeof buildMapScene>) =>
+        scene.riverBodies.flatMap((body) =>
+          Array.from(body.centerPath.matchAll(/[ML] ([-\d.]+) ([-\d.]+)/g), (match) => ({
+            x: Number(match[1]) + scene.minX,
+            y: Number(match[2]) + scene.minY
+          }))
+        );
+      const original = coordinates(full);
+      expect(clipped.riverBodies).toHaveLength(2);
+      expect(new Set(clipped.riverBodies.map((body) => body.id)).size).toBe(2);
+      for (const point of coordinates(clipped)) {
+        expect(
+          original.some(
+            (candidate) => Math.hypot(candidate.x - point.x, candidate.y - point.y) < 0.003
+          )
+        ).toBe(true);
+      }
+    }
+  );
+
+  it("does not apply a remote water endpoint to a clipped fragment", () => {
+    const document = createEmptyDocument({ id: "clipped-mouth", name: "Clipped mouth" });
+    document.cells = [{ row: 0, col: 20, terrain: "sea", biome: null, tags: [], note: "" }];
+    document.features.rivers = [
+      {
+        id: "river",
+        name: "River",
+        points: [
+          { row: 0, col: -20, width: 4 },
+          { row: 0, col: 20, width: 4 }
+        ]
+      } satisfies RiverFeature
+    ];
+    const scene = buildMapScene(createRuntimeState(document), {
+      riverClipRange: { minRow: -2, maxRow: 2, minCol: -2, maxCol: 2 }
+    });
+    expect(scene.riverBodies).toHaveLength(1);
+    expect(scene.riverBodies[0]?.connectedEnd).toBe(false);
+    expect(scene.riverBodies[0]?.widthRange.max).toBeCloseTo(4);
+  });
+
   it("renders river overlay bodies and includes river coordinates in scene bounds", () => {
-    const runtime = createRuntimeState(createEmptyDocument({ id: "river-render", name: "River Render" }));
+    const runtime = createRuntimeState(
+      createEmptyDocument({ id: "river-render", name: "River Render" })
+    );
     const result = applyCommand(runtime, {
       action: "create_river",
       source: "cli",
@@ -85,7 +152,9 @@ describe("river rendering", () => {
     const scene = buildMapScene(result.map);
     expect(scene.riverBodies).toHaveLength(1);
     expect(scene.riverBodies[0]?.bodyPath).toContain("M ");
-    expect(scene.riverBodies[0]?.widthRange.max).toBeGreaterThan(scene.riverBodies[0]?.widthRange.min ?? 0);
+    expect(scene.riverBodies[0]?.widthRange.max).toBeGreaterThan(
+      scene.riverBodies[0]?.widthRange.min ?? 0
+    );
     expect(scene.riverBodies[0]?.pointCount).toBeGreaterThan(3);
     const svg = renderSvgString(scene);
     expect(svg).toContain('data-river-id="main-river"');
@@ -112,11 +181,15 @@ describe("river rendering", () => {
     const lowDetail = buildMapScene(result.map, { riverDetail: "low" });
     expect(highDetail.riverBodies).toHaveLength(1);
     expect(lowDetail.riverBodies).toHaveLength(1);
-    expect(highDetail.riverBodies[0]?.pointCount).toBeGreaterThan(lowDetail.riverBodies[0]?.pointCount ?? 0);
+    expect(highDetail.riverBodies[0]?.pointCount).toBeGreaterThan(
+      lowDetail.riverBodies[0]?.pointCount ?? 0
+    );
   });
 
   it("renders water endpoint connections and preview river bodies", () => {
-    const runtime = createRuntimeState(createEmptyDocument({ id: "river-preview", name: "River Preview" }));
+    const runtime = createRuntimeState(
+      createEmptyDocument({ id: "river-preview", name: "River Preview" })
+    );
     const withLake = applyCommand(runtime, {
       action: "set_cell",
       source: "cli",
@@ -152,8 +225,10 @@ describe("river rendering", () => {
 });
 
 describe("export rendering", () => {
-  it("uses lightweight fills for png export while preserving river overlays", () => {
-    let runtime = createRuntimeState(createEmptyDocument({ id: "export-render", name: "Export Render" }));
+  it("uses the same terrain, texture, labels and rivers for the canvas and export", () => {
+    let runtime = createRuntimeState(
+      createEmptyDocument({ id: "export-render", name: "Export Render" })
+    );
     const cellResult = applyCommand(runtime, {
       action: "set_cell",
       source: "cli",
@@ -180,8 +255,17 @@ describe("export rendering", () => {
     });
     expect(riverResult.ok).toBe(true);
 
-    const interactiveSvg = renderSvgString(buildMapScene(riverResult.map));
-    expect(interactiveSvg).toContain("url(#pattern-grass)");
+    const interactiveSvg = renderSvgString(
+      buildMapScene(riverResult.map, {
+        includeCoordinates: true,
+        includeShorthand: true,
+        includeGrid: true,
+        includeUndesigned: false,
+        background: "#FFFFFF",
+        padding: 24,
+        size: 36
+      })
+    );
 
     const exportSvg = renderSvgString(
       buildExportScene({
@@ -198,12 +282,14 @@ describe("export rendering", () => {
         }
       })
     );
-    expect(exportSvg).not.toContain("url(#pattern-grass)");
+    expect(exportSvg).toEqual(interactiveSvg);
     expect(exportSvg).toContain('data-river-id="export-river"');
   });
 
   it("omits the background rectangle for transparent export", () => {
-    const runtime = createRuntimeState(createEmptyDocument({ id: "transparent-export", name: "Transparent Export" }));
+    const runtime = createRuntimeState(
+      createEmptyDocument({ id: "transparent-export", name: "Transparent Export" })
+    );
     const svg = renderSvgString(
       buildExportScene({
         map: runtime,

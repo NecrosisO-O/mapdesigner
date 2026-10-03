@@ -1,20 +1,25 @@
 {
   "name": "mapdesigner",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.3.0-rc.1",
   "license": "GPL-3.0-only",
   "packageManager": "pnpm@10.23.0",
   "type": "module",
   "scripts": {
     "build": "pnpm -r build",
+    "check": "pnpm build && pnpm typecheck && pnpm test",
+    "dev": "pnpm --filter @mapdesigner/map-core --filter @mapdesigner/map-render build && pnpm --parallel --filter @mapdesigner/server --filter @mapdesigner/web dev",
     "dev:web": "pnpm --filter @mapdesigner/web dev",
     "dev:server": "pnpm --filter @mapdesigner/server dev",
     "start": "pnpm --filter @mapdesigner/server start",
     "test": "pnpm -r test",
-    "typecheck": "pnpm -r typecheck"
+    "typecheck": "pnpm -r typecheck",
+    "format:check": "prettier --check \"apps/*/src/**/*.{ts,tsx,css}\" \"packages/*/src/**/*.ts\"",
+    "backup": "node scripts/backup.mjs"
   },
   "devDependencies": {
-    "@types/node": "^24.5.2",
-    "typescript": "^5.9.2"
+    "@types/node": "^24.19.1",
+    "prettier": "^3.9.9",
+    "typescript": "^5.9.3"
   }
 }

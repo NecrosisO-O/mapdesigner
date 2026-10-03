@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="zh-CN">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MapDesigner 响应式验收</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 16px;
+      background: #e6e9e1;
+      color: #25362f;
+      font: 14px/1.5 system-ui;
+    }
+    header {
+      display: flex;
+      gap: 18px;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    select {
+      font: inherit;
+      padding: 8px;
+    }
+    p {
+      margin: 0;
+    }
+    iframe {
+      display: block;
+      border: 0;
+      box-shadow: 0 0 0 1px #aeb7ac;
+      background: #fff;
+      margin: 0 auto;
+    }
+  </style>
+  <header>
+    <label
+      >验收尺寸
+      <select id="size">
+        <option>375×812</option>
+        <option>812×375</option>
+        <option>1024×768</option>
+        <option>1440×900</option>
+      </select></label
+    >
+    <p>正式编辑器在独立 CSS 视口内运行；本页不模拟真实手机、软键盘或浏览器页面缩放。</p>
+  </header>
+  <iframe title="响应式编辑器" src="/" width="375" height="812"></iframe>
+  <script type="module">
+    const select = document.querySelector("select"),
+      frame = document.querySelector("iframe");
+    select.addEventListener("change", () => {
+      const [width, height] = select.value.split("×");
+      frame.width = width;
+      frame.height = height;
+    });
+  </script>
+</html>

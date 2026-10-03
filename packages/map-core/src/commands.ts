@@ -1,7 +1,13 @@
 import { createCellId, createDisplayCoord, sameCoord } from "./coords.js";
 import { pushHistory } from "./history.js";
-import { buildHexLine } from "./rivers.js";
+import { validateCommandInput } from "./command-input.js";
+import { buildHexLine, prepareRiverEdit } from "./rivers.js";
 import { cloneDocument, normalizeDocument } from "./serialization.js";
+import {
+  connectRiverPoints,
+  propagateRiverJunctions,
+  validateRiverNetwork
+} from "./river-network.js";
 import type {
   ActiveCell,
   CellChangeDetail,
@@ -48,12 +54,13 @@ function removeCell(cells: DesignedCellRecord[], target: GridCoordinate): boolea
 }
 
 function createRiverId(name: string, existing: RiverFeature[]): string {
-  const slug = name
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9_-]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 48) || "river";
+  const slug =
+    name
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9_-]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 48) || "river";
   const existingIds = new Set(existing.map((river) => river.id));
   if (!existingIds.has(slug)) {
     return slug;
@@ -69,6 +76,7 @@ function normalizeRiverPoint(point: RiverPoint): RiverPoint {
   return {
     row: point.row,
     col: point.col,
+    ...(point.junction_id ? { junction_id: point.junction_id } : {}),
     ...(typeof point.width === "number" ? { width: point.width } : {})
   };
 }
@@ -78,6 +86,10 @@ function normalizeRiverFeature(river: RiverFeature): RiverFeature {
     id: river.id,
     name: river.name.trim(),
     points: river.points.map(normalizeRiverPoint),
+    width_mode: river.width_mode ?? "distance",
+    flow_direction: river.flow_direction ?? "unspecified",
+    start_kind: river.start_kind ?? "auto",
+    end_kind: river.end_kind ?? "auto",
     ...(river.color ? { color: river.color } : {}),
     ...(typeof river.opacity === "number" ? { opacity: river.opacity } : {})
   };
@@ -87,7 +99,11 @@ function findRiverIndex(rivers: RiverFeature[], id: string): number {
   return rivers.findIndex((river) => river.id === id);
 }
 
-function insertRiverWidthAnchor(river: RiverFeature, target: GridCoordinate, width: number): boolean {
+function insertRiverWidthAnchor(
+  river: RiverFeature,
+  target: GridCoordinate,
+  width: number
+): boolean {
   for (let index = 0; index < river.points.length - 1; index += 1) {
     const line = buildHexLine(river.points[index]!, river.points[index + 1]!);
     const lineIndex = line.findIndex((coord) => sameCoord(coord, target));
@@ -151,29 +167,32 @@ function synthesizeUndesignedCell(target: GridCoordinate): ActiveCell {
   };
 }
 
-function snapshotCell(state: MapRuntimeState, target: GridCoordinate): ActiveCell | null {
-  const found = state.activeCells.find((cell) => sameCoord(cell, target));
-  if (found) {
-    return cloneActiveCell(found);
-  }
-  const existsInDocument = state.document.cells.some((cell) => sameCoord(cell, target));
-  if (existsInDocument) {
-    return null;
-  }
-  return synthesizeUndesignedCell(target);
-}
-
 function buildChangeDetails(
   previous: MapRuntimeState,
   next: MapRuntimeState,
   changed: GridCoordinate[]
 ): CellChangeDetail[] {
+  const index = (state: MapRuntimeState) => {
+    const active = new Map(state.activeCells.map((cell) => [cell.id, cell]));
+    const designed = new Set(state.document.cells.map((cell) => createCellId(cell.row, cell.col)));
+    return (target: GridCoordinate): ActiveCell | null => {
+      const id = createCellId(target.row, target.col),
+        cell = active.get(id);
+      return cell
+        ? cloneActiveCell(cell)
+        : designed.has(id)
+          ? null
+          : synthesizeUndesignedCell(target);
+    };
+  };
+  const before = index(previous),
+    after = index(next);
   return changed.map((target) => ({
     coord: { row: target.row, col: target.col },
     cell_id: createCellId(target.row, target.col),
     display_coord: createDisplayCoord(target.row, target.col),
-    before: snapshotCell(previous, target),
-    after: snapshotCell(next, target)
+    before: before(target),
+    after: after(target)
   }));
 }
 
@@ -186,6 +205,12 @@ function finalize(
   label: string,
   source: "webui" | "cli" | "system" = "system"
 ): CommandResult {
+  if (label.includes("river") && !errors.length) {
+    errors.push(
+      ...document.features.rivers.flatMap((river, index) => validateRiverFeature(river, index))
+    );
+    errors.push(...validateRiverNetwork(document.features.rivers));
+  }
   if (errors.some((entry) => entry.severity === "invalid")) {
     return {
       ok: false,
@@ -210,7 +235,15 @@ function finalize(
   };
 }
 
-export function applyCommand(state: MapRuntimeState, command: MapCommand): CommandResult {
+export function applyCommand(
+  state: MapRuntimeState,
+  command: MapCommand,
+  options: { legacyRiverWidths?: boolean } = {}
+): CommandResult {
+  const widthMode = options.legacyRiverWidths ? "legacy" : "distance";
+  const inputErrors = validateCommandInput(command);
+  if (inputErrors.length)
+    return { ok: false, map: state, changed: [], details: [], warnings: [], errors: inputErrors };
   const working = cloneDocument(state.document);
   const warnings: ValidationIssue[] = [];
   const errors: ValidationIssue[] = [];
@@ -218,6 +251,109 @@ export function applyCommand(state: MapRuntimeState, command: MapCommand): Comma
   const source = command.source ?? "system";
 
   switch (command.action) {
+    case "connect_river_points": {
+      errors.push(...connectRiverPoints(working.features.rivers, command.points));
+      working.meta.revision += 1;
+      working.meta.updated_at = new Date().toISOString();
+      return finalize(state, working, [], [], errors, command.action, source);
+    }
+    case "disconnect_river_point": {
+      const point = working.features.rivers.find((r) => r.id === command.point.river_id)?.points[
+        command.point.point_index
+      ];
+      if (!point)
+        errors.push({
+          code: "missing_river_point",
+          message: "river point was not found",
+          severity: "invalid"
+        });
+      else delete point.junction_id;
+      working.meta.revision += 1;
+      working.meta.updated_at = new Date().toISOString();
+      return finalize(state, working, [], [], errors, command.action, source);
+    }
+    case "restore_rivers": {
+      const replaced = new Set([...command.remove_ids, ...command.rivers.map((r) => r.id)]);
+      working.features.rivers = [
+        ...working.features.rivers.filter((r) => !replaced.has(r.id)),
+        ...structuredClone(command.rivers)
+      ];
+      working.meta.revision += 1;
+      working.meta.updated_at = new Date().toISOString();
+      return finalize(state, working, [], [], [], command.action, source);
+    }
+    case "set_map_style": {
+      if (working.meta.map_style !== command.style) {
+        working.meta.map_style = command.style;
+        working.meta.updated_at = new Date().toISOString();
+        working.meta.revision += 1;
+      }
+      return finalize(state, working, [], [], [], command.action, source);
+    }
+    case "patch_cells": {
+      const cells = new Map(working.cells.map((cell) => [createCellId(cell.row, cell.col), cell]));
+      if (command.changes.tags !== undefined)
+        errors.push(...validateTags(command.changes.tags, "changes.tags"));
+      if (
+        command.changes.biome !== undefined &&
+        command.changes.biome !== null &&
+        !isBiomeKey(command.changes.biome)
+      ) {
+        errors.push({
+          code: "invalid_biome",
+          message: "biome must be null or a known biome key",
+          severity: "invalid",
+          target: "changes.biome"
+        });
+      }
+      if (errors.length)
+        return finalize(state, working, [], warnings, errors, "patch_cells", source);
+      for (const target of new Map(
+        command.targets.map((target) => [createCellId(target.row, target.col), target])
+      ).values()) {
+        const previous = cells.get(createCellId(target.row, target.col));
+        const terrain = command.changes.terrain ?? previous?.terrain;
+        if (!isTerrainKey(terrain)) {
+          errors.push({
+            code: "invalid_terrain",
+            message: "new cells require a valid terrain",
+            severity: "invalid",
+            target: createCellId(target.row, target.col)
+          });
+          continue;
+        }
+        const biome =
+          command.changes.biome === undefined ? (previous?.biome ?? null) : command.changes.biome;
+        const issues = validateTerrainBiomePair(
+          terrain,
+          biome,
+          createCellId(target.row, target.col)
+        );
+        errors.push(...issues.filter((issue) => issue.severity === "invalid"));
+        warnings.push(...issues.filter((issue) => issue.severity === "warning"));
+        cells.set(createCellId(target.row, target.col), {
+          ...target,
+          terrain,
+          biome,
+          tags:
+            command.changes.tags === undefined
+              ? (previous?.tags ?? [])
+              : command.tagMode === "add"
+                ? [...new Set([...(previous?.tags ?? []), ...command.changes.tags])]
+                : command.tagMode === "remove"
+                  ? (previous?.tags ?? []).filter((tag) => !command.changes.tags!.includes(tag))
+                  : [...new Set(command.changes.tags)],
+          note: command.changes.note === undefined ? (previous?.note ?? "") : command.changes.note
+        });
+        changed.push(target);
+      }
+      working.cells = [...cells.values()];
+      if (changed.length) {
+        working.meta.updated_at = new Date().toISOString();
+        working.meta.revision++;
+      }
+      return finalize(state, working, changed, warnings, errors, "patch_cells", source);
+    }
     case "set_cell": {
       errors.push(...validateCoordinate(command.target, "target"));
       if (!isTerrainKey(command.changes.terrain)) {
@@ -250,7 +386,15 @@ export function applyCommand(state: MapRuntimeState, command: MapCommand): Comma
       const biome = command.changes.biome ?? null;
       warnings.push(...validateTerrainBiomePair(command.changes.terrain, biome, "changes"));
       if (warnings.some((entry) => entry.severity === "invalid")) {
-        return finalize(state, working, [], warnings, warnings.filter((entry) => entry.severity === "invalid"), "set_cell", source);
+        return finalize(
+          state,
+          working,
+          [],
+          warnings,
+          warnings.filter((entry) => entry.severity === "invalid"),
+          "set_cell",
+          source
+        );
       }
 
       upsertCell(working.cells, {
@@ -264,7 +408,15 @@ export function applyCommand(state: MapRuntimeState, command: MapCommand): Comma
       working.meta.updated_at = new Date().toISOString();
       working.meta.revision += 1;
       changed.push(command.target);
-      return finalize(state, working, changed, warnings.filter((entry) => entry.severity === "warning"), [], "set_cell", source);
+      return finalize(
+        state,
+        working,
+        changed,
+        warnings.filter((entry) => entry.severity === "warning"),
+        [],
+        "set_cell",
+        source
+      );
     }
 
     case "set_cells": {
@@ -303,11 +455,22 @@ export function applyCommand(state: MapRuntimeState, command: MapCommand): Comma
       warnings.push(...validateTerrainBiomePair(command.changes.terrain, biome, "changes"));
       const invalidWarnings = warnings.filter((entry) => entry.severity === "invalid");
       if (invalidWarnings.length > 0) {
-        return finalize(state, working, [], warnings.filter((entry) => entry.severity === "warning"), invalidWarnings, "set_cells", source);
+        return finalize(
+          state,
+          working,
+          [],
+          warnings.filter((entry) => entry.severity === "warning"),
+          invalidWarnings,
+          "set_cells",
+          source
+        );
       }
 
-      for (const target of command.targets) {
-        upsertCell(working.cells, {
+      const cells = new Map(working.cells.map((cell) => [createCellId(cell.row, cell.col), cell]));
+      for (const target of new Map(
+        command.targets.map((target) => [createCellId(target.row, target.col), target])
+      ).values()) {
+        cells.set(createCellId(target.row, target.col), {
           row: target.row,
           col: target.col,
           terrain: command.changes.terrain,
@@ -317,9 +480,18 @@ export function applyCommand(state: MapRuntimeState, command: MapCommand): Comma
         });
         changed.push(target);
       }
+      working.cells = [...cells.values()];
       working.meta.updated_at = new Date().toISOString();
       working.meta.revision += 1;
-      return finalize(state, working, changed, warnings.filter((entry) => entry.severity === "warning"), [], "set_cells", source);
+      return finalize(
+        state,
+        working,
+        changed,
+        warnings.filter((entry) => entry.severity === "warning"),
+        [],
+        "set_cells",
+        source
+      );
     }
 
     case "clear_cell": {
@@ -360,7 +532,13 @@ export function applyCommand(state: MapRuntimeState, command: MapCommand): Comma
           return cell;
         }
         changed.push({ row: cell.row, col: cell.col });
-        warnings.push(...validateTerrainBiomePair(command.changes.terrain, cell.biome, createCellId(cell.row, cell.col)));
+        warnings.push(
+          ...validateTerrainBiomePair(
+            command.changes.terrain,
+            cell.biome,
+            createCellId(cell.row, cell.col)
+          )
+        );
         return {
           ...cell,
           terrain: command.changes.terrain
@@ -368,13 +546,29 @@ export function applyCommand(state: MapRuntimeState, command: MapCommand): Comma
       });
       const invalidWarnings = warnings.filter((entry) => entry.severity === "invalid");
       if (invalidWarnings.length > 0) {
-        return finalize(state, state.document, [], warnings.filter((entry) => entry.severity === "warning"), invalidWarnings, "replace_terrain", source);
+        return finalize(
+          state,
+          state.document,
+          [],
+          warnings.filter((entry) => entry.severity === "warning"),
+          invalidWarnings,
+          "replace_terrain",
+          source
+        );
       }
       if (changed.length > 0) {
         working.meta.updated_at = new Date().toISOString();
         working.meta.revision += 1;
       }
-      return finalize(state, working, changed, warnings.filter((entry) => entry.severity === "warning"), [], "replace_terrain", source);
+      return finalize(
+        state,
+        working,
+        changed,
+        warnings.filter((entry) => entry.severity === "warning"),
+        [],
+        "replace_terrain",
+        source
+      );
     }
 
     case "replace_biome": {
@@ -419,7 +613,13 @@ export function applyCommand(state: MapRuntimeState, command: MapCommand): Comma
           return cell;
         }
         changed.push({ row: cell.row, col: cell.col });
-        warnings.push(...validateTerrainBiomePair(cell.terrain, command.changes.biome, createCellId(cell.row, cell.col)));
+        warnings.push(
+          ...validateTerrainBiomePair(
+            cell.terrain,
+            command.changes.biome,
+            createCellId(cell.row, cell.col)
+          )
+        );
         return {
           ...cell,
           biome: command.changes.biome
@@ -427,13 +627,29 @@ export function applyCommand(state: MapRuntimeState, command: MapCommand): Comma
       });
       const invalidWarnings = warnings.filter((entry) => entry.severity === "invalid");
       if (invalidWarnings.length > 0) {
-        return finalize(state, state.document, [], warnings.filter((entry) => entry.severity === "warning"), invalidWarnings, "replace_biome", source);
+        return finalize(
+          state,
+          state.document,
+          [],
+          warnings.filter((entry) => entry.severity === "warning"),
+          invalidWarnings,
+          "replace_biome",
+          source
+        );
       }
       if (changed.length > 0) {
         working.meta.updated_at = new Date().toISOString();
         working.meta.revision += 1;
       }
-      return finalize(state, working, changed, warnings.filter((entry) => entry.severity === "warning"), [], "replace_biome", source);
+      return finalize(
+        state,
+        working,
+        changed,
+        warnings.filter((entry) => entry.severity === "warning"),
+        [],
+        "replace_biome",
+        source
+      );
     }
 
     case "annotate_cell": {
@@ -488,6 +704,10 @@ export function applyCommand(state: MapRuntimeState, command: MapCommand): Comma
         id: command.river.id ?? createRiverId(command.river.name, working.features.rivers),
         name: command.river.name,
         points: command.river.points,
+        width_mode: command.river.width_mode ?? widthMode,
+        flow_direction: command.river.flow_direction,
+        start_kind: command.river.start_kind,
+        end_kind: command.river.end_kind,
         color: command.river.color,
         opacity: command.river.opacity
       });
@@ -532,9 +752,15 @@ export function applyCommand(state: MapRuntimeState, command: MapCommand): Comma
       }
       const existing = working.features.rivers[riverIndex]!;
       const next = normalizeRiverFeature({
-        ...existing,
+        ...prepareRiverEdit(
+          existing,
+          command.changes.points,
+          command.changes.width_mode ?? widthMode
+        ),
         name: command.changes.name ?? existing.name,
-        points: command.changes.points ?? existing.points,
+        flow_direction: command.changes.flow_direction ?? existing.flow_direction,
+        start_kind: command.changes.start_kind ?? existing.start_kind,
+        end_kind: command.changes.end_kind ?? existing.end_kind,
         color: command.changes.color === undefined ? existing.color : command.changes.color,
         opacity: command.changes.opacity === undefined ? existing.opacity : command.changes.opacity
       });
@@ -543,6 +769,7 @@ export function applyCommand(state: MapRuntimeState, command: MapCommand): Comma
         return finalize(state, working, [], warnings, errors, "update_river", source);
       }
       working.features.rivers[riverIndex] = next;
+      propagateRiverJunctions(working.features.rivers, existing, next);
       working.meta.updated_at = new Date().toISOString();
       working.meta.revision += 1;
       return finalize(state, working, [], warnings, [], "update_river", source);
@@ -609,14 +836,14 @@ export function applyCommand(state: MapRuntimeState, command: MapCommand): Comma
       }
       const existing = working.features.rivers[riverIndex]!;
       const next = normalizeRiverFeature({
-        ...existing,
-        points: command.points
+        ...prepareRiverEdit(existing, command.points, widthMode)
       });
       errors.push(...validateRiverFeature(next));
       if (errors.length > 0) {
         return finalize(state, working, [], warnings, errors, "set_river_path", source);
       }
       working.features.rivers[riverIndex] = next;
+      propagateRiverJunctions(working.features.rivers, existing, next);
       working.meta.updated_at = new Date().toISOString();
       working.meta.revision += 1;
       return finalize(state, working, [], warnings, [], "set_river_path", source);
@@ -645,8 +872,11 @@ export function applyCommand(state: MapRuntimeState, command: MapCommand): Comma
       if (errors.length > 0) {
         return finalize(state, working, [], warnings, errors, "set_river_width", source);
       }
-      const river = working.features.rivers[riverIndex]!;
-      const pointIndex = river.points.findIndex((point) => point.row === command.target.row && point.col === command.target.col);
+      const river = prepareRiverEdit(working.features.rivers[riverIndex]!, undefined, widthMode);
+      working.features.rivers[riverIndex] = river;
+      const pointIndex = river.points.findIndex(
+        (point) => point.row === command.target.row && point.col === command.target.col
+      );
       if (pointIndex === -1) {
         if (!insertRiverWidthAnchor(river, command.target, command.width)) {
           return finalize(

@@ -1,722 +1,628 @@
-import {
-  getHistoryLimitForDesignedCellCount,
-  type ActiveCell,
-  type CellRange,
-  type DesignedCellRecord,
-  type MapCommand,
-  type MapFeatures,
-  type MapRuntimeState,
-  type MapSummary
+import type {
+  ActiveCell,
+  CellChangeDetail,
+  CellRange,
+  MapCommand,
+  MapFeatures,
+  MapRuntimeState,
+  MapSummary
 } from "@mapdesigner/map-core";
-import { startTransition, useEffect, useMemo, useRef, useState } from "react";
-import { api, type MapHistory, type MapListItem } from "./api.js";
-
-const RANGE_CHUNK_SIZE = 24;
-const RANGE_OVERSCAN = 6;
-const MAX_RANGE_SPAN = 160;
-const FEATURE_RANGE_LIMIT = 1_000;
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  api,
+  type ApiEnvelope,
+  type CommandApplyResponse,
+  type HistoryMoveResult,
+  type MapHistory,
+  type MapListItem
+} from "./api.js";
+import {
+  runtimeSummary,
+  sessionRuntime,
+  ViewportCache,
+  type EditorSession,
+  type WorkspaceMap,
+  type RangeData
+} from "./editor-session.js";
 
 export function formatDateTime(value: string): string {
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-  return date.toLocaleString("zh-CN", { hour12: false });
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString("zh-CN", { hour12: false });
 }
-
 export function formatStatusMessage(message: string | undefined, fallback: string): string {
-  if (!message) {
-    return fallback;
-  }
-  if (message === "map id is required") {
-    return "请先选择一张地图";
-  }
-  if (message.includes("ENOENT:") || message.includes("/storage/maps/")) {
+  if (!message) return fallback;
+  if (message === "enter the configured access token")
+    return "需要访问令牌，请打开地图菜单中的连接设置";
+  if (message === "map id is required") return "请先选择一张地图";
+  if (message.includes("ENOENT:") || message.includes("/storage/maps/"))
     return "地图文件不存在或暂时无法读取";
-  }
   return message;
 }
-
-function rangeKey(range: CellRange): string {
-  return `${range.minRow}:${range.maxRow}:${range.minCol}:${range.maxCol}`;
-}
-
-function clampRangeSpan(min: number, max: number): { min: number; max: number } {
-  if (max - min + 1 <= MAX_RANGE_SPAN) {
-    return { min, max };
-  }
-  const center = Math.floor((min + max) / 2);
-  const half = Math.floor(MAX_RANGE_SPAN / 2);
-  return {
-    min: center - half,
-    max: center + half - 1
+const keyOf = (range: CellRange) =>
+  [range.minRow, range.maxRow, range.minCol, range.maxCol].join(":");
+function normalizeRange(range: CellRange): CellRange {
+  const span = (min: number, max: number) => {
+    min -= 6;
+    max += 6;
+    return [Math.floor(min / 24) * 24, Math.ceil((max + 1) / 24) * 24 - 1] as const;
   };
+  const [minRow, maxRow] = span(range.minRow, range.maxRow),
+    [minCol, maxCol] = span(range.minCol, range.maxCol);
+  return { minRow, maxRow, minCol, maxCol };
 }
-
-function normalizeVisibleRange(range: CellRange): CellRange {
-  const rowSpan = clampRangeSpan(range.minRow - RANGE_OVERSCAN, range.maxRow + RANGE_OVERSCAN);
-  const colSpan = clampRangeSpan(range.minCol - RANGE_OVERSCAN, range.maxCol + RANGE_OVERSCAN);
-  return {
-    minRow: Math.floor(rowSpan.min / RANGE_CHUNK_SIZE) * RANGE_CHUNK_SIZE,
-    maxRow: Math.ceil((rowSpan.max + 1) / RANGE_CHUNK_SIZE) * RANGE_CHUNK_SIZE - 1,
-    minCol: Math.floor(colSpan.min / RANGE_CHUNK_SIZE) * RANGE_CHUNK_SIZE,
-    maxCol: Math.ceil((colSpan.max + 1) / RANGE_CHUNK_SIZE) * RANGE_CHUNK_SIZE - 1
-  };
+function initialRange(summary: MapSummary): CellRange {
+  const bounds = summary.render_bounds ?? summary.bounds;
+  return normalizeRange({
+    minRow: bounds.min_row ?? -1,
+    maxRow: bounds.max_row ?? 1,
+    minCol: bounds.min_col ?? -1,
+    maxCol: bounds.max_col ?? 1
+  });
 }
-
-function initialVisibleRangeFromSummary(summary: MapSummary): CellRange {
-  const { bounds, grid } = summary;
-  if (
-    bounds.min_row === null ||
-    bounds.max_row === null ||
-    bounds.min_col === null ||
-    bounds.max_col === null
-  ) {
-    return {
-      minRow: grid.origin.row - 1,
-      maxRow: grid.origin.row + 1,
-      minCol: grid.origin.col - 1,
-      maxCol: grid.origin.col + 1
-    };
-  }
-  return {
-    minRow: bounds.min_row,
-    maxRow: bounds.max_row,
-    minCol: bounds.min_col,
-    maxCol: bounds.max_col
-  };
-}
-
-function summaryFromRuntime(map: MapRuntimeState): MapSummary {
-  const rows = map.document.cells.map((cell) => cell.row);
-  const cols = map.document.cells.map((cell) => cell.col);
-  return {
-    meta: map.document.meta,
-    grid: map.document.grid,
-    bounds:
-      map.document.cells.length === 0
-        ? { min_row: null, max_row: null, min_col: null, max_col: null }
-        : {
-            min_row: Math.min(...rows),
-            max_row: Math.max(...rows),
-            min_col: Math.min(...cols),
-            max_col: Math.max(...cols)
-          },
-    designed_cell_count: map.document.cells.length,
-    feature_counts: {
-      rivers: map.document.features.rivers.length
-    }
-  };
-}
-
-function createEmptyFeatures(): MapFeatures {
-  return { rivers: [] };
-}
-
-function sortActiveCells(left: ActiveCell, right: ActiveCell): number {
-  if (left.row !== right.row) {
-    return left.row - right.row;
-  }
-  return left.col - right.col;
-}
-
-function activeCellsToDesignedRecords(cells: ActiveCell[]): DesignedCellRecord[] {
-  return cells
-    .filter((cell): cell is ActiveCell & { terrain: NonNullable<ActiveCell["terrain"]> } =>
-      cell.status === "designed" && Boolean(cell.terrain)
-    )
-    .sort(sortActiveCells)
-    .map((cell) => ({
-      row: cell.row,
-      col: cell.col,
-      terrain: cell.terrain,
-      biome: cell.biome,
-      tags: [...cell.tags],
-      note: cell.note
-    }));
-}
-
-function buildPartialRuntime(
-  summary: MapSummary,
-  features: MapFeatures,
-  activeCells: ActiveCell[]
-): MapRuntimeState {
-  const sortedActiveCells = [...activeCells].sort(sortActiveCells);
-  return {
-    document: {
-      schema_version: 1,
-      meta: summary.meta,
-      grid: summary.grid,
-      cells: activeCellsToDesignedRecords(sortedActiveCells),
-      features
-    },
-    activeCells: sortedActiveCells,
-    history: {
-      past: [],
-      future: [],
-      limit: getHistoryLimitForDesignedCellCount(summary.designed_cell_count)
-    }
-  };
-}
+const errorMessage = (response: { errors?: Array<{ message?: string }> }, fallback: string) =>
+  formatStatusMessage(response.errors?.[0]?.message, fallback);
 
 export function useMapWorkspace(setMessage: (message: string) => void) {
   const [maps, setMaps] = useState<MapListItem[]>([]);
-  const [currentMap, setCurrentMap] = useState<MapRuntimeState | null>(null);
-  const [currentMapId, setCurrentMapId] = useState<string>("");
-  const [mapSummary, setMapSummary] = useState<MapSummary | null>(null);
-  const [mapFeatures, setMapFeatures] = useState<MapFeatures>(() => createEmptyFeatures());
-  const [mapHistory, setMapHistory] = useState<MapHistory | null>(null);
-  const [cellCache, setCellCache] = useState<Map<string, ActiveCell>>(() => new Map());
-  const [visibleCellIds, setVisibleCellIds] = useState<string[]>([]);
-  const [isRenaming, setIsRenaming] = useState(false);
-  const [renameDraft, setRenameDraft] = useState("");
-  const [persistedRevision, setPersistedRevision] = useState<number | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [session, setSession] = useState<EditorSession | null>(null);
+  const [viewport, setViewport] = useState<{ mapId: string; range: CellRange } | null>(null);
+  const sessionRef = useRef<EditorSession | null>(null);
+  const generation = useRef(0),
+    rangeRequest = useRef(0),
+    listRequest = useRef(0);
+  const cache = useRef(new ViewportCache());
+  const [loading, setLoading] = useState(false),
+    opening = useRef(false);
+  const [pendingCount, setPendingCount] = useState(0),
+    pending = useRef(0);
+  const queue = useRef<Promise<unknown>>(Promise.resolve());
+  const inFlight = useRef(new Map<string, Promise<WorkspaceMap | null>>());
+  const [writeError, setWriteError] = useState<string | null>(null);
+  const retryCommands = useRef<{ id: string; commands: MapCommand[] } | null>(null);
+  const suppressAutoOpen = useRef(false);
+  const [isRenaming, setIsRenaming] = useState(false),
+    [renameDraft, setRenameDraft] = useState("");
+  const importAbort = useRef<AbortController | null>(null);
+  const [importProgress, setImportProgress] = useState("");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const suppressAutoOpenRef = useRef(false);
-  const lastVisibleRangeRef = useRef<CellRange | null>(null);
-  const lastVisibleRangeKeyRef = useRef("");
-  const visibleRangeRequestSeqRef = useRef(0);
-
+  const currentMap = useMemo(() => (session ? sessionRuntime(session) : null), [session]);
+  const currentMapId = session?.summary.meta.id ?? "";
   const mapDirty =
-    currentMap !== null &&
-    persistedRevision !== null &&
-    currentMap.document.meta.revision !== persistedRevision;
-
+    !!session && session.nameDraft !== null && session.nameDraft !== session.summary.meta.name;
   const displayMaps = maps.map((map) =>
-    currentMap && map.id === currentMap.document.meta.id
+    map.id === currentMapId && session
       ? {
           ...map,
-          name: currentMap.document.meta.name,
-          revision: currentMap.document.meta.revision,
-          designedCellCount: mapSummary?.designed_cell_count ?? currentMap.document.cells.length,
-          updatedAt: currentMap.document.meta.updated_at
+          name: session.nameDraft ?? session.summary.meta.name,
+          revision: session.summary.meta.revision,
+          designedCellCount: session.summary.designed_cell_count
         }
       : map
   );
 
-  const visibleMap = useMemo(() => {
-    if (!currentMap || visibleCellIds.length === 0) {
-      return currentMap;
-    }
-    const activeCells = visibleCellIds
-      .map((id) => cellCache.get(id))
-      .filter((cell): cell is ActiveCell => Boolean(cell));
-    if (activeCells.length === 0) {
-      return currentMap;
-    }
-    return buildPartialRuntime(mapSummary ?? summaryFromRuntime(currentMap), mapFeatures, activeCells);
-  }, [cellCache, currentMap, mapFeatures, mapSummary, visibleCellIds]);
-
-  async function refreshMaps(selectId?: string): Promise<void> {
-    const response = await api.listMaps();
-    if (!response.ok || !response.result) {
-      setMessage(formatStatusMessage(response.errors[0]?.message, "加载地图列表失败"));
-      return;
-    }
-    startTransition(() => {
-      setMaps(response.result ?? []);
-    });
-    if (selectId) {
-      setCurrentMapId(selectId);
-    }
+  function publish(value: EditorSession | null): void {
+    sessionRef.current = value;
+    setSession(value);
   }
-
-  function loadMapIntoWorkspace(map: MapRuntimeState, summary: MapSummary | null = null): void {
-    visibleRangeRequestSeqRef.current += 1;
-    suppressAutoOpenRef.current = false;
-    setCurrentMap(map);
-    setCurrentMapId(map.document.meta.id);
-    setMapSummary(summary ?? summaryFromRuntime(map));
-    setMapFeatures(map.document.features ?? createEmptyFeatures());
-    setCellCache(new Map());
-    setVisibleCellIds([]);
-    lastVisibleRangeRef.current = null;
-    lastVisibleRangeKeyRef.current = "";
-    setPersistedRevision(map.document.meta.revision);
-    setIsRenaming(false);
-    setRenameDraft(map.document.meta.name);
+  function valid(epoch: number, id?: string): boolean {
+    return epoch === generation.current && (!id || sessionRef.current?.summary.meta.id === id);
   }
-
-  function loadPartialMapIntoWorkspace(
-    summary: MapSummary,
-    features: MapFeatures,
-    activeCells: ActiveCell[] = [],
-    loadedRange: CellRange | null = null
-  ): MapRuntimeState {
-    visibleRangeRequestSeqRef.current += 1;
-    const runtime = buildPartialRuntime(summary, features, activeCells);
-    suppressAutoOpenRef.current = false;
-    setCurrentMap(runtime);
-    setCurrentMapId(summary.meta.id);
-    setMapSummary(summary);
-    setMapFeatures(features);
-    setCellCache(new Map(activeCells.map((cell) => [cell.id, cell])));
-    setVisibleCellIds(activeCells.map((cell) => cell.id));
-    lastVisibleRangeRef.current = loadedRange;
-    lastVisibleRangeKeyRef.current = loadedRange ? `${summary.meta.id}:${rangeKey(loadedRange)}` : "";
-    setPersistedRevision(summary.meta.revision);
-    setIsRenaming(false);
-    setRenameDraft(summary.meta.name);
-    return runtime;
-  }
-
-  async function refreshMapSummary(id = currentMap?.document.meta.id): Promise<MapSummary | null> {
-    if (!id) {
-      setMapSummary(null);
-      return null;
-    }
-    const response = await api.getMapSummary(id);
-    if (!response.ok || !response.result) {
-      setMessage(formatStatusMessage(response.errors[0]?.message, "刷新地图摘要失败"));
-      return null;
-    }
-    setMapSummary(response.result);
-    return response.result;
-  }
-
-  async function refreshMapFeatures(id = currentMap?.document.meta.id): Promise<MapFeatures | null> {
-    if (!id) {
-      setMapFeatures(createEmptyFeatures());
-      return null;
-    }
-    const response = lastVisibleRangeRef.current
-      ? await api.getMapFeaturesInRange(id, lastVisibleRangeRef.current, { limit: FEATURE_RANGE_LIMIT })
-      : await api.getMapFeatures(id);
-    if (!response.ok || !response.result) {
-      setMessage(formatStatusMessage(response.errors[0]?.message, "刷新地图要素失败"));
-      return null;
-    }
-    setMapFeatures(response.result);
-    return response.result;
-  }
-
-  async function refreshMapHistory(id = currentMap?.document.meta.id): Promise<MapHistory | null> {
-    if (!id) {
-      setMapHistory(null);
-      return null;
-    }
-    const response = await api.getMapHistory(id);
-    if (!response.ok || !response.result) {
-      setMessage(formatStatusMessage(response.errors[0]?.message, "刷新历史失败"));
-      return null;
-    }
-    setMapHistory(response.result);
-    return response.result;
-  }
-
-  async function openMap(id: string): Promise<MapRuntimeState | null> {
+  function beginSwitch(): number {
+    const epoch = ++generation.current;
+    rangeRequest.current++;
+    cache.current.clear();
+    queue.current = Promise.resolve();
+    inFlight.current.clear();
+    pending.current = 0;
+    setPendingCount(0);
+    opening.current = true;
     setLoading(true);
-    const summaryResponse = await api.getMapSummary(id);
-    setLoading(false);
-    if (!summaryResponse.ok || !summaryResponse.result) {
-      setMessage(formatStatusMessage(summaryResponse.errors[0]?.message, "打开地图失败"));
-      return null;
-    }
-    const initialRange = normalizeVisibleRange(initialVisibleRangeFromSummary(summaryResponse.result));
-    const [cellsResponse, featuresResponse] = await Promise.all([
-      api.getCellsInRange(summaryResponse.result.meta.id, initialRange, true),
-      api.getMapFeaturesInRange(summaryResponse.result.meta.id, initialRange, { limit: FEATURE_RANGE_LIMIT })
-    ]);
-    if (!cellsResponse.ok || !cellsResponse.result) {
-      setMessage(formatStatusMessage(cellsResponse.errors[0]?.message, "加载可视单元格失败"));
-      return null;
-    }
-    if (!featuresResponse.ok || !featuresResponse.result) {
-      setMessage(formatStatusMessage(featuresResponse.errors[0]?.message, "打开地图要素失败"));
-      return null;
-    }
-    const runtime = loadPartialMapIntoWorkspace(
-      summaryResponse.result,
-      featuresResponse.result,
-      cellsResponse.result.cells,
-      initialRange
-    );
-    await refreshMapHistory(summaryResponse.result.meta.id);
-    setMessage(`已打开 ${summaryResponse.result.meta.name}`);
-    return runtime;
+    return epoch;
   }
-
-  function ensureCanLeaveMap(): boolean {
-    if (!mapDirty) {
-      return true;
+  function finishSwitch(epoch: number): void {
+    if (valid(epoch)) {
+      opening.current = false;
+      setLoading(false);
     }
-    return window.confirm("当前地图有未保存改动，是否放弃并切换？");
   }
-
-  async function createMap(): Promise<MapRuntimeState | null> {
-    const name = window.prompt("输入新地图名称");
-    if (!name) {
+  async function refreshMaps(_selectId?: string): Promise<void> {
+    const seq = ++listRequest.current;
+    try {
+      const response = await api.listMaps();
+      if (seq !== listRequest.current) return;
+      if (response.ok && response.result) setMaps(response.result);
+      else setMessage(errorMessage(response, "加载地图列表失败"));
+    } catch {
+      setMessage("加载地图列表失败，请重试");
+    }
+  }
+  async function readFeatures(id: string, range: CellRange, epoch: number): Promise<MapFeatures> {
+    const rivers: MapFeatures["rivers"] = [];
+    let offset = 0;
+    while (valid(epoch)) {
+      const response = await api.getMapFeaturesInRange(
+        id,
+        range,
+        offset ? { limit: 1000, offset } : { limit: 1000 }
+      );
+      if (!response.ok || !response.result)
+        throw new Error(errorMessage(response, "加载地图要素失败"));
+      rivers.push(...response.result.rivers);
+      if (!response.result.page?.has_more) return { rivers };
+      if (!response.result.page.returned) throw new Error("地图要素分页没有进展，请重试");
+      offset = response.result.page.offset + response.result.page.returned;
+    }
+    return { rivers: [] };
+  }
+  async function refreshMapHistory(
+    id = sessionRef.current?.summary.meta.id
+  ): Promise<MapHistory | null> {
+    if (!id) return null;
+    const epoch = generation.current;
+    try {
+      const response = await api.getMapHistory(id);
+      if (!valid(epoch, id)) return null;
+      if (!response.ok || !response.result) {
+        setMessage(errorMessage(response, "刷新历史失败"));
+        return null;
+      }
+      publish({ ...sessionRef.current!, history: response.result });
+      return response.result;
+    } catch {
+      if (valid(epoch, id)) setMessage("刷新历史失败，请重试");
       return null;
     }
-    const response = await api.createMap({ name });
-    if (!response.ok || !response.result) {
-      setMessage(formatStatusMessage(response.errors[0]?.message, "新建地图失败"));
-      return null;
-    }
-    await refreshMaps(response.result.document.meta.id);
-    loadMapIntoWorkspace(response.result);
-    await refreshMapHistory(response.result.document.meta.id);
-    setMessage(`已新建 ${response.result.document.meta.name}`);
+  }
+  async function refreshMapSummary(
+    id = sessionRef.current?.summary.meta.id
+  ): Promise<MapSummary | null> {
+    if (!id) return null;
+    const epoch = generation.current;
+    const response = await api.getMapSummary(id);
+    if (!valid(epoch, id) || !response.ok || !response.result) return null;
+    publish({ ...sessionRef.current!, summary: response.result });
     return response.result;
   }
-
-  async function saveMap(): Promise<MapRuntimeState | null> {
-    if (!currentMap || persistedRevision === null) {
+  async function refreshMapFeatures(
+    id = sessionRef.current?.summary.meta.id
+  ): Promise<MapFeatures | null> {
+    const current = sessionRef.current;
+    if (!id || !current) return null;
+    const epoch = generation.current;
+    try {
+      const features = await readFeatures(
+        id,
+        current.range ?? initialRange(current.summary),
+        epoch
+      );
+      if (!valid(epoch, id)) return null;
+      publish({ ...sessionRef.current!, features });
+      return features;
+    } catch (error) {
+      if (valid(epoch, id)) setMessage((error as Error).message);
       return null;
     }
-    const response = await api.saveMapMeta(currentMap.document.meta.id, {
-      expectedRevision: persistedRevision,
-      name: currentMap.document.meta.name,
-      description: currentMap.document.meta.description,
-      tags: currentMap.document.meta.tags
+  }
+  async function readRange(id: string, range: CellRange, epoch: number): Promise<RangeData> {
+    if ((range.maxRow - range.minRow + 1) * (range.maxCol - range.minCol + 1) > 40_000) {
+      const response = await api.getOverview(id, range);
+      if (!response.ok || !response.result)
+        throw new Error(errorMessage(response, "加载地图概览失败"));
+      return { cells: [], features: { rivers: [] }, overview: response.result };
+    }
+    const [response, features] = await Promise.all([
+      api.getCellsInRange(id, range, true),
+      readFeatures(id, range, epoch)
+    ]);
+    if (!response.ok || !response.result)
+      throw new Error(errorMessage(response, "加载可视单元格失败"));
+    return { cells: response.result.cells, features, overview: null };
+  }
+  async function openMap(id: string): Promise<MapRuntimeState | null> {
+    const epoch = beginSwitch();
+    try {
+      const response = await api.getMapSummary(id);
+      if (!valid(epoch)) return null;
+      if (!response.ok || !response.result) throw new Error(errorMessage(response, "打开地图失败"));
+      const summary = response.result,
+        range = initialRange(summary);
+      const data = await readRange(id, range, epoch);
+      if (!valid(epoch)) return null;
+      const next: EditorSession = { summary, range, ...data, nameDraft: null, history: null };
+      publish(next);
+      suppressAutoOpen.current = false;
+      setIsRenaming(false);
+      setRenameDraft(summary.meta.name);
+      cache.current.set(id + ":" + summary.meta.revision + ":" + keyOf(range), data);
+      await refreshMapHistory(id);
+      if (!valid(epoch, id)) return null;
+      setMessage("已打开 " + summary.meta.name);
+      return sessionRuntime(sessionRef.current!);
+    } catch (error) {
+      if (valid(epoch)) setMessage(formatStatusMessage((error as Error).message, "打开地图失败"));
+      return null;
+    } finally {
+      finishSwitch(epoch);
+    }
+  }
+  async function loadRange(
+    range: CellRange,
+    force = false,
+    normalized = false
+  ): Promise<MapRuntimeState | null> {
+    const current = sessionRef.current;
+    if (!current) return null;
+    const epoch = generation.current,
+      id = current.summary.meta.id,
+      seq = ++rangeRequest.current;
+    const nextRange = normalized ? range : normalizeRange(range);
+    const key = id + ":" + current.summary.meta.revision + ":" + keyOf(nextRange);
+    if (!force && current.range && keyOf(current.range) === keyOf(nextRange))
+      return sessionRuntime(current);
+    try {
+      let data = force ? undefined : cache.current.get(key);
+      if (!data) {
+        data = await readRange(id, nextRange, epoch);
+        if (!valid(epoch, id) || seq !== rangeRequest.current) return null;
+        if (sessionRef.current!.summary.meta.revision !== current.summary.meta.revision)
+          return null;
+        cache.current.set(key, data);
+      }
+      if (!valid(epoch, id) || seq !== rangeRequest.current) return null;
+      const next = { ...sessionRef.current!, ...data, range: nextRange };
+      publish(next);
+      return sessionRuntime(next);
+    } catch (error) {
+      if (valid(epoch, id) && seq === rangeRequest.current) setMessage((error as Error).message);
+      return null;
+    }
+  }
+  async function requestVisibleRange(
+    range: CellRange,
+    id = sessionRef.current?.summary.meta.id
+  ): Promise<void> {
+    if (!id || id !== sessionRef.current?.summary.meta.id) return;
+    setViewport((current) =>
+      current?.mapId === id && keyOf(current.range) === keyOf(range)
+        ? current
+        : { mapId: id, range }
+    );
+    if (!opening.current) await loadRange(range);
+  }
+  function enqueue(
+    key: string,
+    task: (current: EditorSession, epoch: number) => Promise<WorkspaceMap | null>
+  ): Promise<WorkspaceMap | null> {
+    const current = sessionRef.current;
+    if (!current || opening.current) return Promise.resolve(null);
+    const epoch = generation.current,
+      id = current.summary.meta.id,
+      identity = epoch + ":" + key;
+    const duplicate = inFlight.current.get(identity);
+    if (duplicate) return duplicate;
+    pending.current++;
+    setWriteError(null);
+    setPendingCount(pending.current);
+    const operation = queue.current
+      .then(async () => {
+        if (!valid(epoch, id)) return null;
+        try {
+          return await task(sessionRef.current!, epoch);
+        } catch (error) {
+          if (valid(epoch, id)) {
+            setWriteError(formatStatusMessage((error as Error).message, "操作失败，请重试"));
+            setMessage(formatStatusMessage((error as Error).message, "操作失败，请重试"));
+          }
+          return null;
+        }
+      })
+      .finally(() => {
+        inFlight.current.delete(identity);
+        if (valid(epoch)) {
+          pending.current--;
+          setPendingCount(pending.current);
+        }
+      });
+    inFlight.current.set(identity, operation);
+    queue.current = operation;
+    return operation;
+  }
+  async function acceptResult(
+    result: CommandApplyResponse | HistoryMoveResult,
+    epoch: number,
+    id: string
+  ): Promise<WorkspaceMap | null> {
+    if (!valid(epoch, id)) return null;
+    const summary =
+      result.summary ??
+      (result.map ? runtimeSummary(result.map) : (await api.getMapSummary(id)).result);
+    if (!summary || !valid(epoch, id)) return null;
+    const old = sessionRef.current!,
+      changes = "changes" in result ? (result.changes ?? []) : [];
+    const cells = new Map(old.cells.map((cell) => [cell.id, cell]));
+    for (const change of changes) if (change.after) cells.set(change.cell_id, change.after);
+    publish({
+      ...old,
+      summary,
+      cells: [...cells.values()],
+      features: result.features ?? old.features
     });
-    if (!response.ok || !response.result) {
-      setMessage(formatStatusMessage(response.errors[0]?.message, "保存失败"));
-      return null;
+    cache.current.clear();
+    rangeRequest.current++;
+    if (old.range) await loadRange(old.range, true, true);
+    if (!valid(epoch, id)) return null;
+    await Promise.all([refreshMaps(), refreshMapHistory(id)]);
+    if (!valid(epoch, id)) return null;
+    const map = sessionRuntime(sessionRef.current!);
+    const returned = new Map(map.activeCells.map((cell) => [cell.id, cell]));
+    for (const change of changes) if (change.after) returned.set(change.cell_id, change.after);
+    return {
+      ...map,
+      document: { ...map.document, features: result.features ?? map.document.features },
+      confirmedFeatures: result.features,
+      activeCells: [...returned.values()]
+    };
+  }
+  function applyCommands(commands: MapCommand[]): Promise<MapRuntimeState | null> {
+    return enqueue("commands:" + JSON.stringify(commands), async (current, epoch) => {
+      const id = current.summary.meta.id;
+      retryCommands.current = { id, commands };
+      const response = await api.applyCommands(id, commands, {
+        includeMap: false,
+        expectedRevision: current.summary.meta.revision
+      });
+      if (!valid(epoch, id)) return null;
+      if (!response.ok || !response.result) {
+        setWriteError(errorMessage(response, "应用修改失败"));
+        setMessage(errorMessage(response, "应用修改失败"));
+        return null;
+      }
+      retryCommands.current = null;
+      return acceptResult(response.result, epoch, id);
+    });
+  }
+  function historyMove(direction: "undo" | "redo"): Promise<WorkspaceMap | null> {
+    return enqueue(direction, async (current, epoch) => {
+      const id = current.summary.meta.id;
+      const response = await (direction === "undo"
+        ? api.undoMap(id, false)
+        : api.redoMap(id, false));
+      if (!valid(epoch, id)) return null;
+      if (!response.ok) {
+        setMessage(errorMessage(response, "历史操作失败"));
+        return null;
+      }
+      if (!response.result) {
+        setMessage(direction === "undo" ? "没有可撤销的操作" : "没有可重做的操作");
+        return null;
+      }
+      const result = await acceptResult(response.result, epoch, id);
+      if (result) setMessage(direction === "undo" ? "已撤销" : "已重做");
+      return result;
+    });
+  }
+  function ensureCanLeaveMap(): boolean {
+    if (pending.current) {
+      setMessage("请等待当前修改提交完成");
+      return false;
     }
-    const nextRuntime = buildPartialRuntime(response.result, mapFeatures, currentMap.activeCells);
-    setCurrentMap(nextRuntime);
-    setMapSummary(response.result);
-    setPersistedRevision(response.result.meta.revision);
-    setIsRenaming(false);
-    setRenameDraft(response.result.meta.name);
-    await refreshMaps(response.result.meta.id);
-    await refreshMapHistory(response.result.meta.id);
-    setMessage("保存成功");
-    return nextRuntime;
+    return !mapDirty || window.confirm("当前地图有未保存改动，是否放弃并切换？");
   }
-
-  function startRenaming(): void {
-    if (!currentMap) {
-      return;
-    }
-    setIsRenaming(true);
-    setRenameDraft(currentMap.document.meta.name);
-  }
-
-  function cancelRenaming(): void {
-    setIsRenaming(false);
-    setRenameDraft(currentMap?.document.meta.name ?? "");
-  }
-
   function renameCurrentMap(name: string): void {
-    if (!currentMap) {
-      return;
-    }
-    const nextName = name.trim();
-    if (!nextName || nextName === currentMap.document.meta.name) {
-      return;
-    }
-
-    const nextDocument = structuredClone(currentMap.document);
-    nextDocument.meta.name = nextName;
-    nextDocument.meta.updated_at = new Date().toISOString();
-    nextDocument.meta.revision += 1;
-    setCurrentMap({ ...currentMap, document: nextDocument });
+    const current = sessionRef.current;
+    if (!current || !name.trim()) return;
+    publish({
+      ...current,
+      nameDraft: name.trim() === current.summary.meta.name ? null : name.trim()
+    });
     setIsRenaming(false);
-    setRenameDraft(nextName);
+    setRenameDraft(name.trim());
     setMessage("地图名称已更新，等待保存");
   }
-
-  async function saveMapAs(): Promise<MapRuntimeState | null> {
-    if (!currentMap) {
-      return null;
-    }
-    const name = window.prompt("输入副本地图名称", `${currentMap.document.meta.name} Copy`);
-    if (!name?.trim()) {
-      return null;
-    }
-    const response = await api.saveMapAs(currentMap.document.meta.id, {
-      name: name.trim()
+  function saveMap(): Promise<MapRuntimeState | null> {
+    const name = sessionRef.current?.nameDraft;
+    if (!name) return Promise.resolve(currentMap);
+    return enqueue("metadata:" + name, async (current, epoch) => {
+      const id = current.summary.meta.id;
+      const response = await api.saveMapMeta(id, {
+        expectedRevision: current.summary.meta.revision,
+        name,
+        description: current.summary.meta.description,
+        tags: current.summary.meta.tags
+      });
+      if (!valid(epoch, id)) return null;
+      if (!response.ok || !response.result) {
+        setWriteError(errorMessage(response, "保存失败"));
+        setMessage(errorMessage(response, "保存失败"));
+        return null;
+      }
+      publish({
+        ...sessionRef.current!,
+        summary: response.result,
+        nameDraft: sessionRef.current!.nameDraft === name ? null : sessionRef.current!.nameDraft
+      });
+      setIsRenaming(false);
+      await refreshMaps();
+      if (!valid(epoch, id)) return null;
+      setMessage("保存成功");
+      return sessionRuntime(sessionRef.current!);
     });
-    if (!response.ok || !response.result) {
-      setMessage(formatStatusMessage(response.errors[0]?.message, "另存为失败"));
-      return null;
-    }
-    await refreshMaps(response.result.document.meta.id);
-    loadMapIntoWorkspace(response.result);
-    await refreshMapHistory(response.result.document.meta.id);
-    setMessage(`已另存为 ${response.result.document.meta.name}`);
-    return response.result;
   }
-
+  async function createOrCopy(
+    kind: "create" | "copy" | "duplicate",
+    name?: string
+  ): Promise<MapRuntimeState | null> {
+    const current = sessionRef.current;
+    if (kind !== "create" && !current) return null;
+    if (kind !== "duplicate" && !name)
+      name =
+        window.prompt(
+          kind === "create" ? "输入新地图名称" : "输入副本地图名称",
+          kind === "create" ? "" : (current!.nameDraft ?? current!.summary.meta.name) + " Copy"
+        ) ?? undefined;
+    if (kind !== "duplicate" && !name?.trim()) return null;
+    const epoch = beginSwitch();
+    try {
+      const response =
+        kind === "create"
+          ? await api.createMap({ name: name!.trim() })
+          : kind === "copy"
+            ? await api.saveMapAs(current!.summary.meta.id, { name: name!.trim() })
+            : await api.duplicateMap(current!.summary.meta.id);
+      if (!valid(epoch)) return null;
+      if (!response.ok || !response.result) throw new Error(errorMessage(response, "创建地图失败"));
+      const map = response.result;
+      publish({
+        summary: runtimeSummary(map),
+        features: map.document.features,
+        cells: map.activeCells,
+        range: null,
+        nameDraft: null,
+        history: null
+      });
+      suppressAutoOpen.current = false;
+      setIsRenaming(false);
+      setRenameDraft(map.document.meta.name);
+      await Promise.all([refreshMaps(), refreshMapHistory(map.document.meta.id)]);
+      if (!valid(epoch)) return null;
+      setMessage(
+        kind === "create"
+          ? "已新建 " + map.document.meta.name
+          : kind === "copy"
+            ? "已另存为 " + map.document.meta.name
+            : "复制成功"
+      );
+      return map;
+    } catch (error) {
+      if (valid(epoch)) setMessage((error as Error).message);
+      return null;
+    } finally {
+      finishSwitch(epoch);
+    }
+  }
   async function importFile(file: File): Promise<MapRuntimeState | null> {
-    const content = await file.text();
-    const response = await api.importMap(content);
-    if (!response.ok || !response.result) {
-      const retry = window.confirm(`${response.errors[0]?.message ?? "导入失败"}。是否生成新 ID 后重试？`);
-      if (!retry) {
-        setMessage(formatStatusMessage(response.errors[0]?.message, "导入失败"));
-        return null;
-      }
-      const retryResponse = await api.importMap(content, true);
-      if (!retryResponse.ok || !retryResponse.result) {
-        setMessage(formatStatusMessage(retryResponse.errors[0]?.message, "导入失败"));
-        return null;
-      }
-      const opened = await openMap(retryResponse.result.summary.meta.id);
-      if (!opened) {
-        return null;
-      }
-      await refreshMaps(retryResponse.result.summary.meta.id);
-      setMessage("导入成功");
-      return opened;
-    }
-    const opened = await openMap(response.result.summary.meta.id);
-    if (!opened) {
+    if (importAbort.current) return null;
+    if (file.size > 64 * 1024 * 1024) {
+      setMessage("导入文件超过 64 MiB 限制");
       return null;
     }
-    await refreshMaps(response.result.summary.meta.id);
-    setMessage("导入成功");
-    return opened;
+    const epoch = beginSwitch();
+    const controller = new AbortController();
+    importAbort.current = controller;
+    const control = { signal: controller.signal, onProgress: setImportProgress };
+    try {
+      const content = file;
+      if (!valid(epoch)) return null;
+      let response = await api.importMap(content, false, control);
+      if (!valid(epoch)) return null;
+      if (!response.ok || !response.result) {
+        const message = errorMessage(response, "导入失败");
+        if (!message.includes("conflict") || !window.confirm(message + "。是否生成新 ID 后重试？"))
+          throw new Error(message);
+        response = await api.importMap(content, true, control);
+      }
+      if (!valid(epoch)) return null;
+      if (!response.ok || !response.result) throw new Error(errorMessage(response, "导入失败"));
+      const result = await openMap(response.result.summary.meta.id);
+      if (result) {
+        const openedEpoch = generation.current;
+        await refreshMaps();
+        if (valid(openedEpoch, result.document.meta.id)) setMessage("导入成功");
+      }
+      return result;
+    } catch (error) {
+      if (valid(epoch)) setMessage((error as Error).message);
+      return null;
+    } finally {
+      finishSwitch(epoch);
+      importAbort.current = null;
+      setImportProgress("");
+    }
   }
-
-  async function duplicateMap(): Promise<MapRuntimeState | null> {
-    if (!currentMap) {
-      return null;
-    }
-    const response = await api.duplicateMap(currentMap.document.meta.id);
-    if (!response.ok || !response.result) {
-      setMessage(formatStatusMessage(response.errors[0]?.message, "复制失败"));
-      return null;
-    }
-    await refreshMaps(response.result.document.meta.id);
-    loadMapIntoWorkspace(response.result);
-    await refreshMapHistory(response.result.document.meta.id);
-    setMessage("复制成功");
-    return response.result;
-  }
-
-  async function deleteCurrentMap(): Promise<boolean> {
-    if (!currentMap) {
+  async function deleteCurrentMap(confirmed = false): Promise<boolean> {
+    const current = sessionRef.current;
+    if (!current || pending.current) return false;
+    if (
+      !confirmed &&
+      !window.confirm("确认删除 " + (current.nameDraft ?? current.summary.meta.name) + " 吗？")
+    )
       return false;
-    }
-    if (!window.confirm(`确认删除 ${currentMap.document.meta.name} 吗？`)) {
-      return false;
-    }
-    const response = await api.deleteMap(currentMap.document.meta.id);
+    const epoch = generation.current,
+      id = current.summary.meta.id;
+    const response = await api.deleteMap(id);
+    if (!valid(epoch, id)) return false;
     if (!response.ok) {
-      setMessage(formatStatusMessage(response.errors[0]?.message, "删除失败"));
+      setMessage(errorMessage(response, "删除失败"));
       return false;
     }
-    setCurrentMap(null);
-    setCurrentMapId("");
-    setMapSummary(null);
-    setMapFeatures(createEmptyFeatures());
-    setCellCache(new Map());
-    setVisibleCellIds([]);
-    visibleRangeRequestSeqRef.current += 1;
-    lastVisibleRangeRef.current = null;
-    lastVisibleRangeKeyRef.current = "";
-    setPersistedRevision(null);
+    generation.current++;
+    rangeRequest.current++;
+    cache.current.clear();
+    publish(null);
+    suppressAutoOpen.current = true;
     setIsRenaming(false);
     setRenameDraft("");
-    suppressAutoOpenRef.current = true;
     await refreshMaps();
-    setMapHistory(null);
     setMessage("地图已删除");
     return true;
   }
-
-  async function applyCommands(commands: MapCommand[]): Promise<MapRuntimeState | null> {
-    if (!currentMap) {
-      setMessage("请先选择一张地图");
-      return null;
-    }
-    const response = await api.applyCommands(currentMap.document.meta.id, commands, { includeMap: false });
-    if (!response.ok || !response.result) {
-      setMessage(formatStatusMessage(response.errors[0]?.message, "应用修改失败"));
-      return null;
-    }
-    const nextSummary = response.result.summary ?? await refreshMapSummary(currentMap.document.meta.id);
-    const nextFeatures = response.result.features ?? null;
-    if (!nextSummary) {
-      return null;
-    }
-    setMapSummary(nextSummary);
-    if (nextFeatures) {
-      setMapFeatures(nextFeatures);
-    }
-    setPersistedRevision(nextSummary.meta.revision);
-    await refreshMaps(nextSummary.meta.id);
-    let nextRuntime: MapRuntimeState | null = null;
-    if (lastVisibleRangeRef.current) {
-      nextRuntime = await loadVisibleRange(lastVisibleRangeRef.current, nextSummary.meta.id, nextSummary, nextFeatures, true, true);
-    } else {
-      nextRuntime = buildPartialRuntime(nextSummary, nextFeatures ?? mapFeatures, currentMap.activeCells);
-      setCurrentMap(nextRuntime);
-    }
-    await refreshMapHistory(nextSummary.meta.id);
-    return nextRuntime;
-  }
-
-  async function undoCurrentMap(): Promise<MapRuntimeState | null> {
-    if (!currentMap) {
-      return null;
-    }
-    const response = await api.undoMap(currentMap.document.meta.id, false);
-    if (!response.ok) {
-      setMessage(formatStatusMessage(response.errors[0]?.message, "撤销失败"));
-      return null;
-    }
-    if (!response.result) {
-      setMessage("没有可撤销的操作");
-      return null;
-    }
-    const nextSummary = response.result.summary ?? await refreshMapSummary(currentMap.document.meta.id);
-    const nextFeatures = response.result.features ?? null;
-    if (!nextSummary) {
-      return null;
-    }
-    setMapSummary(nextSummary);
-    if (nextFeatures) {
-      setMapFeatures(nextFeatures);
-    }
-    setPersistedRevision(nextSummary.meta.revision);
-    await refreshMaps(nextSummary.meta.id);
-    let nextRuntime: MapRuntimeState | null = null;
-    if (lastVisibleRangeRef.current) {
-      nextRuntime = await loadVisibleRange(lastVisibleRangeRef.current, nextSummary.meta.id, nextSummary, nextFeatures, true, true);
-    } else {
-      nextRuntime = buildPartialRuntime(nextSummary, nextFeatures ?? mapFeatures, currentMap.activeCells);
-      setCurrentMap(nextRuntime);
-    }
-    await refreshMapHistory(nextSummary.meta.id);
-    setMessage(response.result.warnings[0]?.message ?? "已撤销");
-    return nextRuntime;
-  }
-
-  async function redoCurrentMap(): Promise<MapRuntimeState | null> {
-    if (!currentMap) {
-      return null;
-    }
-    const response = await api.redoMap(currentMap.document.meta.id, false);
-    if (!response.ok) {
-      setMessage(formatStatusMessage(response.errors[0]?.message, "重做失败"));
-      return null;
-    }
-    if (!response.result) {
-      setMessage("没有可重做的操作");
-      return null;
-    }
-    const nextSummary = response.result.summary ?? await refreshMapSummary(currentMap.document.meta.id);
-    const nextFeatures = response.result.features ?? null;
-    if (!nextSummary) {
-      return null;
-    }
-    setMapSummary(nextSummary);
-    if (nextFeatures) {
-      setMapFeatures(nextFeatures);
-    }
-    setPersistedRevision(nextSummary.meta.revision);
-    await refreshMaps(nextSummary.meta.id);
-    let nextRuntime: MapRuntimeState | null = null;
-    if (lastVisibleRangeRef.current) {
-      nextRuntime = await loadVisibleRange(lastVisibleRangeRef.current, nextSummary.meta.id, nextSummary, nextFeatures, true, true);
-    } else {
-      nextRuntime = buildPartialRuntime(nextSummary, nextFeatures ?? mapFeatures, currentMap.activeCells);
-      setCurrentMap(nextRuntime);
-    }
-    await refreshMapHistory(nextSummary.meta.id);
-    setMessage(response.result.warnings[0]?.message ?? "已重做");
-    return nextRuntime;
-  }
-
-  async function loadVisibleRange(
-    range: CellRange,
-    mapId = currentMap?.document.meta.id,
-    summaryOverride: MapSummary | null = null,
-    featuresOverride: MapFeatures | null = null,
-    force = false,
-    rangeIsNormalized = false
-  ): Promise<MapRuntimeState | null> {
-    if (!mapId) {
-      return null;
-    }
-    const normalizedRange = rangeIsNormalized ? range : normalizeVisibleRange(range);
-    const key = `${mapId}:${rangeKey(normalizedRange)}`;
-    lastVisibleRangeRef.current = normalizedRange;
-    if (!force && key === lastVisibleRangeKeyRef.current) {
-      return currentMap;
-    }
-    lastVisibleRangeKeyRef.current = key;
-    const requestSeq = visibleRangeRequestSeqRef.current + 1;
-    visibleRangeRequestSeqRef.current = requestSeq;
-    const [response, featuresResponse] = await Promise.all([
-      api.getCellsInRange(mapId, normalizedRange, true),
-      featuresOverride ? Promise.resolve(null) : api.getMapFeaturesInRange(mapId, normalizedRange, { limit: FEATURE_RANGE_LIMIT })
-    ]);
-    if (requestSeq !== visibleRangeRequestSeqRef.current) {
-      return null;
-    }
-    if (!response.ok || !response.result) {
-      setMessage(formatStatusMessage(response.errors[0]?.message, "加载可视单元格失败"));
-      return null;
-    }
-    if (featuresResponse && (!featuresResponse.ok || !featuresResponse.result)) {
-      setMessage(formatStatusMessage(featuresResponse.errors[0]?.message, "加载可视要素失败"));
-      return null;
-    }
-    const nextSummary = summaryOverride ?? mapSummary ?? await refreshMapSummary(mapId);
-    const nextFeatures = featuresOverride ?? featuresResponse?.result ?? mapFeatures;
-    if (!nextSummary) {
-      return null;
-    }
-    setMapFeatures(nextFeatures);
-    setCellCache((current) => {
-      const next = new Map(current);
-      for (const cell of response.result!.cells) {
-        next.set(cell.id, cell);
-      }
-      return next;
-    });
-    setVisibleCellIds(response.result.cells.map((cell) => cell.id));
-    const runtime = buildPartialRuntime(nextSummary, nextFeatures, response.result.cells);
-    setCurrentMap(runtime);
-    return runtime;
-  }
-
-  async function requestVisibleRange(range: CellRange, mapId = currentMap?.document.meta.id): Promise<void> {
-    await loadVisibleRange(range, mapId);
-  }
-
   useEffect(() => {
     void refreshMaps();
+    return () => {
+      generation.current++;
+      listRequest.current++;
+      rangeRequest.current++;
+    };
   }, []);
-
   useEffect(() => {
-    if (maps.length === 0 || currentMapId) {
-      return;
-    }
-    if (suppressAutoOpenRef.current) {
-      return;
-    }
-    void openMap(maps[0]!.id);
-  }, [currentMapId, maps]);
-
+    if (maps.length && !sessionRef.current && !opening.current && !suppressAutoOpen.current)
+      void openMap(maps[0]!.id);
+  }, [maps]);
   useEffect(() => {
-    if (!isRenaming) {
-      setRenameDraft(currentMap?.document.meta.name ?? "");
-    }
+    setWriteError(null);
+    retryCommands.current = null;
+  }, [currentMapId]);
+  useEffect(() => {
+    if (!isRenaming) setRenameDraft(currentMap?.document.meta.name ?? "");
   }, [currentMap?.document.meta.name, isRenaming]);
-
   return {
+    writeError,
+    canRetryCommands: retryCommands.current?.id === currentMapId,
+    retryLastCommands: () =>
+      retryCommands.current?.id === currentMapId
+        ? applyCommands(retryCommands.current.commands)
+        : Promise.resolve(null),
+    importProgress,
+    cancelImport: () => importAbort.current?.abort(),
+    overview: session?.overview ?? null,
     maps,
     currentMap,
-    visibleMap,
+    visibleMap: currentMap,
     currentMapId,
-    mapSummary,
-    mapHistory,
+    mapSummary: session?.summary ?? null,
+    mapHistory: session?.history ?? null,
     displayMaps,
     isRenaming,
     renameDraft,
     loading,
+    pendingCount,
     mapDirty,
-    visibleRange: lastVisibleRangeRef.current,
+    visibleRange: viewport?.mapId === currentMapId ? viewport.range : null,
     fileInputRef,
-    setCurrentMap,
     setRenameDraft,
+    setCurrentMap: (map: MapRuntimeState | null) =>
+      publish(
+        map
+          ? {
+              summary: runtimeSummary(map),
+              features: map.document.features,
+              cells: map.activeCells,
+              range: null,
+              nameDraft: null,
+              history: null
+            }
+          : null
+      ),
     refreshMaps,
     refreshMapSummary,
     refreshMapFeatures,
@@ -724,17 +630,25 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
     requestVisibleRange,
     openMap,
     ensureCanLeaveMap,
-    createMap,
+    createMap: (name?: string) => createOrCopy("create", name),
     saveMap,
-    startRenaming,
-    cancelRenaming,
-    renameCurrentMap,
-    saveMapAs,
+    saveMapAs: (name?: string) => createOrCopy("copy", name),
+    duplicateMap: () => createOrCopy("duplicate"),
     importFile,
-    duplicateMap,
     deleteCurrentMap,
     applyCommands,
-    undoCurrentMap,
-    redoCurrentMap
+    undoCurrentMap: () => historyMove("undo"),
+    redoCurrentMap: () => historyMove("redo"),
+    renameCurrentMap,
+    startRenaming: () => {
+      if (currentMap) {
+        setIsRenaming(true);
+        setRenameDraft(currentMap.document.meta.name);
+      }
+    },
+    cancelRenaming: () => {
+      setIsRenaming(false);
+      setRenameDraft(currentMap?.document.meta.name ?? "");
+    }
   };
 }

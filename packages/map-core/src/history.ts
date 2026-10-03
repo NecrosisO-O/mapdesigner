@@ -1,11 +1,10 @@
 import { buildActiveCells } from "./activity.js";
-import { cloneDocument, getHistoryLimitForDesignedCellCount, normalizeDocument } from "./serialization.js";
-import type {
-  HistorySource,
-  MapDocument,
-  MapRuntimeState,
-  RuntimeHistoryEntry
-} from "./types.js";
+import {
+  cloneDocument,
+  getHistoryLimitForDesignedCellCount,
+  normalizeDocument
+} from "./serialization.js";
+import type { HistorySource, MapDocument, MapRuntimeState, RuntimeHistoryEntry } from "./types.js";
 
 export function pushHistory(
   state: MapRuntimeState,

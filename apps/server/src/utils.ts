@@ -15,11 +15,7 @@ export function createMapId(name: string): string {
   return `${base}-${suffix}`;
 }
 
-export function createEnvelope<T>(input: {
-  result?: T;
-  warnings?: unknown[];
-  errors?: unknown[];
-}) {
+export function createEnvelope<T>(input: { result?: T; warnings?: unknown[]; errors?: unknown[] }) {
   return {
     ok: (input.errors ?? []).length === 0,
     result: input.result,

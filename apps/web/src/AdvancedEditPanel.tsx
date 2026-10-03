@@ -1,3 +1,4 @@
+import type { BatchField, FieldMode } from "./useAdvancedEditor.js";
 import {
   BIOME_ENTRIES,
   BIOME_KEYS,
@@ -21,7 +22,13 @@ interface AdvancedEditPanelProps {
   currentMap: MapRuntimeState | null;
   batchModeActive: boolean;
   selectedCount: number;
+  mixedFields: Record<BatchField, boolean>;
+  plannedCount: number;
   batchDraft: BatchEditDraft;
+  batchTagMode: "replace" | "add" | "remove";
+  onBatchTagModeChange: (mode: "replace" | "add" | "remove") => void;
+  batchModes: Record<BatchField, FieldMode>;
+  onBatchFieldModeChange: (field: BatchField, mode: FieldMode) => void;
   replaceTerrainDraft: ReplaceTerrainDraft;
   replaceBiomeDraft: ReplaceBiomeDraft;
   batchFilteredTerrainCategories: TerrainCategoryKey[];
@@ -59,14 +66,52 @@ export function AdvancedEditPanel(props: AdvancedEditPanelProps) {
     <section className="panel advanced-editor-panel">
       <div className="cell-editor-heading">
         <div>
-          <h2>高级编辑</h2>
+          <h2>批量修改</h2>
           <p>已选 {props.selectedCount} 格</p>
         </div>
-        {props.batchModeActive ? <span className="status-chip status-chip-dirty">批量选择</span> : null}
+        {props.batchModeActive ? (
+          <span className="status-chip status-chip-dirty">批量选择</span>
+        ) : null}
       </div>
 
       <div className="editor-section">
         <h3>批量设置</h3>
+        <p>选择每个字段的处理方式。“多种值”描述当前选区，“清空”表示将要执行的修改。</p>
+        <div className="batch-field-modes">
+          {(["terrain", "biome", "tags", "note"] as const).map((field) => (
+            <label key={field}>
+              {{ terrain: "地形", biome: "生态", tags: "标签", note: "备注" }[field]}操作
+              <small className="muted">
+                当前：
+                {props.mixedFields[field] ? "多种值" : props.selectedCount ? "相同值" : "未选择"}
+              </small>
+              <select
+                value={props.batchModes[field]}
+                onChange={(event) =>
+                  props.onBatchFieldModeChange(field, event.target.value as FieldMode)
+                }
+              >
+                <option value="keep">保持原值</option>
+                <option value="set">设置</option>
+                {field !== "terrain" && <option value="clear">清空</option>}
+              </select>
+            </label>
+          ))}
+        </div>
+        <p className="batch-preview" role="status">
+          将修改 {props.plannedCount} / {props.selectedCount} 格 ·{" "}
+          {Object.entries(props.batchModes)
+            .filter(([, mode]) => mode !== "keep")
+            .map(
+              ([field, mode]) =>
+                ({ terrain: "地形", biome: "生态", tags: "标记", note: "备注" })[
+                  field as BatchField
+                ] +
+                "：" +
+                (mode === "clear" ? "清空" : "设置")
+            )
+            .join("、") || "所有字段保持原值"}
+        </p>
         <div className="action-row action-row-inline">
           <button
             type="button"
@@ -77,21 +122,29 @@ export function AdvancedEditPanel(props: AdvancedEditPanelProps) {
           >
             批量选择
           </button>
-          <button type="button" onClick={props.onClearBatchSelection} disabled={props.selectedCount === 0}>
+          <button
+            type="button"
+            onClick={props.onClearBatchSelection}
+            disabled={props.selectedCount === 0}
+          >
             清空选择
           </button>
           <button
             type="button"
             className="primary-button"
             onClick={props.onApplyBatchEdit}
-            disabled={!props.currentMap || props.selectedCount === 0 || !props.batchDraft.terrain}
+            disabled={
+              !props.currentMap ||
+              props.plannedCount === 0 ||
+              Object.values(props.batchModes).every((mode) => mode === "keep")
+            }
           >
             应用到选中格
           </button>
         </div>
 
         <label>
-          批量 Terrain 分类
+          批量地形分类
           <select
             value={props.batchDraft.terrainCategory}
             onChange={(event) => props.onBatchTerrainCategoryChange(event.target.value)}
@@ -106,13 +159,15 @@ export function AdvancedEditPanel(props: AdvancedEditPanelProps) {
           </select>
         </label>
         <label>
-          批量 Terrain
+          批量地形
           <select
             value={props.batchDraft.terrain}
             onChange={(event) => props.onBatchTerrainChange(event.target.value)}
             disabled={!props.currentMap || !props.batchDraft.terrainCategory}
           >
-            <option value="">{props.batchDraft.terrainCategory ? "未设置" : "请先选择 Terrain 分类"}</option>
+            <option value="">
+              {props.batchDraft.terrainCategory ? "未设置" : "请先选择 地形分类"}
+            </option>
             {props.batchTerrainOptions.map((entry) => (
               <option key={entry.key} value={entry.key}>
                 {entry.label} ({entry.short})
@@ -121,7 +176,7 @@ export function AdvancedEditPanel(props: AdvancedEditPanelProps) {
           </select>
         </label>
         <label>
-          批量 Biome
+          批量生态
           <select
             value={props.batchDraft.biome}
             onChange={(event) => props.onBatchBiomeChange(event.target.value)}
@@ -133,6 +188,19 @@ export function AdvancedEditPanel(props: AdvancedEditPanelProps) {
                 {BIOME_ENTRIES[key].label} ({BIOME_ENTRIES[key].short})
               </option>
             ))}
+          </select>
+        </label>
+        <label>
+          标签处理
+          <select
+            value={props.batchTagMode}
+            onChange={(event) =>
+              props.onBatchTagModeChange(event.target.value as "replace" | "add" | "remove")
+            }
+          >
+            <option value="replace">替换标签</option>
+            <option value="add">追加标签</option>
+            <option value="remove">移除指定标签</option>
           </select>
         </label>
         <div className="tag-grid compact-tag-grid">
@@ -149,7 +217,7 @@ export function AdvancedEditPanel(props: AdvancedEditPanelProps) {
           ))}
         </div>
         <label>
-          批量 Note
+          批量备注
           <textarea
             rows={3}
             value={props.batchDraft.note}
@@ -159,104 +227,107 @@ export function AdvancedEditPanel(props: AdvancedEditPanelProps) {
         </label>
       </div>
 
-      <div className="editor-section">
-        <h3>替换地形</h3>
-        <label>
-          匹配 Terrain
-          <select
-            value={props.replaceTerrainDraft.matchTerrain}
-            onChange={(event) => props.onReplaceTerrainMatchChange(event.target.value)}
+      <details className="editor-section">
+        <summary>全图替换</summary>
+        <div className="editor-section">
+          <h3>替换地形</h3>
+          <label>
+            匹配地形
+            <select
+              value={props.replaceTerrainDraft.matchTerrain}
+              onChange={(event) => props.onReplaceTerrainMatchChange(event.target.value)}
+              disabled={!props.currentMap}
+            >
+              <option value="">请选择地形</option>
+              {TERRAIN_KEYS.map((key) => (
+                <option key={key} value={key}>
+                  {TERRAIN_ENTRIES[key].label} ({TERRAIN_ENTRIES[key].short})
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            目标地形分类
+            <select
+              value={props.replaceTerrainDraft.replacementCategory}
+              onChange={(event) => props.onReplacementTerrainCategoryChange(event.target.value)}
+              disabled={!props.currentMap}
+            >
+              <option value="">请选择分类</option>
+              {Object.entries(TERRAIN_CATEGORY_LABELS).map(([key, label]) => (
+                <option key={key} value={key}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            目标地形
+            <select
+              value={props.replaceTerrainDraft.replacementTerrain}
+              onChange={(event) => props.onReplacementTerrainChange(event.target.value)}
+              disabled={!props.currentMap || !props.replaceTerrainDraft.replacementCategory}
+            >
+              <option value="">请选择地形</option>
+              {props.replaceTerrainOptions.map((entry) => (
+                <option key={entry.key} value={entry.key}>
+                  {entry.label} ({entry.short})
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            type="button"
+            className="primary-button full-width-button"
+            onClick={props.onApplyTerrainReplacement}
             disabled={!props.currentMap}
           >
-            <option value="">请选择 terrain</option>
-            {TERRAIN_KEYS.map((key) => (
-              <option key={key} value={key}>
-                {TERRAIN_ENTRIES[key].label} ({TERRAIN_ENTRIES[key].short})
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          目标 Terrain 分类
-          <select
-            value={props.replaceTerrainDraft.replacementCategory}
-            onChange={(event) => props.onReplacementTerrainCategoryChange(event.target.value)}
-            disabled={!props.currentMap}
-          >
-            <option value="">请选择分类</option>
-            {Object.entries(TERRAIN_CATEGORY_LABELS).map(([key, label]) => (
-              <option key={key} value={key}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          目标 Terrain
-          <select
-            value={props.replaceTerrainDraft.replacementTerrain}
-            onChange={(event) => props.onReplacementTerrainChange(event.target.value)}
-            disabled={!props.currentMap || !props.replaceTerrainDraft.replacementCategory}
-          >
-            <option value="">请选择 terrain</option>
-            {props.replaceTerrainOptions.map((entry) => (
-              <option key={entry.key} value={entry.key}>
-                {entry.label} ({entry.short})
-              </option>
-            ))}
-          </select>
-        </label>
-        <button
-          type="button"
-          className="primary-button full-width-button"
-          onClick={props.onApplyTerrainReplacement}
-          disabled={!props.currentMap}
-        >
-          替换地形
-        </button>
-      </div>
+            替换地形
+          </button>
+        </div>
 
-      <div className="editor-section">
-        <h3>替换生态</h3>
-        <label>
-          匹配 Biome
-          <select
-            value={props.replaceBiomeDraft.matchBiome}
-            onChange={(event) => props.onReplaceBiomeMatchChange(event.target.value)}
+        <div className="editor-section">
+          <h3>替换生态</h3>
+          <label>
+            匹配生态
+            <select
+              value={props.replaceBiomeDraft.matchBiome}
+              onChange={(event) => props.onReplaceBiomeMatchChange(event.target.value)}
+              disabled={!props.currentMap}
+            >
+              <option value="">请选择生态</option>
+              {[props.noneBiomeValue, ...BIOME_KEYS].map((value) => (
+                <option key={value} value={value}>
+                  {formatBiomeOption(value, props.noneBiomeValue)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            目标生态
+            <select
+              value={props.replaceBiomeDraft.replacementBiome}
+              onChange={(event) => props.onReplacementBiomeChange(event.target.value)}
+              disabled={!props.currentMap}
+            >
+              <option value="">请选择生态</option>
+              {[props.noneBiomeValue, ...BIOME_KEYS].map((value) => (
+                <option key={value} value={value}>
+                  {formatBiomeOption(value, props.noneBiomeValue)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            type="button"
+            className="primary-button full-width-button"
+            onClick={props.onApplyBiomeReplacement}
             disabled={!props.currentMap}
           >
-            <option value="">请选择 biome</option>
-            {[props.noneBiomeValue, ...BIOME_KEYS].map((value) => (
-              <option key={value} value={value}>
-                {formatBiomeOption(value, props.noneBiomeValue)}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          目标 Biome
-          <select
-            value={props.replaceBiomeDraft.replacementBiome}
-            onChange={(event) => props.onReplacementBiomeChange(event.target.value)}
-            disabled={!props.currentMap}
-          >
-            <option value="">请选择 biome</option>
-            {[props.noneBiomeValue, ...BIOME_KEYS].map((value) => (
-              <option key={value} value={value}>
-                {formatBiomeOption(value, props.noneBiomeValue)}
-              </option>
-            ))}
-          </select>
-        </label>
-        <button
-          type="button"
-          className="primary-button full-width-button"
-          onClick={props.onApplyBiomeReplacement}
-          disabled={!props.currentMap}
-        >
-          替换生态
-        </button>
-      </div>
+            替换生态
+          </button>
+        </div>
+      </details>
     </section>
   );
 }

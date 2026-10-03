@@ -1,3 +1,4 @@
+import { buildAtlasPatterns } from "./symbols.js";
 import {
   BIOME_ENTRIES,
   PRIMARY_TAG_PRIORITY,
@@ -5,6 +6,7 @@ import {
   TERRAIN_ENTRIES,
   type ActiveCell,
   type BiomeKey,
+  type MapStyle,
   type TagKey,
   type TerrainKey
 } from "@mapdesigner/map-core";
@@ -81,12 +83,67 @@ const BIOME_PATTERN_IDS: Record<BiomeKey, string> = {
   pack_ice: "pattern-pack-ice"
 };
 
-export function getTerrainColor(terrain: TerrainKey | null): string {
-  return terrain ? TERRAIN_COLORS[terrain] : "#EEE8DA";
+export const ATLAS_TERRAIN_COLORS: Record<TerrainKey, string> = {
+  ocean: "#416D89",
+  sea: "#75A8BC",
+  coast: "#B7C9B4",
+  beach: "#E8D5A5",
+  tidal_flat: "#B8C2AC",
+  reef: "#82BCB0",
+  lagoon: "#9CCBC3",
+  estuary: "#ADC5AC",
+  lake: "#8BB9CB",
+  salt_lake: "#C2D7D7",
+  river: "#8BB9CB",
+  delta: "#AFC69C",
+  plain: "#D3DEBA",
+  alluvial_plain: "#C5D7AD",
+  floodplain: "#B4CDAD",
+  wetland: "#A1BDA7",
+  hill: "#B4C197",
+  foothill: "#C2BB9B",
+  mountain: "#9B9A8A",
+  plateau: "#CCB98F",
+  basin: "#C8CDA8",
+  valley: "#B9CD9E",
+  canyon: "#C29577",
+  rift_valley: "#B7AA8C",
+  dune: "#E7CE96",
+  gravel_desert: "#CCB697",
+  salt_flat: "#E7E2D3",
+  badlands: "#CBAB91",
+  karst: "#BBC7B1",
+  loess: "#D9C194",
+  rocky_barren: "#B4AEA1",
+  glacier: "#DCECEF",
+  permafrost: "#CAD6D4",
+  volcanic: "#9F8D82",
+  lava_field: "#625A54",
+  geothermal: "#C0B49A"
+};
+
+export function getTerrainColor(
+  terrain: TerrainKey | null,
+  style: MapStyle = "classic-v1"
+): string {
+  return terrain
+    ? (style === "atlas-v1" ? ATLAS_TERRAIN_COLORS : TERRAIN_COLORS)[terrain]
+    : "#EEEDE5";
 }
 
-export function getBiomePatternId(biome: BiomeKey | null): string | null {
-  return biome ? BIOME_PATTERN_IDS[biome] : null;
+export function getBiomePatternId(
+  biome: BiomeKey | null,
+  style: MapStyle = "classic-v1",
+  size = 36
+): string | null {
+  const id = biome
+    ? style === "atlas-v1"
+      ? biome === "bare"
+        ? null
+        : "atlas-" + biome
+      : BIOME_PATTERN_IDS[biome]
+    : null;
+  return id ? id + (size === 36 ? "" : "-s" + size) : null;
 }
 
 export function getCellShorthand(cell: ActiveCell): string | null {
@@ -111,7 +168,8 @@ export function getPrimaryTagLabel(tag: TagKey | null): string | null {
   return tag ? TAG_ENTRIES[tag].short : null;
 }
 
-export function buildSvgDefs(): string[] {
+function rawSvgDefs(style: MapStyle = "classic-v1"): string[] {
+  if (style === "atlas-v1") return buildAtlasPatterns();
   return [
     `<pattern id="pattern-grass" patternUnits="userSpaceOnUse" width="10" height="10"><circle cx="2" cy="2" r="1" fill="#466B2D" opacity="0.35"/><circle cx="7" cy="5" r="1" fill="#466B2D" opacity="0.25"/></pattern>`,
     `<pattern id="pattern-steppe" patternUnits="userSpaceOnUse" width="12" height="12"><path d="M1 10 L4 8 M7 4 L10 2" stroke="#705A2B" stroke-width="1" opacity="0.3"/></pattern>`,
@@ -145,8 +203,37 @@ export function buildSvgDefs(): string[] {
   ];
 }
 
-export function buildPatternOverlay(biome: BiomeKey | null): string | null {
-  const id = getBiomePatternId(biome);
+export function buildSvgDefs(
+  style: MapStyle = "classic-v1",
+  size = 36,
+  minX = 0,
+  minY = 0
+): string[] {
+  return rawSvgDefs(style).map((def) =>
+    def
+      .replace(
+        /id="([^"]+)"/,
+        (_, id: string) => 'id="' + id + (size === 36 ? "" : "-s" + size) + '"'
+      )
+      .replace(
+        "<pattern ",
+        '<pattern patternTransform="translate(' +
+          -minX +
+          " " +
+          -minY +
+          ") scale(" +
+          size / 36 +
+          ')" '
+      )
+  );
+}
+
+export function buildPatternOverlay(
+  biome: BiomeKey | null,
+  style: MapStyle = "classic-v1",
+  size = 36
+): string | null {
+  const id = getBiomePatternId(biome, style, size);
   return id ? `url(#${id})` : null;
 }
 

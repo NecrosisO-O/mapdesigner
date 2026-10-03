@@ -2,12 +2,49 @@
 
 All notable changes to this project will be documented in this file.
 
-## Unreleased
+## [0.3.0-rc.1] - 2026-10-03
+
+First release candidate for 0.3.0. This entry covers all changes since 0.2.0.
 
 ### Added
 
-- Added river overlay features with structured commands, CLI helpers, canvas drawing, SVG/WebUI rendering, width anchors, water endpoint hints, and legacy map compatibility.
-- Added water and wetland tone refinements so brackish estuaries, tidal flats, wetlands, and deltas read less like ordinary land.
+- SQLite map storage with persistent undo/redo history, legacy JSON import, and an online backup command.
+- Summary and range queries, paginated feature search, streamed JSON export, and map overviews for larger maps.
+- A canvas-focused workspace with contextual inspectors, visual materials, sampling, stroke painting, whole-map object search, layer controls, and shared legends.
+- Natural and classic map styles with terrain symbols, ecology textures, graphical markers, and explicit compatibility for existing maps.
+- Direct river node and width editing, explicit junctions, flow and endpoint settings, branches, and local editing advice.
+- Background import and export jobs with progress, cancellation, revision checks, and resource budgets.
+- Actual PNG previews and composed exports with titles, captions, legends, transparent backgrounds, direction, and grid-distance references.
+- Fourteen reproducible cartographic fixtures, browser comparisons, color-vision simulations, and separate rendering/data performance records.
+
+### Changed
+
+- Map commands and history updates run atomically, and editor mutations are serialized with revision checks.
+- Editor drafts, material painting, river editing, and export tasks have dedicated state and cancellation handling.
+- New rivers interpolate width by path distance; old maps and history retain their original width rules until compatible editing conversion.
+- Network listening requires an access token, with host/origin checks and temporary download credentials.
+- The runtime uses Node.js 24.16.0 and pnpm 10.23.0. Production containers run as UID 1000 and include CJK fonts.
+- CI verifies builds, types, tests, formatting, and production container startup and export.
+
+### Fixed
+
+- Partial command/history writes, conflicting edits, and unnecessary full-map work during local edits.
+- River width changes caused by inserting unanchored nodes, false connections at viewport cuts, wide-bend holes, confluence overpainting, and internal river bands across lakes.
+- Narrow-screen inspector overlap and landscape export previews covering action buttons.
+- Inconsistent canvas/export textures and label fonts, missing CJK fonts in containers, and inaccessible rivers beyond the first result page.
+
+### Upgrade
+
+- Stop the old server and CLI processes, and back up the entire data directory or Docker volume before upgrading.
+- Keep the existing data root. Legacy files in `storage/maps` are imported into SQLite and retained; maps and new history are saved in `storage/mapdesigner.db`.
+- Use Node.js 24.16.0 and pnpm 10.23.0 for source deployments. Set `MAPDESIGNER_TOKEN` for Docker or network listening and enter it in the map menu connection settings.
+- Ensure the existing Docker data volume is writable by UID/GID 1000. See the [upgrade guide](./docs/deployment.md#升级到-v030-rc1) and [Docker instructions](./docs/docker.md#升级已有数据卷) for the steps.
+
+### Validation
+
+- 214 regression tests cover core rules, rendering, server and CLI behavior, and editor workflows.
+- Production container checks cover non-root execution, access tokens, CJK fonts, background previews, and PNG downloads.
+- Maintainer hands-on acceptance completed for RC1. Measured results and implementation evidence are recorded in the [acceptance record](./docs/research/2026-10-03/visual-redesign/README.md).
 
 ## [0.2.0] - 2026-05-25
 

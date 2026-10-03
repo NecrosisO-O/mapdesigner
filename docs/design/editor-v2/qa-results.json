@@ -1,0 +1,113 @@
+{
+  "date": "2026-10-02",
+  "scope": "独立交互原型；桌面浏览器检查和窄屏视口模拟",
+  "checks": [
+    {
+      "case": "cell draft guard, pan, apply, undo, redo",
+      "passed": true,
+      "observed": "工具切换弹出保护；平移后备注保留；撤销备注为空，重做恢复备注"
+    },
+    {
+      "case": "batch patch",
+      "passed": true,
+      "observed": "选中2格并缩放，选择数量保留；确认框显示2格、地形；应用后生态grassland与备注保留"
+    },
+    {
+      "case": "river drawing",
+      "passed": true,
+      "observed": "2个路径点完成后河流数2→3；一次撤销恢复2条"
+    },
+    {
+      "case": "brush stroke history",
+      "passed": true,
+      "observed": "连续拖过3格均变山地；一次撤销全部恢复原地形"
+    },
+    {
+      "case": "keyboard canvas",
+      "passed": true,
+      "observed": "ArrowRight 从R17 C21移到R17 C22，焦点保持在画布"
+    },
+    {
+      "case": "native button keyboard and layer visibility",
+      "passed": true,
+      "observed": "Space可切换主题；取消勾选生态纹理后对应SVG层display:none"
+    },
+    {
+      "case": "PNG export",
+      "passed": true,
+      "observed": "下载文件已检查：1100×850，223311字节；浏览器下载事件监听超时，但系统Downloads存在本次文件"
+    },
+    {
+      "case": "mobile canvas 375×812",
+      "measured": {
+        "canvasHeight": 730,
+        "canvasWidth": 325,
+        "headerHeight": 54,
+        "height": 812,
+        "pageHeight": 812,
+        "pageWidth": 375,
+        "width": 375
+      }
+    },
+    {
+      "case": "tablet layout 1024×768",
+      "measured": {
+        "canvasHeight": 682,
+        "canvasWidth": 684,
+        "headerHeight": 58,
+        "height": 768,
+        "inspectorWidth": 280,
+        "pageHeight": 768,
+        "pageWidth": 1024,
+        "width": 1024
+      }
+    },
+    {
+      "case": "landscape 812×375 after height fix",
+      "measured": {
+        "canvasHeight": 289,
+        "canvasWidth": 752,
+        "height": 375,
+        "pageHeight": 375,
+        "pageWidth": 812,
+        "railHeight": 289,
+        "railScrollHeight": 350,
+        "width": 812
+      }
+    },
+    {
+      "case": "desktop 1440×900",
+      "measured": {
+        "canvasHeight": 814,
+        "canvasWidth": 876,
+        "headerHeight": 58,
+        "height": 900,
+        "inspectorBodyHeight": 678,
+        "inspectorBodyScrollHeight": 678,
+        "pageHeight": 900,
+        "pageWidth": 1440,
+        "width": 1440
+      }
+    },
+    {
+      "case": "focus layout",
+      "passed": true,
+      "observed": "1440宽下专注画布宽1380；退出后恢复内容栏与属性栏"
+    },
+    {
+      "case": "SVG export after ID namespacing",
+      "passed": true,
+      "observed": "下载SVG为1100×850、151505字节，XML可解析，重复ID为0，纹理引用缺失为0"
+    },
+    {
+      "case": "console",
+      "passed": true,
+      "observed": "最终浏览器error/warn列表为空"
+    }
+  ],
+  "limits": [
+    "未接入真实API、持久化或完整地图规则",
+    "未验证真实触摸、软键盘与完整读屏流程",
+    "PNG下载事件等待超时后通过本机生成文件验证；SVG亦检查了实际文件"
+  ]
+}
