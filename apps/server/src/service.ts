@@ -443,11 +443,7 @@ export async function exportJson(id: string): Promise<{ fileName: string; path: 
   return { fileName, path: filePath };
 }
 
-export async function exportPng(
-  id: string,
-  options: Partial<ExportRenderOptions> = {}
-): Promise<{ fileName: string; path: string }> {
-  await ensureDirectories();
+async function preparePngExport(id: string, options: Partial<ExportRenderOptions> = {}) {
   const baseOptions: ExportRenderOptions = {
     preset: "clean",
     includeCoordinates: false,
@@ -466,6 +462,11 @@ export async function exportPng(
   }
   const normalizedId = assertSafeMapId(id);
   const summary = await getMapSummary(normalizedId);
+  if (
+    resolved.expectedRevision !== undefined &&
+    resolved.expectedRevision !== summary.meta.revision
+  )
+    throw badRequest("地图已改变，请刷新导出预览后重试");
   if (!resolved.range && summary.designed_cell_count > MAX_WHOLE_MAP_PNG_EXPORT_CELLS) {
     throw badRequest(
       `whole-map PNG export is limited to ${MAX_WHOLE_MAP_PNG_EXPORT_CELLS} designed cells; use a range for large maps`
@@ -479,6 +480,37 @@ export async function exportPng(
     options: resolved
   });
   assertPixelBudget(scene.width, scene.height);
+  return { scene, summary, normalizedId, resolved, runtime };
+}
+
+export async function previewPng(id: string, options: Partial<ExportRenderOptions> = {}) {
+  const { scene, runtime } = await preparePngExport(id, options);
+  const ratio = Math.min(1, 1000 / Math.max(scene.width, scene.height));
+  const width = Math.max(1, Math.round(scene.width * ratio)),
+    height = Math.max(1, Math.round(scene.height * ratio));
+  const svg = renderSvgString(scene).replace(
+    'width="' + scene.width + '" height="' + scene.height + '"',
+    'width="' + width + '" height="' + height + '"'
+  );
+  const image = await sharp(Buffer.from(svg), { limitInputPixels: 1_000_000 })
+    .timeout({ seconds: PNG_EXPORT_TIMEOUT_SECONDS })
+    .png()
+    .toBuffer();
+  return {
+    image: "data:image/png;base64," + image.toString("base64"),
+    width: Math.ceil(scene.width),
+    height: Math.ceil(scene.height),
+    revision: runtime.document.meta.revision,
+    cellCount: runtime.document.cells.length
+  };
+}
+
+export async function exportPng(
+  id: string,
+  options: Partial<ExportRenderOptions> = {}
+): Promise<{ fileName: string; path: string }> {
+  await ensureDirectories();
+  const { scene, summary, normalizedId, resolved } = await preparePngExport(id, options);
   const svg = renderSvgString(scene);
   const fileName = `${slugify(summary.meta.name) || normalizedId}-${resolved.preset}${exportRangeFileSuffix(resolved.range)}-${randomUUID()}.png`;
   const filePath = exportPath(fileName);

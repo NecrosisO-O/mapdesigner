@@ -1,3 +1,4 @@
+import { getMapMaterialUsage } from "./repository.js";
 import { getOverview } from "./overview.js";
 import { registerJobs } from "./jobs.js";
 import { downloadDisposition, downloadUrl } from "./downloads.js";
@@ -285,6 +286,14 @@ export async function createServer(): Promise<FastifyInstance> {
         })
       })
   );
+
+  app.get<{ Params: { id: string } }>("/api/maps/:id/materials", async (request, reply) => {
+    try {
+      return createEnvelope({ result: await getMapMaterialUsage(request.params.id) });
+    } catch (error) {
+      return sendError(reply, "material_usage_failed", error, 404);
+    }
+  });
 
   app.get<{ Params: { id: string } }>("/api/maps/:id/features", async (request, reply) => {
     try {

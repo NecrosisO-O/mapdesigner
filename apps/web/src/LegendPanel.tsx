@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { api } from "./api.js";
+import { useEffect, useState } from "react";
 import {
   TERRAIN_KEYS,
   TERRAIN_ENTRIES,
@@ -9,6 +10,7 @@ import {
   TAG_KEYS,
   TAG_ENTRIES,
   type MapRuntimeState,
+  type MapMaterialUsage,
   type BiomeKey,
   type TerrainKey,
   type TagKey
@@ -27,20 +29,43 @@ export function LegendPanel({
   highlight: LegendHighlight | null;
   onHighlight: (value: LegendHighlight | null) => void;
 }) {
+  const [usage, setUsage] = useState<MapMaterialUsage | null>(null),
+    [error, setError] = useState(""),
+    [retry, setRetry] = useState(0);
+  useEffect(() => {
+    let active = true;
+    setUsage(null);
+    setError("");
+    if (map)
+      void api.getMaterialUsage(map.document.meta.id).then((result) => {
+        if (!active) return;
+        if (result.ok && result.result) setUsage(result.result);
+        else setError("无法读取全图图例，点击重试。");
+      });
+    return () => {
+      active = false;
+    };
+  }, [map?.document.meta.id, map?.document.meta.revision, retry]);
   const [all, setAll] = useState(false);
   const [kind, setKind] = useState<LegendHighlight["kind"]>("terrain");
   const cells = map?.document.cells ?? [];
   const keys = kind === "terrain" ? TERRAIN_KEYS : kind === "biome" ? BIOME_KEYS : TAG_KEYS;
   const used = new Set(
-    cells.flatMap((cell) =>
-      kind === "terrain"
-        ? [cell.terrain]
+    usage
+      ? kind === "terrain"
+        ? usage.terrains
         : kind === "biome"
-          ? cell.biome
-            ? [cell.biome]
-            : []
-          : cell.tags
-    )
+          ? usage.biomes
+          : usage.tags
+      : cells.flatMap((cell) =>
+          kind === "terrain"
+            ? [cell.terrain]
+            : kind === "biome"
+              ? cell.biome
+                ? [cell.biome]
+                : []
+              : cell.tags
+        )
   );
   return (
     <div className="legend-panel">
@@ -50,7 +75,10 @@ export function LegendPanel({
         <input type="checkbox" checked={all} onChange={(e) => setAll(e.target.checked)} />
         显示完整图例
       </label>
-      <p className="muted">{all ? "全部类型" : "当前已加载区域使用的类型"}</p>
+      <p className="muted">
+        {all ? "全部类型" : usage ? "本图使用的全部类型" : "正在读取全图；暂显示当前区域"}
+      </p>
+      {error && <button onClick={() => setRetry((v) => v + 1)}>{error}</button>}
       <div className="segmented-control" role="group" aria-label="图例类别">
         {(["terrain", "biome", "tag"] as const).map((value) => (
           <button key={value} aria-pressed={kind === value} onClick={() => setKind(value)}>

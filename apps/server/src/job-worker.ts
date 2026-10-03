@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import { parentPort, workerData } from "node:worker_threads";
-import { exportJson, exportPng, getMapSummary, importMap } from "./service.js";
+import { exportJson, exportPng, previewPng, getMapSummary, importMap } from "./service.js";
 import { closeDatabaseForTests, getDatabase } from "./db.js";
 import type { JobInput } from "./jobs.js";
 const { input, cancellation } = workerData as { input: JobInput; cancellation: SharedArrayBuffer };
@@ -31,20 +31,28 @@ try {
       beforeCommit
     });
   } else {
-    progress(input.kind === "png" ? "正在渲染图片" : "正在写出地图");
+    progress(
+      input.kind === "preview"
+        ? "正在生成成图预览"
+        : input.kind === "png"
+          ? "正在渲染图片"
+          : "正在写出地图"
+    );
     await getMapSummary(input.mapId);
     // This worker owns its connection for the entire asynchronous export.
     getDatabase().exec("BEGIN");
     try {
       result =
-        input.kind === "png"
-          ? await exportPng(input.mapId, input.options)
-          : await exportJson(input.mapId);
+        input.kind === "preview"
+          ? await previewPng(input.mapId, input.options)
+          : input.kind === "png"
+            ? await exportPng(input.mapId, input.options)
+            : await exportJson(input.mapId);
     } finally {
       getDatabase().exec("ROLLBACK");
     }
     if (Atomics.load(flag, 0) === 1) {
-      await fs.rm((result as { path: string }).path, { force: true });
+      if (input.kind !== "preview") await fs.rm((result as { path: string }).path, { force: true });
       cancelled();
     }
     beforeCommit();

@@ -1649,3 +1649,158 @@ details.editor-section[open] > summary::after {
   grid-template-columns: minmax(0, 1fr) 100px;
   gap: 10px;
 }
+
+.dialog:has(.export-layout) {
+  width: 1080px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.export-layout {
+  display: grid;
+  grid-template-columns: 270px minmax(0, 1fr);
+  gap: 24px;
+  min-height: 0;
+  flex: 1;
+}
+.export-options {
+  overflow: auto;
+  min-height: 0;
+  padding-right: 12px;
+  scroll-padding: 12px;
+}
+.export-options fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+.export-preview {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  gap: 12px;
+  overflow: auto;
+}
+.export-preview-image {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 230px;
+  flex: 1;
+  overflow: hidden;
+  background: repeating-conic-gradient(#d5dcd4 0% 25%, #e8ebe4 0% 50%) 50%/18px 18px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.export-preview-image img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  display: block;
+}
+.export-preview figcaption {
+  display: grid;
+  gap: 5px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.export-preview figcaption strong {
+  font-size: 16px;
+  color: var(--text);
+}
+.export-preview .empty-state {
+  background: var(--surface);
+  margin: 12px;
+  padding: 20px;
+  border-radius: 8px;
+  line-height: 1.6;
+}
+.export-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-top: 1px solid var(--border);
+  padding-top: 16px;
+  margin-top: 16px;
+  flex-shrink: 0;
+}
+.export-footer [role="status"] {
+  font-size: 13px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.export-footer a {
+  display: block;
+  color: var(--accent);
+  margin-top: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.export-footer .action-row {
+  flex-shrink: 0;
+}
+.export-footer .action-row button {
+  min-height: 44px;
+}
+@media (max-width: 760px) {
+  .dialog:has(.export-layout) {
+    max-height: calc(var(--visible-height, 100dvh) - 20px);
+    padding: 16px;
+  }
+  .export-layout {
+    display: flex;
+    flex-direction: column;
+    overflow: auto;
+    gap: 16px;
+  }
+  .export-preview {
+    order: -1;
+    flex: none;
+    overflow: visible;
+  }
+  .export-preview-image {
+    height: 220px;
+    flex: none;
+    min-height: 0;
+  }
+  .export-options {
+    overflow: visible;
+    padding: 0;
+    flex: none;
+  }
+  .export-options input,
+  .export-options select,
+  .export-options textarea {
+    font-size: 16px;
+  }
+  .export-footer {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    padding-top: 10px;
+    margin-top: 10px;
+  }
+  .export-footer .action-row button {
+    min-height: 44px;
+  }
+}
+
+.export-preview-zoomed {
+  overflow: auto;
+  display: block;
+}
+.export-preview-zoomed img {
+  max-width: none;
+  max-height: none;
+  width: auto;
+  height: auto;
+  margin: auto;
+}
+.preview-zoom {
+  justify-self: start;
+}

@@ -1,4 +1,6 @@
 import type {
+  ExportPreview,
+  MapMaterialUsage,
   CellRange,
   MapOverview,
   CellRangeResult,
@@ -50,6 +52,7 @@ export interface HistoryEntry {
   action: string;
   source: string;
   timestamp: string;
+  description?: string;
 }
 
 export interface MapHistory {
@@ -214,6 +217,15 @@ export const api = {
   },
   listMaps: () => request<MapListItem[]>("/api/maps"),
   getMap: (id: string) => request<MapRuntimeState>(`/api/maps/${id}`),
+  getMaterialUsage: (id: string) => request<MapMaterialUsage>("/api/maps/" + id + "/materials"),
+  previewPng: (id: string, options: Partial<ExportRenderOptions>, control: TaskControl = {}) =>
+    runJob<ExportPreview>(
+      request("/api/jobs/export", {
+        method: "POST",
+        body: JSON.stringify({ kind: "preview", mapId: id, options })
+      }),
+      control
+    ),
   getMapSummary: (id: string) => request<MapSummary>(`/api/maps/${id}/summary`),
   getMapFeatures: (id: string) => request<MapFeatures>(`/api/maps/${id}/features`),
   getMapFeaturesInRange: (

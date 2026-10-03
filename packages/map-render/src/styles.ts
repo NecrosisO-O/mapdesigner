@@ -133,15 +133,17 @@ export function getTerrainColor(
 
 export function getBiomePatternId(
   biome: BiomeKey | null,
-  style: MapStyle = "classic-v1"
+  style: MapStyle = "classic-v1",
+  size = 36
 ): string | null {
-  return biome
+  const id = biome
     ? style === "atlas-v1"
       ? biome === "bare"
         ? null
         : "atlas-" + biome
       : BIOME_PATTERN_IDS[biome]
     : null;
+  return id ? id + (size === 36 ? "" : "-s" + size) : null;
 }
 
 export function getCellShorthand(cell: ActiveCell): string | null {
@@ -166,7 +168,7 @@ export function getPrimaryTagLabel(tag: TagKey | null): string | null {
   return tag ? TAG_ENTRIES[tag].short : null;
 }
 
-export function buildSvgDefs(style: MapStyle = "classic-v1"): string[] {
+function rawSvgDefs(style: MapStyle = "classic-v1"): string[] {
   if (style === "atlas-v1") return buildAtlasPatterns();
   return [
     `<pattern id="pattern-grass" patternUnits="userSpaceOnUse" width="10" height="10"><circle cx="2" cy="2" r="1" fill="#466B2D" opacity="0.35"/><circle cx="7" cy="5" r="1" fill="#466B2D" opacity="0.25"/></pattern>`,
@@ -201,11 +203,37 @@ export function buildSvgDefs(style: MapStyle = "classic-v1"): string[] {
   ];
 }
 
+export function buildSvgDefs(
+  style: MapStyle = "classic-v1",
+  size = 36,
+  minX = 0,
+  minY = 0
+): string[] {
+  return rawSvgDefs(style).map((def) =>
+    def
+      .replace(
+        /id="([^"]+)"/,
+        (_, id: string) => 'id="' + id + (size === 36 ? "" : "-s" + size) + '"'
+      )
+      .replace(
+        "<pattern ",
+        '<pattern patternTransform="translate(' +
+          -minX +
+          " " +
+          -minY +
+          ") scale(" +
+          size / 36 +
+          ')" '
+      )
+  );
+}
+
 export function buildPatternOverlay(
   biome: BiomeKey | null,
-  style: MapStyle = "classic-v1"
+  style: MapStyle = "classic-v1",
+  size = 36
 ): string | null {
-  const id = getBiomePatternId(biome, style);
+  const id = getBiomePatternId(biome, style, size);
   return id ? `url(#${id})` : null;
 }
 

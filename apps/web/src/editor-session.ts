@@ -101,6 +101,8 @@ export class ViewportCache {
     const weight =
       value.cells.length +
       (value.overview?.tiles.length ?? 0) +
+      (value.overview?.rivers?.reduce((n, r) => n + r.paths.reduce((m, p) => m + p.length, 0), 0) ??
+        0) +
       value.features.rivers.reduce((sum, river) => sum + river.points.length, 0);
     if (weight > this.cellBudget) return;
     this.entries.set(key, value);
@@ -109,6 +111,10 @@ export class ViewportCache {
         sum +
         entry.cells.length +
         (entry.overview?.tiles.length ?? 0) +
+        (entry.overview?.rivers?.reduce(
+          (n, r) => n + r.paths.reduce((m, p) => m + p.length, 0),
+          0
+        ) ?? 0) +
         entry.features.rivers.reduce((n, river) => n + river.points.length, 0),
       0
     );
@@ -121,6 +127,10 @@ export class ViewportCache {
       count -=
         entry.cells.length +
         (entry.overview?.tiles.length ?? 0) +
+        (entry.overview?.rivers?.reduce(
+          (n, r) => n + r.paths.reduce((m, p) => m + p.length, 0),
+          0
+        ) ?? 0) +
         entry.features.rivers.reduce((n, river) => n + river.points.length, 0);
       this.entries.delete(oldest);
     }
@@ -134,6 +144,10 @@ export class ViewportCache {
         sum +
         entry.cells.length +
         (entry.overview?.tiles.length ?? 0) +
+        (entry.overview?.rivers?.reduce(
+          (n, r) => n + r.paths.reduce((m, p) => m + p.length, 0),
+          0
+        ) ?? 0) +
         entry.features.rivers.reduce((n, river) => n + river.points.length, 0),
       0
     );

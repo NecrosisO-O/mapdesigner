@@ -18,7 +18,7 @@ ENV HOST=0.0.0.0
 ENV PORT=3010
 ENV MAPDESIGNER_ROOT=/data
 WORKDIR /app
-RUN apt-get update && apt-get install -y --no-install-recommends fonts-dejavu-core && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends fonts-dejavu-core fonts-noto-cjk && rm -rf /var/lib/apt/lists/*
 COPY --from=build --chown=node:node /out /app
 COPY --from=build --chown=node:node /app/apps/web/dist /app/apps/web/dist
 RUN mkdir -p /data/storage/maps /data/storage/exports && chown -R node:node /data

@@ -3,6 +3,7 @@ import { buildSvgDefs } from "./styles.js";
 import { riverGeometry, riverBandPath } from "./river-geometry.js";
 import { buildWaterGeometry, riverWaterTransitions, waterCellLookup } from "./water.js";
 import { paintRiverWater } from "./river-paint.js";
+import { composeExport, renderExportFurniture } from "./export-layout.js";
 import { escapeXml, renderCellSurface, renderCellAnnotations } from "./presentation.js";
 import type { ExportSceneInput, MapRenderOptions, MapScene } from "./types.js";
 import {
@@ -352,7 +353,7 @@ export function buildMapScene(map: MapRuntimeState, options: MapRenderOptions = 
         renderRange ?? undefined
       )
     ],
-    defs: buildSvgDefs(resolved.mapStyle),
+    defs: buildSvgDefs(resolved.mapStyle, resolved.size, layout.minX, layout.minY),
     options: resolved
   };
 }
@@ -403,9 +404,13 @@ export function renderSvgString(scene: MapScene): string {
     scene.defs.join("") +
     "</defs>" +
     background +
+    (scene.composition
+      ? '<g transform="translate(0 ' + scene.composition.headerHeight + ')">'
+      : "") +
     surfaces +
     renderRiverLayers(scene) +
     labels +
+    (scene.composition ? "</g>" + renderExportFurniture(scene) : "") +
     "</svg>"
   );
 }
@@ -419,11 +424,16 @@ export function buildExportScene(input: ExportSceneInput): MapScene {
         { row: input.options.range.maxRow, col: input.options.range.maxCol }
       ]
     : undefined;
-  return buildMapScene(input.map, {
+  const scene = buildMapScene(input.map, {
     size: 36 * input.options.scale,
     padding: input.options.padding,
     background: input.options.background,
     usePatternOverlays: true,
+    includeTerrain: input.options.includeTerrain,
+    includeTerrainSymbols: input.options.includeTerrainSymbols,
+    includeBiomes: input.options.includeBiomes,
+    includeRivers: input.options.includeRivers,
+    includeTags: input.options.includeTags,
     includeCoordinates: input.options.includeCoordinates,
     includeShorthand: input.options.includeShorthand,
     includeGrid: input.options.includeGrid,
@@ -431,4 +441,5 @@ export function buildExportScene(input: ExportSceneInput): MapScene {
     riverClipRange: input.options.range ?? undefined,
     boundsCoords
   });
+  return composeExport(scene, input.map, input.options);
 }

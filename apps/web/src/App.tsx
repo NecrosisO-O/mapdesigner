@@ -13,6 +13,7 @@ import { ToolRail } from "./ToolRail.js";
 import { api } from "./api.js";
 import { DetailPanel } from "./DetailPanel.js";
 import { MapCanvas } from "./MapCanvas.js";
+import { ExportDialog } from "./ExportDialog.js";
 import { SidebarPanel } from "./SidebarPanel.js";
 import { useAdvancedEditor } from "./useAdvancedEditor.js";
 import { TopToolbar } from "./TopToolbar.js";
@@ -30,7 +31,6 @@ export default function App() {
   const [showGrid, setShowGrid] = useState(true);
   const [showUndesigned, setShowUndesigned] = useState(true);
   const [tagFilter, setTagFilter] = useState<TagKey[]>([]);
-  const [lastOpaqueExportBackground, setLastOpaqueExportBackground] = useState("#F4F0E6");
   const [interactionMode, setInteractionMode] = useState<InteractionMode>("select");
   const prompt = useDialogPrompt();
   const [contentOpen, setContentOpen] = useState(() => window.innerWidth > 760),
@@ -583,18 +583,7 @@ export default function App() {
           legend={<LegendPanel map={activeMap} highlight={highlight} onHighlight={setHighlight} />}
           layers={layers}
           onLayerChange={(key, visible) => setLayers((current) => ({ ...current, [key]: visible }))}
-          onClose={() => setContentOpen(false)}
-          onSelectRiver={(id) => {
-            riverEditor.selectRiver(id);
-            setInspectorTab("river");
-            revealInspector();
-          }}
-          onExportJson={() => void exportPanel.handleExportJson(workspace.currentMap)}
-          loading={workspace.loading}
-          message={message}
           currentMap={workspace.currentMap}
-          mapSummary={workspace.mapSummary}
-          mapDirty={workspace.mapDirty}
           showCoordinates={showCoordinates}
           showShorthand={showShorthand}
           showGrid={showGrid}
@@ -606,73 +595,7 @@ export default function App() {
           onShowShorthandChange={setShowShorthand}
           onShowGridChange={setShowGrid}
           onShowUndesignedChange={setShowUndesigned}
-          exportPanelOpen={exportPanel.exportPanelOpen}
-          isExportingPng={exportPanel.isExportingPng}
-          exportProgress={exportPanel.progress}
-          exportResult={exportPanel.resultMessage}
-          onCancelExport={exportPanel.cancelExport}
-          pngOptions={exportPanel.pngOptions}
-          pngRangeMode={exportPanel.pngRangeMode}
-          lastOpaqueBackground={lastOpaqueExportBackground}
           tagFilter={tagFilter}
-          onToggleExportPanel={() => exportPanel.setExportPanelOpen((current) => !current)}
-          onExportPng={() =>
-            void exportPanel.handleExportPng(workspace.currentMap, workspace.visibleRange)
-          }
-          onPngRangeModeChange={exportPanel.setPngRangeMode}
-          onPresetChange={(preset) =>
-            exportPanel.setPngOptions((current) => ({
-              ...current,
-              preset,
-              includeCoordinates: preset === "reference" ? true : current.includeCoordinates,
-              includeShorthand: preset === "reference" ? true : current.includeShorthand
-            }))
-          }
-          onScaleChange={(scale) =>
-            exportPanel.setPngOptions((current) => ({
-              ...current,
-              scale
-            }))
-          }
-          onPaddingChange={(padding) =>
-            exportPanel.setPngOptions((current) => ({
-              ...current,
-              padding
-            }))
-          }
-          onBackgroundChange={(background) => {
-            if (background !== "transparent") {
-              setLastOpaqueExportBackground(background);
-            }
-            exportPanel.setPngOptions((current) => ({
-              ...current,
-              background
-            }));
-          }}
-          onIncludeGridChange={(includeGrid) =>
-            exportPanel.setPngOptions((current) => ({
-              ...current,
-              includeGrid
-            }))
-          }
-          onIncludeUndesignedChange={(includeUndesigned) =>
-            exportPanel.setPngOptions((current) => ({
-              ...current,
-              includeUndesigned
-            }))
-          }
-          onIncludeCoordinatesChange={(includeCoordinates) =>
-            exportPanel.setPngOptions((current) => ({
-              ...current,
-              includeCoordinates
-            }))
-          }
-          onIncludeShorthandChange={(includeShorthand) =>
-            exportPanel.setPngOptions((current) => ({
-              ...current,
-              includeShorthand
-            }))
-          }
           onTagFilterChange={(tag, checked) =>
             setTagFilter((current) =>
               checked
@@ -954,6 +877,24 @@ export default function App() {
           {workspace.mapSummary?.meta.revision ?? "—"}
         </span>
       </footer>
+      {exportPanel.exportPanelOpen && workspace.currentMap && (
+        <ExportDialog
+          control={exportPanel}
+          map={workspace.currentMap}
+          summary={workspace.mapSummary}
+          visibleRange={workspace.visibleRange}
+          viewOptions={{
+            includeTerrain: layers.terrain,
+            includeBiomes: layers.biomes,
+            includeRivers: layers.rivers,
+            includeTags: layers.tags,
+            includeGrid: showGrid,
+            includeCoordinates: showCoordinates,
+            includeShorthand: showShorthand,
+            includeUndesigned: showUndesigned
+          }}
+        />
+      )}
       {prompt.dialog}
       {historyOpen && (
         <Dialog title="编辑历史" onClose={() => setHistoryOpen(false)}>

@@ -184,3 +184,72 @@ it("downloads Chinese-named JSON and PNG files over a real HTTP connection", asy
     }
   }
 });
+
+it("previews the same composition as PNG and rejects stale preview revisions", async () => {
+  const map = await service.createMap({ name: "Preview" }),
+    id = map.document.meta.id;
+  await service.applyCommandsLight(id, [
+    {
+      action: "set_cell",
+      target: { row: 0, col: 0 },
+      changes: { terrain: "mountain", biome: "conifer_forest", tags: ["peak"] }
+    }
+  ]);
+  const options = {
+    scale: 1,
+    title: "山地 <样例>",
+    caption: "图例与标题采用真实输出排版",
+    includeLegend: true,
+    northArrow: true,
+    gridScale: true,
+    background: "transparent"
+  };
+  const started = (
+    await app.inject({
+      method: "POST",
+      url: "/api/jobs/export",
+      payload: { kind: "preview", mapId: id, options }
+    })
+  ).json().result;
+  const job = await finish(started.id);
+  expect(job.state, job.error).toBe("done");
+  const preview = job.result,
+    exported = await service.exportPng(id, { ...options, expectedRevision: preview.revision });
+  const original = await sharp(exported.path)
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  const image = await sharp(Buffer.from(preview.image.split(",")[1], "base64"))
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  expect(preview.width).toBe(original.info.width);
+  expect(preview.height).toBe(original.info.height);
+  expect(image.data.equals(original.data)).toBe(true);
+  await service.applyCommandsLight(id, [
+    { action: "set_cell", target: { row: 0, col: 0 }, changes: { terrain: "hill" } }
+  ]);
+  await expect(
+    service.exportPng(id, { ...options, expectedRevision: preview.revision })
+  ).rejects.toThrow("地图已改变");
+});
+it("returns material usage outside the currently displayed region", async () => {
+  const map = await service.createMap({ name: "Legend" }),
+    id = map.document.meta.id;
+  await service.applyCommandsLight(id, [
+    {
+      action: "set_cell",
+      target: { row: 0, col: 0 },
+      changes: { terrain: "plain", biome: "grassland" }
+    },
+    {
+      action: "set_cell",
+      target: { row: 400, col: 400 },
+      changes: { terrain: "mountain", biome: "conifer_forest", tags: ["peak"] }
+    }
+  ]);
+  const usage = (await app.inject({ url: "/api/maps/" + id + "/materials" })).json().result;
+  expect(usage.terrains).toEqual(["mountain", "plain"]);
+  expect(usage.biomes).toEqual(["conifer_forest", "grassland"]);
+  expect(usage.tags).toEqual(["peak"]);
+});
