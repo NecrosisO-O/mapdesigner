@@ -17,16 +17,18 @@ It combines a visual WebUI with a structured CLI, so the same map can evolve alo
 - Layer terrain and biome data on each cell
 - Draw river overlays across cells from the WebUI or CLI, with width anchors and water endpoint hints
 - Store maps in local SQLite storage, with structured JSON import/export for archives and interchange
-- Export rendered maps as PNG references
+- Search visual materials, sample terrain, paint strokes, and edit river nodes and widths directly
+- Read shared terrain symbols, ecology textures, whole-map legends, and continuous water surfaces
+- Preview and export PNG maps with titles, legends, transparent backgrounds, and grid-distance references
 - Inspect and modify maps through a structured CLI for scripts and AI agents
 - Use summary and range-based queries for larger maps instead of loading every cell
 - Use the same map rules across WebUI, CLI, and exports
 
 ## Screenshot
 
-![MapDesigner main interface](./docs/research/2026-10-03/ui/desktop-light.jpg)
+![MapDesigner main interface](./docs/research/2026-10-03/visual-redesign/workspace-final.png)
 
-See the [browser acceptance record](./docs/research/2026-10-03/browser-acceptance.md) for responsive layouts and verified editing workflows.
+See the [browser acceptance record](./docs/research/2026-10-03/visual-redesign/README.md) for responsive layouts and verified editing workflows.
 
 ## Quick Start
 
@@ -74,7 +76,7 @@ More examples and command conventions are documented in [Agent CLI Guide](./docs
 
 ## Current Status
 
-`v0.2.0` focuses on a more practical editor surface, smoother deep zoom behavior, safer local storage handling, richer structured CLI/export workflows, and early overlay features such as rivers.
+`v0.2.0` focuses on a more practical editor surface, smoother deep zoom behavior, safer local storage handling, richer structured CLI/export workflows, explicit river networks, direct geometry editing, and shared cartographic output. The visual redesign and remaining device/user studies are tracked in [the acceptance record](./docs/research/2026-10-03/visual-redesign/README.md).
 
 ## Development Note
 

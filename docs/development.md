@@ -169,7 +169,7 @@ Critical 项为 Vitest UI 服务相关告警（`GHSA-5xrq-8626-4rwp`）；
 
 正式界面直接上传 JSON 文件，经过临时文件与独立工作线程处理，避免把文件再次包进 JSON 请求。
 POST /api/jobs/import 接收 application/octet-stream，可附 generateNewId=true。
-POST /api/jobs/export 接收 {kind: "png" | "json", mapId, options?}。
+POST /api/jobs/export 接收 {kind: "png" | "json" | "preview", mapId, options?}。
 返回任务 ID，使用 GET /api/jobs/:id 查询，DELETE /api/jobs/:id 取消。
 最多三项运行/等待任务，单工作线程上限 512 MiB、120 秒；任务状态保留最多 20 项和 15 分钟。
 服务重启后任务状态失效。导入事务在最终提交前检查取消，失败或取消不会留下半张地图。
@@ -179,3 +179,12 @@ POST /api/jobs/export 接收 {kind: "png" | "json", mapId, options?}。
 PNG 总面积限制 4000 万像素、单边 32768 像素，超出时缩小导出范围或倍率。
 每次导出产生独立文件，下载链接携带五分钟有效的单文件凭证；不要公开分享下载链接。
 旧同步 API 和 CLI 保留。开发模式的工作线程使用 apps/server/worker.mjs 引导，生产模式直接运行编译产物。
+
+
+### 视觉重构验证入口
+
+当前视觉规范和完整记录见 [editor-v3](./design/editor-v3/README.md) 与 [视觉验收](./research/2026-10-03/visual-redesign/README.md)，上方接手阶段的数量保留为历史基线。
+
+构建后运行 node scripts/build-visual-gallery.mjs 生成校验过的固定样例及 SVG/PNG。开发服务的 /visual-qa.html 比较浏览器、PNG、灰度和红绿色觉模拟，也包含浏览器性能测量；/responsive-qa.html 在指定 CSS 视口中打开正式编辑器。这两个入口仅用于开发验收，不进入生产构建。
+
+node scripts/benchmark-visual.mjs 测量场景构建；node scripts/benchmark-visual-data.mjs 在临时 SQLite 数据库中测量真实万格、十万格、五十万格的区域、概览、图例、预览和导出。两个脚本的第一个参数可指定报告路径。数据读取、浏览器帧耗时和真实设备体验分别记录。

@@ -1,5 +1,7 @@
 import {
   isOpenWaterTerrain,
+  getAllowedBiomesForTerrain,
+  TERRAIN_KEYS,
   TAG_ENTRIES,
   PRIMARY_TAG_PRIORITY,
   type ActiveCell,
@@ -166,6 +168,11 @@ export function renderMaterialSvg(
   tags: TagKey[] = [],
   mapStyle: MapStyle = "atlas-v1"
 ): string {
+  // A standalone ecology swatch must use a compatible ground, e.g. freshwater on water.
+  if (biome && !getAllowedBiomesForTerrain(terrain).includes(biome)) {
+    terrain =
+      TERRAIN_KEYS.find((key) => getAllowedBiomesForTerrain(key).includes(biome)) ?? terrain;
+  }
   const cell: ActiveCell = {
     id: "sample",
     display_coord: "",

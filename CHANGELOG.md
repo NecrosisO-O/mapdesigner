@@ -6,8 +6,21 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- Added river overlay features with structured commands, CLI helpers, canvas drawing, SVG/WebUI rendering, width anchors, water endpoint hints, and legacy map compatibility.
-- Added water and wetland tone refinements so brackish estuaries, tidal flats, wetlands, and deltas read less like ordinary land.
+- A canvas-focused workspace with contextual inspectors, visual materials, sampling, stroke painting, whole-map object search, layer controls, and shared legends.
+- Natural and classic map styles with terrain symbols, ecology textures, graphical markers, and explicit compatibility for existing maps.
+- Direct river node and width editing, explicit junctions, flow and endpoint settings, branches, and local editing advice.
+- Actual PNG previews, revision checks, composition with titles and legends, transparent output, and bounded background tasks.
+- Fourteen reproducible cartographic fixtures, browser comparisons, color-vision simulations, and separate rendering/data performance records.
+
+### Fixed
+
+- River width changes caused by inserting unanchored nodes, false connections at viewport cuts, wide-bend holes, confluence overpainting, and internal river bands across lakes.
+- Narrow-screen inspector overlap and landscape export previews covering action buttons.
+- Inconsistent canvas/export textures and label fonts, missing CJK fonts in containers, and inaccessible rivers beyond the first result page.
+
+### Validation
+
+- See the [visual acceptance record](./docs/research/2026-10-03/visual-redesign/README.md) for measured results and outstanding real-device, screen-reader, page-zoom, and first-time-user studies.
 
 ## [0.2.0] - 2026-05-25
 

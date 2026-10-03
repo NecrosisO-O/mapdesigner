@@ -919,13 +919,23 @@ describe("App", () => {
     await act(async () => {
       fireEvent.click(getCellButton("R0C0", "designed"));
     });
-    fireEvent.click(screen.getByLabelText("刷生态"));
+    const brushButton = getFormatBrushButton();
     await act(async () => {
-      fireEvent.click(getFormatBrushButton());
+      fireEvent.click(brushButton);
     });
+    await waitFor(() => expect(brushButton.getAttribute("aria-pressed")).toBe("true"));
+    // Scope controls become available after entering format-brush mode.
+    fireEvent.click(screen.getByLabelText("刷生态"));
     await act(async () => {
       fireEvent.click(getCellButton("R0C1", "undesigned"));
     });
+    await waitFor(() =>
+      expect(apiMock.applyCommands).toHaveBeenCalledWith(
+        "sample-map",
+        [expect.objectContaining({ action: "patch_cells", changes: { terrain: "plain" } })],
+        expect.anything()
+      )
+    );
 
     await waitFor(() => {
       const statusBar = screen.getByLabelText("当前状态");
