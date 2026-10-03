@@ -786,23 +786,22 @@ describe("App", () => {
     fireEvent.click(
       within(screen.getByLabelText("河流绘制工具")).getByRole("button", { name: "取消" })
     );
-    const riverPanel = screen.getByRole("heading", { name: "河流覆盖层" }).closest("section");
+    const riverPanel = screen.getByRole("heading", { name: "节点与河宽" }).closest("section");
     expect(riverPanel).toBeTruthy();
     fireEvent.change(within(riverPanel as HTMLElement).getByLabelText("河流名称"), {
       target: { value: "Main River" }
     });
+    fireEvent.click(within(riverPanel as HTMLElement).getByText("颜色与路径文本"));
     fireEvent.change(within(riverPanel as HTMLElement).getByLabelText("路径坐标"), {
       target: { value: "R0C0, R0C2" }
     });
     fireEvent.change(within(riverPanel as HTMLElement).getByLabelText("宽度锚点"), {
       target: { value: "R0C0:2, R0C1:5, R0C2:8" }
     });
-    fireEvent.click(within(riverPanel as HTMLElement).getByRole("button", { name: "应用河流" }));
+    fireEvent.click(within(riverPanel as HTMLElement).getByRole("button", { name: "应用修改" }));
 
     expect(await screen.findByText("河流修改已保存到服务器")).toBeTruthy();
-    expect(
-      within(riverPanel as HTMLElement).getByRole("option", { name: "Main River" })
-    ).toBeTruthy();
+    expect(within(riverPanel as HTMLElement).getByDisplayValue("Main River")).toBeTruthy();
     const svg = screen.getByLabelText("地图画布");
     expect(svg.querySelector("[data-river-id]")).toBeTruthy();
   });
@@ -814,7 +813,7 @@ describe("App", () => {
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "河流" }));
     });
-    const riverPanel = screen.getByRole("heading", { name: "河流覆盖层" }).closest("section");
+    const riverPanel = screen.getByRole("heading", { name: "节点与河宽" }).closest("section");
     expect(riverPanel).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "河流" }));
     await waitFor(() =>
@@ -826,14 +825,14 @@ describe("App", () => {
     await act(async () => {
       fireEvent.click(getCellButton("R0C0", "designed"));
     });
-    expect(await screen.findByText("路径点：1")).toBeTruthy();
+    expect(riverPanel?.textContent).toContain("路径点：1");
     expect(screen.getByLabelText("河流绘制工具").textContent).toContain("路径点 1");
     expect(screen.queryByLabelText("当前选中信息")).toBeNull();
 
     await act(async () => {
       fireEvent.click(getCellButton("R0C1", "undesigned"));
     });
-    expect(await screen.findByText("路径点：2")).toBeTruthy();
+    expect(riverPanel?.textContent).toContain("路径点：2");
     expect(screen.getByLabelText("河流绘制工具").textContent).toContain("路径点 2");
     expect(
       screen.getByLabelText("地图画布").querySelector('[data-river-preview="true"]')

@@ -2,6 +2,7 @@
 import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  applyCommand,
   createEmptyDocument,
   createRuntimeState,
   type MapCommand,
@@ -300,4 +301,66 @@ it("identifies a newly created offscreen river without selecting an existing riv
   act(() => result.current.acceptConfirmedFeatures({ rivers: [] }));
   expect(result.current.selectedRiverId).toBe("");
   expect(result.current.riverDirty).toBe(false);
+});
+
+describe("structured river operations", () => {
+  function setup() {
+    let map = makeMap();
+    map.document.features.rivers = [
+      {
+        id: "main",
+        name: "主河",
+        width_mode: "distance",
+        points: [
+          { row: 0, col: 0, width: 2 },
+          { row: 0, col: 4, width: 10 }
+        ]
+      }
+    ];
+    const apply = vi.fn(async (commands: MapCommand[]) => {
+      for (const command of commands) {
+        const result = applyCommand(map, command);
+        if (!result.ok) throw new Error(JSON.stringify(result.errors));
+        map = result.map;
+      }
+      return map;
+    });
+    const hook = renderHook(() => useRiverEditor(map, apply, vi.fn()));
+    act(() => hook.result.current.selectRiver("main"));
+    return { ...hook, apply, getMap: () => map };
+  }
+  it("commits a numeric gesture without leaving a stale draft", async () => {
+    const { result, apply } = setup();
+    await act(() =>
+      result.current.commitPoints(
+        result.current.riverPoints.map((p, i) => (i === 0 ? { ...p, row: 1 } : p))
+      )
+    );
+    expect(apply).toHaveBeenCalledTimes(1);
+    expect(result.current.riverPoints[0]!.row).toBe(1);
+    expect(result.current.riverDirty).toBe(false);
+  });
+  it("creates a branch and its connection in a single submission", async () => {
+    const { result, apply, getMap } = setup();
+    act(() => result.current.startBranch());
+    act(() => result.current.appendRiverPoint({ ...cell(makeMap()), row: 2, col: 0 }));
+    await act(() => result.current.finishRiverDrawing());
+    expect(apply).toHaveBeenCalledTimes(1);
+    expect(apply.mock.calls[0]![0].map((c) => c.action)).toEqual([
+      "create_river",
+      "connect_river_points"
+    ]);
+    const rivers = getMap().document.features.rivers;
+    expect(rivers[0]!.points[0]!.junction_id).toBeTruthy();
+    expect(rivers[1]!.points[0]!.junction_id).toBe(rivers[0]!.points[0]!.junction_id);
+    expect(result.current.riverDirty).toBe(false);
+  });
+  it("leaves the source untouched when branch drawing is cancelled", () => {
+    const { result, apply, getMap } = setup();
+    act(() => result.current.startBranch());
+    act(() => result.current.cancelRiverDrawing());
+    expect(apply).not.toHaveBeenCalled();
+    expect(getMap().document.features.rivers).toHaveLength(1);
+    expect(getMap().document.features.rivers[0]!.points[0]!.junction_id).toBeUndefined();
+  });
 });

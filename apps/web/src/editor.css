@@ -1575,3 +1575,77 @@ details.editor-section[open] > summary::after {
     display: none;
   }
 }
+
+.river-inspector-slot {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.river-inspector-slot > section {
+  width: 100%;
+}
+.river-fields {
+  border: 0;
+  margin: 0;
+  padding: 12px 0 0;
+  min-width: 0;
+  display: grid;
+  gap: 12px;
+}
+.river-width-preview {
+  background: var(--subtle);
+  border-radius: 8px;
+  color: var(--accent);
+  padding: 8px;
+}
+.river-width-preview svg {
+  display: block;
+  width: 100%;
+  height: 50px;
+}
+.river-width-preview p,
+.field-help {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.6;
+  margin: 0;
+}
+.river-editing-layer [role="button"] {
+  cursor: move;
+}
+.river-editing-layer [role="slider"] {
+  cursor: ew-resize;
+}
+.river-editing-layer [role]:focus-visible {
+  outline: none;
+  filter: drop-shadow(0 0 3px #d28a22);
+}
+
+.river-fields label {
+  margin: 0;
+}
+.editor-disclosure {
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+}
+.editor-disclosure > summary::after {
+  content: "+";
+  float: right;
+  color: var(--muted);
+}
+.editor-disclosure[open] > summary::after {
+  content: "−";
+}
+.editor-disclosure[open] > :not(summary) {
+  margin-top: 12px;
+}
+.river-width-preview svg {
+  height: 32px;
+}
+
+.river-primary-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 100px;
+  gap: 10px;
+}

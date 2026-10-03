@@ -1,8 +1,11 @@
+import { RiverEditingLayer } from "./RiverEditingLayer.js";
 import type { InteractionMode } from "./TopToolbar.js";
 import { materialForCell, type Material } from "./useMaterialBrush.js";
 import type { LegendHighlight } from "./LegendPanel.js";
 import {
   buildHexLine,
+  propagateRiverJunctions,
+  type RiverPoint,
   createCellId,
   getNeighborCoords,
   type ActiveCell,
@@ -18,6 +21,7 @@ import {
 import {
   buildMapScene,
   centerForCoord,
+  coordForPoint,
   renderCellSurface,
   renderCellAnnotations,
   renderRiverLayers,
@@ -58,6 +62,13 @@ interface MapCanvasProps {
   batchSelectedCellIds?: Set<string>;
   onBatchCellToggle?: (cell: ActiveCell) => void;
   riverPreview?: RiverFeature | null;
+  selectedRiver?: RiverFeature | null;
+  selectedRiverNode?: number;
+  riverEditingDisabled?: boolean;
+  onSelectRiver?: (river: RiverFeature) => void;
+  onSelectRiverNode?: (index: number) => void;
+  onCommitRiverPoints?: (points: RiverPoint[]) => void;
+  snapRiverConnections?: boolean;
   riverDrawingPointCount?: number;
   onRiverPointAdd?: (cell: ActiveCell) => void;
   onFinishRiverDrawing?: () => void;
@@ -150,11 +161,7 @@ function scenePointToCoord(
   scene: { minX: number; minY: number },
   size: number
 ): GridCoordinate {
-  const worldX = point.x + scene.minX;
-  const worldY = point.y + scene.minY;
-  const col = Math.round(worldX / (size * 1.5));
-  const row = Math.round(-worldY / (Math.sqrt(3) * size) - col / 2);
-  return { row, col };
+  return coordForPoint({ x: point.x + scene.minX, y: point.y + scene.minY }, size);
 }
 
 function getVisibleCoordRange(input: {
@@ -308,6 +315,7 @@ function CellGroup(props: {
 }
 
 export function MapCanvas(props: MapCanvasProps) {
+  const [gestureRiver, setGestureRiver] = useState<RiverFeature | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [hoveredCellId, setHoveredCellId] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -338,10 +346,24 @@ export function MapCanvas(props: MapCanvasProps) {
   const suppressNextCellClickRef = useRef(false);
   const lastReportedRangeKeyRef = useRef("");
 
+  const preview = gestureRiver ?? props.riverPreview;
+  const displayMap = useMemo(() => {
+    if (!preview || props.interactionMode === "river-draw") return props.map;
+    const original = props.map.document.features.rivers.find((r) => r.id === preview.id);
+    if (!original) return props.map;
+    const rivers = props.map.document.features.rivers.map((r) =>
+      r.id === preview.id ? preview : { ...r, points: r.points.map((p) => ({ ...p })) }
+    );
+    propagateRiverJunctions(rivers, original, preview);
+    return {
+      ...props.map,
+      document: { ...props.map.document, features: { ...props.map.document.features, rivers } }
+    };
+  }, [props.map, preview, props.interactionMode]);
   const riverDetail = camera.zoom >= 0.8 ? "high" : "low";
   const scene = useMemo(
     () =>
-      buildMapScene(props.map, {
+      buildMapScene(displayMap, {
         includeCoordinates: props.showCoordinates,
         includeShorthand: props.showShorthand,
         includeGrid: props.showGrid,
@@ -350,13 +372,15 @@ export function MapCanvas(props: MapCanvasProps) {
         includeBiomes: props.showBiomes,
         includeRivers: props.showRivers,
         includeTags: props.showTags,
-        previewRivers: props.riverPreview ? [props.riverPreview] : [],
+        previewRivers:
+          props.interactionMode === "river-draw" && props.riverPreview ? [props.riverPreview] : [],
         boundsCoords: boundsCoordsFromSummary(props.mapSummary),
         riverDetail
       }),
     [
       riverDetail,
-      props.map,
+      displayMap,
+      props.interactionMode,
       props.mapSummary,
       props.riverPreview,
       props.showCoordinates,
@@ -673,14 +697,21 @@ export function MapCanvas(props: MapCanvasProps) {
     ? strokeIds
     : new Set(brushHover ? brushCells(brushHover).map((cell) => cell.id) : []);
 
-  function cellAtPoint(clientX: number, clientY: number): ActiveCell | null {
+  function worldAtPoint(clientX: number, clientY: number) {
     const rect = containerRef.current!.getBoundingClientRect(),
       scale = viewportMetrics.baseScale * cameraRef.current.zoom;
-    const point = {
-      x: (clientX - rect.left - viewportMetrics.baseOffset.x - cameraRef.current.offset.x) / scale,
-      y: (clientY - rect.top - viewportMetrics.baseOffset.y - cameraRef.current.offset.y) / scale
+    return {
+      x:
+        (clientX - rect.left - viewportMetrics.baseOffset.x - cameraRef.current.offset.x) / scale +
+        scene.minX,
+      y:
+        (clientY - rect.top - viewportMetrics.baseOffset.y - cameraRef.current.offset.y) / scale +
+        scene.minY
     };
-    const coord = scenePointToCoord(point, scene, 36);
+  }
+  function cellAtPoint(clientX: number, clientY: number): ActiveCell | null {
+    const point = worldAtPoint(clientX, clientY),
+      coord = scenePointToCoord(point, { minX: 0, minY: 0 }, 36);
     return sceneCellsById.get(createCellId(coord.row, coord.col)) ?? null;
   }
   function addStrokeCell(cell: ActiveCell | null): void {
@@ -788,6 +819,7 @@ export function MapCanvas(props: MapCanvasProps) {
           }
         }
         if (key === "Escape") {
+          setGestureRiver(null);
           stroke.current = null;
           strokeLast.current = null;
           setStrokeIds(new Set());
@@ -958,6 +990,11 @@ export function MapCanvas(props: MapCanvasProps) {
         >
           <span>河流绘制</span>
           <strong>路径点 {riverDrawingPointCount}</strong>
+          {props.snapRiverConnections &&
+            hoveredCellId &&
+            props.map.document.features.rivers.some((r) =>
+              r.points.some((p) => createCellId(p.row, p.col) === hoveredCellId)
+            ) && <span className="status-chip">点击将连接已有节点</span>}
           <button
             type="button"
             className="primary-button"
@@ -1077,6 +1114,47 @@ export function MapCanvas(props: MapCanvasProps) {
             aria-hidden="true"
             dangerouslySetInnerHTML={{ __html: renderRiverLayers(scene) }}
           />
+          {props.showRivers !== false &&
+            props.interactionMode === "select" &&
+            props.onSelectRiver && (
+              <g aria-label="选择河流">
+                {scene.riverBodies
+                  .filter((b) => !b.preview)
+                  .map((body) => (
+                    <path
+                      key={body.id}
+                      d={body.centerPath}
+                      fill="none"
+                      stroke="transparent"
+                      strokeWidth={Math.max(
+                        body.widthRange.max,
+                        18 / Math.max(0.01, effectiveScale)
+                      )}
+                      role="button"
+                      tabIndex={0}
+                      aria-label={"选择河流 " + body.riverName}
+                      onPointerDown={(event) => event.stopPropagation()}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        const river = props.map.document.features.rivers.find(
+                          (r) => r.id === body.riverId
+                        );
+                        if (river) props.onSelectRiver?.(river);
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          const river = props.map.document.features.rivers.find(
+                            (r) => r.id === body.riverId
+                          );
+                          if (river) props.onSelectRiver?.(river);
+                        }
+                      }}
+                    />
+                  ))}
+              </g>
+            )}
           <g className="map-annotation-layer" pointerEvents="none" aria-hidden="true">
             {scene.layout.filter(isEntryInLabelViewport).map((entry) => (
               <g
@@ -1130,6 +1208,40 @@ export function MapCanvas(props: MapCanvasProps) {
                 );
               })}
           </g>
+          {props.selectedRiver && props.interactionMode === "select" && (
+            <RiverEditingLayer
+              river={gestureRiver ?? props.selectedRiver}
+              selectedNode={props.selectedRiverNode ?? 0}
+              scale={effectiveScale}
+              minX={scene.minX}
+              minY={scene.minY}
+              disabled={Boolean(props.riverEditingDisabled)}
+              toWorld={worldAtPoint}
+              onSelectNode={(index) => props.onSelectRiverNode?.(index)}
+              onPreview={setGestureRiver}
+              onCommit={(points) => props.onCommitRiverPoints?.(points)}
+            />
+          )}
+          {isRiverDrawing && props.snapRiverConnections && (
+            <g pointerEvents="none" aria-hidden="true">
+              {props.map.document.features.rivers.flatMap((r) =>
+                r.points.map((p, i) => {
+                  const center = centerForCoord(p, 36);
+                  return (
+                    <circle
+                      key={r.id + ":" + i}
+                      cx={center.x - scene.minX}
+                      cy={center.y - scene.minY}
+                      r={7 / Math.max(0.1, effectiveScale)}
+                      fill="none"
+                      stroke="#AA6A12"
+                      strokeWidth={2 / Math.max(0.1, effectiveScale)}
+                    />
+                  );
+                })
+              )}
+            </g>
+          )}
         </g>
       </svg>
     </div>

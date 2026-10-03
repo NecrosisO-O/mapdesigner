@@ -216,11 +216,17 @@ export function useAdvancedEditor(
   const plannedCount = batchSelectedCells.filter((cell) => {
     const next = projectedCell(cell);
     return (["terrain", "biome", "tags", "note"] as const).some(
-      (field) => JSON.stringify(next[field]) !== JSON.stringify(cell[field])
+      (field) =>
+        JSON.stringify(field === "tags" ? [...next.tags].sort() : next[field]) !==
+        JSON.stringify(field === "tags" ? [...cell.tags].sort() : cell[field])
     );
   }).length;
   async function applyBatchEdit(): Promise<MapRuntimeState | null> {
     if (!currentMap) {
+      return null;
+    }
+    if (plannedCount === 0) {
+      setMessage("所选内容没有变化");
       return null;
     }
     if (batchSelectedCells.length === 0) {

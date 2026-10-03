@@ -135,7 +135,7 @@ export function AdvancedEditPanel(props: AdvancedEditPanelProps) {
             onClick={props.onApplyBatchEdit}
             disabled={
               !props.currentMap ||
-              props.selectedCount === 0 ||
+              props.plannedCount === 0 ||
               Object.values(props.batchModes).every((mode) => mode === "keep")
             }
           >
