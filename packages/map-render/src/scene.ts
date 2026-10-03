@@ -37,33 +37,63 @@ const DEFAULT_OPTIONS: ResolvedMapRenderOptions = {
 };
 
 function isCoordInRange(coord: { row: number; col: number }, range: CellRange): boolean {
-  return coord.row >= range.minRow && coord.row <= range.maxRow && coord.col >= range.minCol && coord.col <= range.maxCol;
+  return (
+    coord.row >= range.minRow &&
+    coord.row <= range.maxRow &&
+    coord.col >= range.minCol &&
+    coord.col <= range.maxCol
+  );
 }
 
 function doRangesOverlap(left: CellRange, right: CellRange): boolean {
-  return left.minRow <= right.maxRow && left.maxRow >= right.minRow && left.minCol <= right.maxCol && left.maxCol >= right.minCol;
+  return (
+    left.minRow <= right.maxRow &&
+    left.maxRow >= right.minRow &&
+    left.minCol <= right.maxCol &&
+    left.maxCol >= right.minCol
+  );
 }
 
 const riverSamplesCache = new Map<string, ReturnType<typeof expandRiverPath>>();
 let cachedSampleCount = 0;
 function riverSamples(river: RiverFeature): ReturnType<typeof expandRiverPath> {
-  const key = JSON.stringify(river), hit = riverSamplesCache.get(key);
-  if (hit) { riverSamplesCache.delete(key); riverSamplesCache.set(key, hit); return hit; }
+  const key = JSON.stringify(river),
+    hit = riverSamplesCache.get(key);
+  if (hit) {
+    riverSamplesCache.delete(key);
+    riverSamplesCache.set(key, hit);
+    return hit;
+  }
   const samples = expandRiverPath(river);
   if (samples.length <= 100_000) {
-    while (riverSamplesCache.size && (cachedSampleCount + samples.length > 100_000 || riverSamplesCache.size >= 128)) {
+    while (
+      riverSamplesCache.size &&
+      (cachedSampleCount + samples.length > 100_000 || riverSamplesCache.size >= 128)
+    ) {
       const oldest = riverSamplesCache.keys().next().value!;
-      cachedSampleCount -= riverSamplesCache.get(oldest)!.length; riverSamplesCache.delete(oldest);
+      cachedSampleCount -= riverSamplesCache.get(oldest)!.length;
+      riverSamplesCache.delete(oldest);
     }
-    riverSamplesCache.set(key, samples); cachedSampleCount += samples.length;
+    riverSamplesCache.set(key, samples);
+    cachedSampleCount += samples.length;
   }
   return samples;
 }
-function coordRangeForRiver(river: RiverFeature): CellRange | null { return rangeFromCoords(river.points); }
-function rangeFromCoords(points: Array<{row: number; col: number}>): CellRange | null {
+function coordRangeForRiver(river: RiverFeature): CellRange | null {
+  return rangeFromCoords(river.points);
+}
+function rangeFromCoords(points: Array<{ row: number; col: number }>): CellRange | null {
   if (!points.length) return null;
-  let minRow = Infinity, maxRow = -Infinity, minCol = Infinity, maxCol = -Infinity;
-  for (const point of points) { minRow = Math.min(minRow, point.row); maxRow = Math.max(maxRow, point.row); minCol = Math.min(minCol, point.col); maxCol = Math.max(maxCol, point.col); }
+  let minRow = Infinity,
+    maxRow = -Infinity,
+    minCol = Infinity,
+    maxCol = -Infinity;
+  for (const point of points) {
+    minRow = Math.min(minRow, point.row);
+    maxRow = Math.max(maxRow, point.row);
+    minCol = Math.min(minCol, point.col);
+    maxCol = Math.max(maxCol, point.col);
+  }
   return { minRow, maxRow, minCol, maxCol };
 }
 
@@ -76,9 +106,15 @@ function padRange(range: CellRange, padding: number): CellRange {
   };
 }
 
-function rangeFromCells(cells: ActiveCell[]): CellRange | null { return rangeFromCoords(cells); }
+function rangeFromCells(cells: ActiveCell[]): CellRange | null {
+  return rangeFromCoords(cells);
+}
 
-export function filterRiversForRange(rivers: RiverFeature[], range: CellRange, padding = 1): RiverFeature[] {
+export function filterRiversForRange(
+  rivers: RiverFeature[],
+  range: CellRange,
+  padding = 1
+): RiverFeature[] {
   const padded = padRange(range, padding);
   return rivers.filter((river) => {
     const riverRange = coordRangeForRiver(river);
@@ -109,7 +145,11 @@ function distanceBetween(left: RiverRenderPoint, right: RiverRenderPoint): numbe
   return Math.hypot(left.x - right.x, left.y - right.y);
 }
 
-function perpendicularDistance(point: RiverRenderPoint, start: RiverRenderPoint, end: RiverRenderPoint): number {
+function perpendicularDistance(
+  point: RiverRenderPoint,
+  start: RiverRenderPoint,
+  end: RiverRenderPoint
+): number {
   const dx = end.x - start.x;
   const dy = end.y - start.y;
   const length = Math.hypot(dx, dy);
@@ -119,7 +159,11 @@ function perpendicularDistance(point: RiverRenderPoint, start: RiverRenderPoint,
   return Math.abs(dy * point.x - dx * point.y + end.x * start.y - end.y * start.x) / length;
 }
 
-function simplifyRiverPoints(points: RiverRenderPoint[], tolerance: number, widthTolerance: number): RiverRenderPoint[] {
+function simplifyRiverPoints(
+  points: RiverRenderPoint[],
+  tolerance: number,
+  widthTolerance: number
+): RiverRenderPoint[] {
   if (points.length <= 2) {
     return points;
   }
@@ -160,7 +204,7 @@ function catmullRom(
   const t2 = t * t;
   const t3 = t2 * t;
   const interpolate = (a: number, b: number, c: number, d: number) =>
-    0.5 * ((2 * b) + (-a + c) * t + (2 * a - 5 * b + 4 * c - d) * t2 + (-a + 3 * b - 3 * c + d) * t3);
+    0.5 * (2 * b + (-a + c) * t + (2 * a - 5 * b + 4 * c - d) * t2 + (-a + 3 * b - 3 * c + d) * t3);
   return {
     x: interpolate(p0.x, p1.x, p2.x, p3.x),
     y: interpolate(p0.y, p1.y, p2.y, p3.y),
@@ -168,7 +212,11 @@ function catmullRom(
   };
 }
 
-function smoothRiverPoints(points: RiverRenderPoint[], size: number, detail: "high" | "low"): RiverRenderPoint[] {
+function smoothRiverPoints(
+  points: RiverRenderPoint[],
+  size: number,
+  detail: "high" | "low"
+): RiverRenderPoint[] {
   if (points.length <= 2) {
     return points;
   }
@@ -180,9 +228,10 @@ function smoothRiverPoints(points: RiverRenderPoint[], size: number, detail: "hi
     const p2 = points[index + 1]!;
     const p3 = points[Math.min(points.length - 1, index + 2)]!;
     const segmentDistance = distanceBetween(p1, p2);
-    const steps = detail === "low"
-      ? Math.max(1, Math.min(3, Math.ceil(segmentDistance / Math.max(size * 1.2, 1))))
-      : Math.max(3, Math.min(8, Math.ceil(segmentDistance / Math.max(size * 0.3, 1))));
+    const steps =
+      detail === "low"
+        ? Math.max(1, Math.min(3, Math.ceil(segmentDistance / Math.max(size * 1.2, 1))))
+        : Math.max(3, Math.min(8, Math.ceil(segmentDistance / Math.max(size * 0.3, 1))));
     for (let step = 0; step < steps; step += 1) {
       if (index > 0 && step === 0) {
         continue;
@@ -240,7 +289,10 @@ function buildRiverBandPath(points: RiverRenderPoint[], extraWidth: number): str
     `M ${formatNumber(left[0]!.x)} ${formatNumber(left[0]!.y)}`,
     ...left.slice(1).map((point) => `L ${formatNumber(point.x)} ${formatNumber(point.y)}`),
     `Q ${formatNumber(end.x)} ${formatNumber(end.y)} ${formatNumber(right[right.length - 1]!.x)} ${formatNumber(right[right.length - 1]!.y)}`,
-    ...right.slice(0, -1).reverse().map((point) => `L ${formatNumber(point.x)} ${formatNumber(point.y)}`),
+    ...right
+      .slice(0, -1)
+      .reverse()
+      .map((point) => `L ${formatNumber(point.x)} ${formatNumber(point.y)}`),
     `Q ${formatNumber(start.x)} ${formatNumber(start.y)} ${formatNumber(left[0]!.x)} ${formatNumber(left[0]!.y)}`,
     "Z"
   ].join(" ");
@@ -258,7 +310,9 @@ function buildRiverBodies(
 ): MapScene["riverBodies"] {
   const paddedClipRange = clipRange ? padRange(clipRange, 1) : null;
   return rivers.flatMap((river) => {
-    const samples = riverSamples(river).filter((sample) => !paddedClipRange || isCoordInRange(sample, paddedClipRange));
+    const samples = riverSamples(river).filter(
+      (sample) => !paddedClipRange || isCoordInRange(sample, paddedClipRange)
+    );
     if (samples.length < 2) {
       return [];
     }
@@ -268,7 +322,10 @@ function buildRiverBodies(
     const basePoints = samples.map((sample, index) => {
       const center = centerForCoord(sample, size);
       let width = sample.width;
-      if ((index === 0 && connections.startConnected) || (index === samples.length - 1 && connections.endConnected)) {
+      if (
+        (index === 0 && connections.startConnected) ||
+        (index === samples.length - 1 && connections.endConnected)
+      ) {
         width *= 1.2;
       }
       return {
@@ -277,39 +334,44 @@ function buildRiverBodies(
         width
       };
     });
-    const simplified = detail === "low"
-      ? simplifyRiverPoints(basePoints, size * 0.5, 0.8)
-      : basePoints;
+    const simplified =
+      detail === "low" ? simplifyRiverPoints(basePoints, size * 0.5, 0.8) : basePoints;
     const points = smoothRiverPoints(simplified, size, detail);
-    let minWidth = Infinity, maxWidth = -Infinity;
-    for (const point of points) { minWidth = Math.min(minWidth, point.width); maxWidth = Math.max(maxWidth, point.width); }
+    let minWidth = Infinity,
+      maxWidth = -Infinity;
+    for (const point of points) {
+      minWidth = Math.min(minWidth, point.width);
+      maxWidth = Math.max(maxWidth, point.width);
+    }
     const bodyPath = buildRiverBandPath(points, 0);
     if (!bodyPath) {
       return [];
     }
-    return [{
-      id: river.id,
-      riverId: river.id,
-      riverName: river.name,
-      bankPath: preview ? null : buildRiverBandPath(points, 3.2),
-      bodyPath,
-      highlightPath: preview ? null : centerPathFromPoints(points),
-      centerPath: centerPathFromPoints(points),
-      color,
-      bankColor: "#9FCBD0",
-      highlightColor: "#D8F2F6",
-      opacity,
-      preview,
-      pointCount: points.length,
-      outlineWidth: Math.max(1.2, minWidth * 0.45),
-      highlightWidth: Math.max(0.6, Math.min(1.8, minWidth * 0.28)),
-      widthRange: {
-        min: minWidth,
-        max: maxWidth
-      },
-      connectedStart: connections.startConnected,
-      connectedEnd: connections.endConnected
-    }];
+    return [
+      {
+        id: river.id,
+        riverId: river.id,
+        riverName: river.name,
+        bankPath: preview ? null : buildRiverBandPath(points, 3.2),
+        bodyPath,
+        highlightPath: preview ? null : centerPathFromPoints(points),
+        centerPath: centerPathFromPoints(points),
+        color,
+        bankColor: "#9FCBD0",
+        highlightColor: "#D8F2F6",
+        opacity,
+        preview,
+        pointCount: points.length,
+        outlineWidth: Math.max(1.2, minWidth * 0.45),
+        highlightWidth: Math.max(0.6, Math.min(1.8, minWidth * 0.28)),
+        widthRange: {
+          min: minWidth,
+          max: maxWidth
+        },
+        connectedStart: connections.startConnected,
+        connectedEnd: connections.endConnected
+      }
+    ];
   });
 }
 
@@ -335,19 +397,21 @@ function buildRiverControlPoints(
       const center = centerForCoord(point, size);
       const isStart = index === 0;
       const isEnd = index === river.points.length - 1;
-      return [{
-        id: `${river.id}-control-${index}`,
-        riverId: river.id,
-        riverName: river.name,
-        x: center.x - minX,
-        y: center.y - minY,
-        radius: Math.max(4.2, size * 0.12),
-        label: isStart ? "S" : isEnd ? "E" : String(index + 1),
-        position: isStart ? "start" as const : isEnd ? "end" as const : "middle" as const,
-        color,
-        opacity,
-        preview
-      }];
+      return [
+        {
+          id: `${river.id}-control-${index}`,
+          riverId: river.id,
+          riverName: river.name,
+          x: center.x - minX,
+          y: center.y - minY,
+          radius: Math.max(4.2, size * 0.12),
+          label: isStart ? "S" : isEnd ? "E" : String(index + 1),
+          position: isStart ? ("start" as const) : isEnd ? ("end" as const) : ("middle" as const),
+          color,
+          opacity,
+          preview
+        }
+      ];
     });
   });
 }
@@ -360,14 +424,16 @@ export function buildMapScene(map: MapRuntimeState, options: MapRenderOptions = 
   const renderRange = resolved.riverClipRange ?? rangeFromCells(cells);
   const rivers = renderRange
     ? filterRiversForRange(map.document.features?.rivers ?? [], renderRange)
-    : map.document.features?.rivers ?? [];
+    : (map.document.features?.rivers ?? []);
   const previewRivers = renderRange
     ? filterRiversForRange(resolved.previewRivers, renderRange)
     : resolved.previewRivers;
   const allRivers = [...rivers, ...previewRivers];
   const riverCoordRange = renderRange ? padRange(renderRange, 1) : null;
   const riverCoords = allRivers.flatMap((river) =>
-    riverSamples(river).filter((sample) => !riverCoordRange || isCoordInRange(sample, riverCoordRange))
+    riverSamples(river).filter(
+      (sample) => !riverCoordRange || isCoordInRange(sample, riverCoordRange)
+    )
   );
   const layout = buildHexLayout(cells, {
     size: resolved.size,
@@ -383,12 +449,44 @@ export function buildMapScene(map: MapRuntimeState, options: MapRenderOptions = 
     background: resolved.background,
     layout: layout.layout,
     riverBodies: [
-      ...buildRiverBodies(rivers, map.activeCells, resolved.size, layout.minX, layout.minY, false, renderRange ?? undefined, resolved.riverDetail),
-      ...buildRiverBodies(previewRivers, map.activeCells, resolved.size, layout.minX, layout.minY, true, renderRange ?? undefined, "high")
+      ...buildRiverBodies(
+        rivers,
+        map.activeCells,
+        resolved.size,
+        layout.minX,
+        layout.minY,
+        false,
+        renderRange ?? undefined,
+        resolved.riverDetail
+      ),
+      ...buildRiverBodies(
+        previewRivers,
+        map.activeCells,
+        resolved.size,
+        layout.minX,
+        layout.minY,
+        true,
+        renderRange ?? undefined,
+        "high"
+      )
     ],
     riverControlPoints: [
-      ...buildRiverControlPoints(rivers, resolved.size, layout.minX, layout.minY, false, renderRange ?? undefined),
-      ...buildRiverControlPoints(previewRivers, resolved.size, layout.minX, layout.minY, true, renderRange ?? undefined)
+      ...buildRiverControlPoints(
+        rivers,
+        resolved.size,
+        layout.minX,
+        layout.minY,
+        false,
+        renderRange ?? undefined
+      ),
+      ...buildRiverControlPoints(
+        previewRivers,
+        resolved.size,
+        layout.minX,
+        layout.minY,
+        true,
+        renderRange ?? undefined
+      )
     ],
     defs: buildSvgDefs(),
     options: resolved

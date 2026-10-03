@@ -9,24 +9,23 @@ import { createEmptyDocument, stringifyDocument } from "@mapdesigner/map-core";
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(currentDir, "../../..");
 
-function runCli(args: string[], options?: { input?: string; tempRoot?: string }): Promise<{
+function runCli(
+  args: string[],
+  options?: { input?: string; tempRoot?: string }
+): Promise<{
   code: number | null;
   stdout: string;
   stderr: string;
 }> {
   return new Promise((resolve, reject) => {
-    const child = spawn(
-      "pnpm",
-      ["--dir", "apps/server", "exec", "tsx", "src/cli.ts", ...args],
-      {
-        cwd: repoRoot,
-        env: {
-          ...process.env,
-          MAPDESIGNER_ROOT: options?.tempRoot ?? process.env.MAPDESIGNER_ROOT ?? repoRoot
-        },
-        stdio: "pipe"
-      }
-    );
+    const child = spawn("pnpm", ["--dir", "apps/server", "exec", "tsx", "src/cli.ts", ...args], {
+      cwd: repoRoot,
+      env: {
+        ...process.env,
+        MAPDESIGNER_ROOT: options?.tempRoot ?? process.env.MAPDESIGNER_ROOT ?? repoRoot
+      },
+      stdio: "pipe"
+    });
 
     let stdout = "";
     let stderr = "";
@@ -81,21 +80,18 @@ describe("server cli", () => {
     const inspectedBody = JSON.parse(inspected.stdout);
     expect(inspectedBody.result.document.meta.name).toBe("CLI Test");
 
-    const applied = await runCli(
-      ["maps", "apply", "--map-id", mapId, "--stdin"],
-      {
-        tempRoot,
-        input: JSON.stringify({
-          action: "set_cell",
-          source: "cli",
-          target: { row: 0, col: 0 },
-          changes: {
-            terrain: "plain",
-            biome: "grassland"
-          }
-        })
-      }
-    );
+    const applied = await runCli(["maps", "apply", "--map-id", mapId, "--stdin"], {
+      tempRoot,
+      input: JSON.stringify({
+        action: "set_cell",
+        source: "cli",
+        target: { row: 0, col: 0 },
+        changes: {
+          terrain: "plain",
+          biome: "grassland"
+        }
+      })
+    });
     expect(applied.code).toBe(0);
     const appliedBody = JSON.parse(applied.stdout);
     expect(appliedBody.result.map.document.cells).toHaveLength(1);
@@ -145,25 +141,22 @@ describe("server cli", () => {
     const createdBody = JSON.parse(created.stdout);
     const mapId = createdBody.result.document.meta.id as string;
 
-    const applied = await runCli(
-      ["maps", "apply", "--map-id", mapId, "--stdin"],
-      {
-        tempRoot,
-        input: JSON.stringify({
-          commands: [
-            {
-              action: "set_cell",
-              source: "cli",
-              target: { row: 0, col: 0 },
-              changes: {
-                terrain: "plain",
-                biome: "grassland"
-              }
+    const applied = await runCli(["maps", "apply", "--map-id", mapId, "--stdin"], {
+      tempRoot,
+      input: JSON.stringify({
+        commands: [
+          {
+            action: "set_cell",
+            source: "cli",
+            target: { row: 0, col: 0 },
+            changes: {
+              terrain: "plain",
+              biome: "grassland"
             }
-          ]
-        })
-      }
-    );
+          }
+        ]
+      })
+    });
 
     expect(applied.code).toBe(0);
     const appliedBody = JSON.parse(applied.stdout);
@@ -190,7 +183,9 @@ describe("server cli", () => {
     const importPath = path.join(tempRoot, "import-map.json");
     await fs.writeFile(importPath, stringifyDocument(document), "utf8");
 
-    const imported = await runCli(["maps", "import", "--file", importPath, "--summary"], { tempRoot });
+    const imported = await runCli(["maps", "import", "--file", importPath, "--summary"], {
+      tempRoot
+    });
     expect(imported.code).toBe(0);
     const importedBody = JSON.parse(imported.stdout);
     expect(importedBody.ok).toBe(true);
@@ -209,28 +204,25 @@ describe("server cli", () => {
     const createdBody = JSON.parse(created.stdout);
     const mapId = createdBody.result.document.meta.id as string;
 
-    const applied = await runCli(
-      ["maps", "apply", "--map-id", mapId, "--stdin"],
-      {
-        tempRoot,
-        input: JSON.stringify({
-          commands: [
-            {
-              action: "create_river",
-              source: "cli",
-              river: {
-                id: "north-fork",
-                name: "North Fork",
-                points: [
-                  { row: 0, col: 0, width: 2 },
-                  { row: 0, col: 2, width: 6 }
-                ]
-              }
+    const applied = await runCli(["maps", "apply", "--map-id", mapId, "--stdin"], {
+      tempRoot,
+      input: JSON.stringify({
+        commands: [
+          {
+            action: "create_river",
+            source: "cli",
+            river: {
+              id: "north-fork",
+              name: "North Fork",
+              points: [
+                { row: 0, col: 0, width: 2 },
+                { row: 0, col: 2, width: 6 }
+              ]
             }
-          ]
-        })
-      }
-    );
+          }
+        ]
+      })
+    });
 
     expect(applied.code).toBe(0);
     const appliedBody = JSON.parse(applied.stdout);
@@ -242,9 +234,12 @@ describe("server cli", () => {
       river_deleted_count: 0
     });
 
-    const inspected = await runCli(["maps", "rivers", "inspect", "--map-id", mapId, "--river-id", "north-fork"], {
-      tempRoot
-    });
+    const inspected = await runCli(
+      ["maps", "rivers", "inspect", "--map-id", mapId, "--river-id", "north-fork"],
+      {
+        tempRoot
+      }
+    );
     expect(inspected.code).toBe(0);
     const inspectedBody = JSON.parse(inspected.stdout);
     expect(inspectedBody.result.points).toHaveLength(2);
@@ -256,53 +251,49 @@ describe("server cli", () => {
     const createdBody = JSON.parse(created.stdout);
     const mapId = createdBody.result.document.meta.id as string;
 
-    const preview = await runCli(
-      ["maps", "apply", "--map-id", mapId, "--stdin", "--dry-run"],
-      {
-        tempRoot,
-        input: JSON.stringify({
-          commands: [
-            {
-              action: "set_cell",
-              source: "cli",
-              target: { row: 0, col: 0 },
-              changes: {
-                terrain: "plain",
-                biome: "grassland"
-              }
+    const preview = await runCli(["maps", "apply", "--map-id", mapId, "--stdin", "--dry-run"], {
+      tempRoot,
+      input: JSON.stringify({
+        commands: [
+          {
+            action: "set_cell",
+            source: "cli",
+            target: { row: 0, col: 0 },
+            changes: {
+              terrain: "plain",
+              biome: "grassland"
             }
-          ]
-        })
-      }
-    );
+          }
+        ]
+      })
+    });
     expect(preview.code).toBe(0);
     const previewBody = JSON.parse(preview.stdout);
     expect(previewBody.result.dryRun).toBe(true);
     expect(previewBody.result.map.document.cells).toHaveLength(1);
 
-    const inspectedAfterPreview = await runCli(["maps", "inspect", "--map-id", mapId], { tempRoot });
+    const inspectedAfterPreview = await runCli(["maps", "inspect", "--map-id", mapId], {
+      tempRoot
+    });
     const inspectedPreviewBody = JSON.parse(inspectedAfterPreview.stdout);
     expect(inspectedPreviewBody.result.document.cells).toHaveLength(0);
 
-    const applied = await runCli(
-      ["maps", "apply", "--map-id", mapId, "--stdin"],
-      {
-        tempRoot,
-        input: JSON.stringify({
-          commands: [
-            {
-              action: "set_cell",
-              source: "cli",
-              target: { row: 0, col: 0 },
-              changes: {
-                terrain: "plain",
-                biome: "grassland"
-              }
+    const applied = await runCli(["maps", "apply", "--map-id", mapId, "--stdin"], {
+      tempRoot,
+      input: JSON.stringify({
+        commands: [
+          {
+            action: "set_cell",
+            source: "cli",
+            target: { row: 0, col: 0 },
+            changes: {
+              terrain: "plain",
+              biome: "grassland"
             }
-          ]
-        })
-      }
-    );
+          }
+        ]
+      })
+    });
     expect(applied.code).toBe(0);
 
     const inspectCell = await runCli(
@@ -359,8 +350,15 @@ describe("server cli", () => {
     );
     expect(cells.code).toBe(0);
     const cellsBody = JSON.parse(cells.stdout);
-    expect(cellsBody.result.cells.some((cell: { display_coord: string; status: string }) => cell.display_coord === "R0C0" && cell.status === "designed")).toBe(true);
-    expect(cellsBody.result.cells.some((cell: { status: string }) => cell.status === "undesigned")).toBe(true);
+    expect(
+      cellsBody.result.cells.some(
+        (cell: { display_coord: string; status: string }) =>
+          cell.display_coord === "R0C0" && cell.status === "designed"
+      )
+    ).toBe(true);
+    expect(
+      cellsBody.result.cells.some((cell: { status: string }) => cell.status === "undesigned")
+    ).toBe(true);
   });
 
   it("supports compact apply summaries for large automation workflows", async () => {
@@ -369,25 +367,22 @@ describe("server cli", () => {
     const createdBody = JSON.parse(created.stdout);
     const mapId = createdBody.result.document.meta.id as string;
 
-    const applied = await runCli(
-      ["maps", "apply", "--map-id", mapId, "--stdin", "--summary"],
-      {
-        tempRoot,
-        input: JSON.stringify({
-          commands: [
-            {
-              action: "set_cell",
-              source: "cli",
-              target: { row: 0, col: 0 },
-              changes: {
-                terrain: "plain",
-                biome: "grassland"
-              }
+    const applied = await runCli(["maps", "apply", "--map-id", mapId, "--stdin", "--summary"], {
+      tempRoot,
+      input: JSON.stringify({
+        commands: [
+          {
+            action: "set_cell",
+            source: "cli",
+            target: { row: 0, col: 0 },
+            changes: {
+              terrain: "plain",
+              biome: "grassland"
             }
-          ]
-        })
-      }
-    );
+          }
+        ]
+      })
+    });
 
     expect(applied.code).toBe(0);
     const appliedBody = JSON.parse(applied.stdout);
@@ -410,25 +405,22 @@ describe("server cli", () => {
       }
     }
 
-    const applied = await runCli(
-      ["maps", "apply", "--map-id", mapId, "--stdin", "--summary"],
-      {
-        tempRoot,
-        input: JSON.stringify({
-          commands: [
-            {
-              action: "set_cells",
-              source: "cli",
-              targets,
-              changes: {
-                terrain: "plain",
-                biome: "grassland"
-              }
+    const applied = await runCli(["maps", "apply", "--map-id", mapId, "--stdin", "--summary"], {
+      tempRoot,
+      input: JSON.stringify({
+        commands: [
+          {
+            action: "set_cells",
+            source: "cli",
+            targets,
+            changes: {
+              terrain: "plain",
+              biome: "grassland"
             }
-          ]
-        })
-      }
-    );
+          }
+        ]
+      })
+    });
     expect(applied.code).toBe(0);
     const appliedBody = JSON.parse(applied.stdout);
     expect(appliedBody.result.designed_cell_count).toBe(625);
@@ -464,7 +456,9 @@ describe("server cli", () => {
     expect(cells.code).toBe(0);
     const cellsBody = JSON.parse(cells.stdout);
     expect(cellsBody.result.cells).toHaveLength(9);
-    expect(cellsBody.result.cells.every((cell: { status: string }) => cell.status === "designed")).toBe(true);
+    expect(
+      cellsBody.result.cells.every((cell: { status: string }) => cell.status === "designed")
+    ).toBe(true);
 
     const inspected = await runCli(
       ["maps", "inspect-cell", "--map-id", mapId, "--row", "12", "--col", "12"],
@@ -483,7 +477,11 @@ describe("server cli", () => {
     expect(area.code).toBe(0);
     const areaBody = JSON.parse(area.stdout);
     expect(areaBody.result.cells).toHaveLength(19);
-    expect(areaBody.result.cells.some((cell: { display_coord: string }) => cell.display_coord === "R12C12")).toBe(true);
+    expect(
+      areaBody.result.cells.some(
+        (cell: { display_coord: string }) => cell.display_coord === "R12C12"
+      )
+    ).toBe(true);
   });
 
   it("supports undo and redo commands for agent workflows", async () => {
@@ -491,21 +489,18 @@ describe("server cli", () => {
     expect(created.code).toBe(0);
     const mapId = JSON.parse(created.stdout).result.document.meta.id as string;
 
-    const applied = await runCli(
-      ["maps", "apply", "--map-id", mapId, "--stdin"],
-      {
-        tempRoot,
-        input: JSON.stringify({
-          action: "set_cell",
-          source: "cli",
-          target: { row: 0, col: 0 },
-          changes: {
-            terrain: "plain",
-            biome: "grassland"
-          }
-        })
-      }
-    );
+    const applied = await runCli(["maps", "apply", "--map-id", mapId, "--stdin"], {
+      tempRoot,
+      input: JSON.stringify({
+        action: "set_cell",
+        source: "cli",
+        target: { row: 0, col: 0 },
+        changes: {
+          terrain: "plain",
+          biome: "grassland"
+        }
+      })
+    });
     expect(applied.code).toBe(0);
 
     const status = await runCli(["maps", "history-status", "--map-id", mapId], { tempRoot });
@@ -561,17 +556,22 @@ describe("server cli", () => {
       ]
     };
 
-    const preview = await runCli(["maps", "apply", "--map-id", mapId, "--stdin", "--dry-run", "--summary"], {
-      tempRoot,
-      input: JSON.stringify(commands)
-    });
+    const preview = await runCli(
+      ["maps", "apply", "--map-id", mapId, "--stdin", "--dry-run", "--summary"],
+      {
+        tempRoot,
+        input: JSON.stringify(commands)
+      }
+    );
     expect(preview.code).toBe(0);
     const previewBody = JSON.parse(preview.stdout);
     expect(previewBody.result.dry_run).toBe(true);
     expect(previewBody.result.changed_count).toBe(6);
     expect(previewBody.result.designed_cell_count).toBe(2);
 
-    const inspectedAfterPreview = await runCli(["maps", "inspect", "--map-id", mapId], { tempRoot });
+    const inspectedAfterPreview = await runCli(["maps", "inspect", "--map-id", mapId], {
+      tempRoot
+    });
     expect(JSON.parse(inspectedAfterPreview.stdout).result.document.cells).toHaveLength(0);
 
     const applied = await runCli(["maps", "apply", "--map-id", mapId, "--stdin", "--summary"], {
@@ -663,20 +663,23 @@ describe("server cli", () => {
       river_deleted_count: 0
     });
 
-    const widenedRiver = await runCli(["maps", "apply", "--map-id", mapId, "--stdin", "--summary"], {
-      tempRoot,
-      input: JSON.stringify({
-        commands: [
-          {
-            action: "set_river_width",
-            source: "cli",
-            river_id: "main-river",
-            target: { row: 0, col: 1 },
-            width: 6
-          }
-        ]
-      })
-    });
+    const widenedRiver = await runCli(
+      ["maps", "apply", "--map-id", mapId, "--stdin", "--summary"],
+      {
+        tempRoot,
+        input: JSON.stringify({
+          commands: [
+            {
+              action: "set_river_width",
+              source: "cli",
+              river_id: "main-river",
+              target: { row: 0, col: 1 },
+              width: 6
+            }
+          ]
+        })
+      }
+    );
     expect(widenedRiver.code).toBe(0);
     const widenedRiverBody = JSON.parse(widenedRiver.stdout);
     expect(widenedRiverBody.result.river_count).toBe(2);
@@ -727,7 +730,10 @@ describe("server cli", () => {
       { tempRoot }
     );
     expect(rangedList.code).toBe(0);
-    expect(JSON.parse(rangedList.stdout).result.map((river: { id: string }) => river.id)).toEqual(["main-river", "mixed-river"]);
+    expect(JSON.parse(rangedList.stdout).result.map((river: { id: string }) => river.id)).toEqual([
+      "main-river",
+      "mixed-river"
+    ]);
 
     const pagedList = await runCli(
       [
@@ -823,11 +829,15 @@ describe("server cli", () => {
     expect(created.code).toBe(0);
     const mapId = JSON.parse(created.stdout).result.document.meta.id as string;
 
-    const unknownFlag = await runCli(["maps", "export-png", "--map-id", mapId, "--mystery"], { tempRoot });
+    const unknownFlag = await runCli(["maps", "export-png", "--map-id", mapId, "--mystery"], {
+      tempRoot
+    });
     expect(unknownFlag.code).toBe(1);
     expect(JSON.parse(unknownFlag.stdout).errors[0].message).toMatch(/unknown flag --mystery/);
 
-    const invalidScale = await runCli(["maps", "export-png", "--map-id", mapId, "--scale", "5"], { tempRoot });
+    const invalidScale = await runCli(["maps", "export-png", "--map-id", mapId, "--scale", "5"], {
+      tempRoot
+    });
     expect(invalidScale.code).toBe(1);
     const invalidScaleBody = JSON.parse(invalidScale.stdout);
     expect(invalidScaleBody.errors[0].code).toBe("bad_request");

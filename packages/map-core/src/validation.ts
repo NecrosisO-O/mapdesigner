@@ -43,7 +43,8 @@ function isHexColor(value: unknown): value is string {
 
 export function validateCoordinate(coord: GridCoordinate, target: string): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
-  if (!coord || typeof coord !== "object") return [issue("invalid_coordinate", "coordinate must be an object", "invalid", target)];
+  if (!coord || typeof coord !== "object")
+    return [issue("invalid_coordinate", "coordinate must be an object", "invalid", target)];
   if (!Number.isSafeInteger(coord.row)) {
     issues.push(issue("invalid_row", "row must be an integer", "invalid", `${target}.row`));
   }
@@ -59,7 +60,10 @@ export function validateRiverPoint(point: RiverPoint, target: string): Validatio
   if (
     point.width !== undefined &&
     point.width !== null &&
-    (typeof point.width !== "number" || !Number.isFinite(point.width) || point.width < MIN_RIVER_WIDTH || point.width > MAX_RIVER_WIDTH)
+    (typeof point.width !== "number" ||
+      !Number.isFinite(point.width) ||
+      point.width < MIN_RIVER_WIDTH ||
+      point.width > MAX_RIVER_WIDTH)
   ) {
     issues.push(
       issue(
@@ -87,19 +91,41 @@ export function validateRiverFeature(river: RiverFeature, index = 0): Validation
     );
   }
   if (typeof river.name !== "string" || !river.name.trim()) {
-    issues.push(issue("invalid_river_name", "river name must be a non-empty string", "invalid", `${target}.name`));
+    issues.push(
+      issue(
+        "invalid_river_name",
+        "river name must be a non-empty string",
+        "invalid",
+        `${target}.name`
+      )
+    );
   }
   if (!Array.isArray(river.points)) {
-    issues.push(issue("invalid_river_points", "river points must be an array", "invalid", `${target}.points`));
+    issues.push(
+      issue("invalid_river_points", "river points must be an array", "invalid", `${target}.points`)
+    );
   } else {
     if (river.points.length < 2) {
-      issues.push(issue("invalid_river_points", "river requires at least two points", "invalid", `${target}.points`));
+      issues.push(
+        issue(
+          "invalid_river_points",
+          "river requires at least two points",
+          "invalid",
+          `${target}.points`
+        )
+      );
     }
     let sampleCount = 0;
     river.points.forEach((point, pointIndex) => {
       issues.push(...validateRiverPoint(point, `${target}.points[${pointIndex}]`));
       const previous = river.points[pointIndex - 1];
-      if (previous && point) sampleCount += Math.max(Math.abs(previous.row - point.row), Math.abs(previous.col - point.col), Math.abs(previous.row + previous.col - point.row - point.col)) + 1;
+      if (previous && point)
+        sampleCount +=
+          Math.max(
+            Math.abs(previous.row - point.row),
+            Math.abs(previous.col - point.col),
+            Math.abs(previous.row + previous.col - point.row - point.col)
+          ) + 1;
       if (previous && point && previous.row === point.row && previous.col === point.col) {
         issues.push(
           issue(
@@ -111,17 +137,35 @@ export function validateRiverFeature(river: RiverFeature, index = 0): Validation
         );
       }
     });
-    if (sampleCount > 500_000) issues.push(issue("river_too_large", "river path exceeds 500000 cells", "invalid", target));
+    if (sampleCount > 500_000)
+      issues.push(issue("river_too_large", "river path exceeds 500000 cells", "invalid", target));
   }
   if (river.color !== undefined && river.color !== null && !isHexColor(river.color)) {
-    issues.push(issue("invalid_river_color", "river color must be a #RRGGBB color", "invalid", `${target}.color`));
+    issues.push(
+      issue(
+        "invalid_river_color",
+        "river color must be a #RRGGBB color",
+        "invalid",
+        `${target}.color`
+      )
+    );
   }
   if (
     river.opacity !== undefined &&
     river.opacity !== null &&
-    (typeof river.opacity !== "number" || !Number.isFinite(river.opacity) || river.opacity < 0.1 || river.opacity > 1)
+    (typeof river.opacity !== "number" ||
+      !Number.isFinite(river.opacity) ||
+      river.opacity < 0.1 ||
+      river.opacity > 1)
   ) {
-    issues.push(issue("invalid_river_opacity", "river opacity must be between 0.1 and 1", "invalid", `${target}.opacity`));
+    issues.push(
+      issue(
+        "invalid_river_opacity",
+        "river opacity must be between 0.1 and 1",
+        "invalid",
+        `${target}.opacity`
+      )
+    );
   }
   return issues;
 }
@@ -136,17 +180,16 @@ export function validateTerrainBiomePair(
   }
 
   const issues: ValidationIssue[] = [];
-  const invalid = (
-    code: string,
-    message: string
-  ) => issues.push(issue(code, message, "invalid", `${target}.biome`));
-  const warning = (
-    code: string,
-    message: string
-  ) => issues.push(issue(code, message, "warning", `${target}.biome`));
+  const invalid = (code: string, message: string) =>
+    issues.push(issue(code, message, "invalid", `${target}.biome`));
+  const warning = (code: string, message: string) =>
+    issues.push(issue(code, message, "warning", `${target}.biome`));
 
   if (biome === "freshwater" && ["ocean", "sea", "reef"].includes(terrain)) {
-    invalid("biome_freshwater_conflict", "freshwater cannot be used with ocean, sea, or reef terrain");
+    invalid(
+      "biome_freshwater_conflict",
+      "freshwater cannot be used with ocean, sea, or reef terrain"
+    );
   }
 
   if (
@@ -161,7 +204,10 @@ export function validateTerrainBiomePair(
   }
 
   if (biome === "seagrass" && !["sea", "coast", "lagoon", "estuary"].includes(terrain)) {
-    invalid("biome_seagrass_conflict", "seagrass is only valid for sea, coast, lagoon, or estuary terrain");
+    invalid(
+      "biome_seagrass_conflict",
+      "seagrass is only valid for sea, coast, lagoon, or estuary terrain"
+    );
   }
 
   if (
@@ -178,10 +224,7 @@ export function validateTerrainBiomePair(
     invalid("biome_pack_ice_conflict", "pack_ice is only valid for ocean, sea, or coast terrain");
   }
 
-  if (
-    biome === "arid" &&
-    ["ocean", "sea", "lake", "river", "lagoon"].includes(terrain)
-  ) {
+  if (biome === "arid" && ["ocean", "sea", "lake", "river", "lagoon"].includes(terrain)) {
     invalid("biome_arid_conflict", "arid cannot be used with stable water terrains");
   }
 
@@ -189,10 +232,7 @@ export function validateTerrainBiomePair(
     warning("biome_alpine_warning", "alpine on obvious lowland terrain should be reviewed");
   }
 
-  if (
-    biome === "tropical_rainforest" &&
-    ["glacier", "permafrost"].includes(terrain)
-  ) {
+  if (biome === "tropical_rainforest" && ["glacier", "permafrost"].includes(terrain)) {
     warning(
       "biome_tropical_rainforest_warning",
       "tropical_rainforest on glacier or permafrost should be reviewed"
@@ -203,7 +243,10 @@ export function validateTerrainBiomePair(
     ["bog", "marsh", "swamp", "reedbed"].includes(biome) &&
     ["mountain", "canyon", "lava_field"].includes(terrain)
   ) {
-    warning("biome_wet_highland_warning", "wetland biome on steep highland terrain should be reviewed");
+    warning(
+      "biome_wet_highland_warning",
+      "wetland biome on steep highland terrain should be reviewed"
+    );
   }
 
   if (biome === "bare" && ["wetland", "floodplain"].includes(terrain)) {
@@ -213,19 +256,32 @@ export function validateTerrainBiomePair(
   return issues;
 }
 
-export function validateDesignedCellRecord(
-  cell: DesignedCellRecord,
-  index = 0
-): ValidationIssue[] {
+export function validateDesignedCellRecord(cell: DesignedCellRecord, index = 0): ValidationIssue[] {
   const issues = validateCoordinate(cell, `cells[${index}]`);
   if (!isTerrainKey(cell.terrain)) {
-    issues.push(issue("invalid_terrain", "terrain must be a known terrain key", "invalid", `cells[${index}].terrain`));
+    issues.push(
+      issue(
+        "invalid_terrain",
+        "terrain must be a known terrain key",
+        "invalid",
+        `cells[${index}].terrain`
+      )
+    );
   }
   if (cell.biome !== null && !isBiomeKey(cell.biome)) {
-    issues.push(issue("invalid_biome", "biome must be null or a known biome key", "invalid", `cells[${index}].biome`));
+    issues.push(
+      issue(
+        "invalid_biome",
+        "biome must be null or a known biome key",
+        "invalid",
+        `cells[${index}].biome`
+      )
+    );
   }
   if (!Array.isArray(cell.tags) || cell.tags.some((tag) => !isTagKey(tag))) {
-    issues.push(issue("invalid_tags", "tags must all be known tag keys", "invalid", `cells[${index}].tags`));
+    issues.push(
+      issue("invalid_tags", "tags must all be known tag keys", "invalid", `cells[${index}].tags`)
+    );
   }
   if (typeof cell.note !== "string") {
     issues.push(issue("invalid_note", "note must be a string", "invalid", `cells[${index}].note`));
@@ -244,7 +300,9 @@ export function validateMapDocument(document: unknown): ValidationIssue[] {
 
   const value = document as Partial<MapDocument>;
   if (value.schema_version !== 1) {
-    issues.push(issue("invalid_schema_version", "schema_version must be 1", "invalid", "schema_version"));
+    issues.push(
+      issue("invalid_schema_version", "schema_version must be 1", "invalid", "schema_version")
+    );
   }
 
   if (!value.meta || typeof value.meta !== "object") {
@@ -257,7 +315,9 @@ export function validateMapDocument(document: unknown): ValidationIssue[] {
       issues.push(issue("invalid_meta_name", "meta.name is required", "invalid", "meta.name"));
     }
     if (!Number.isInteger(value.meta.revision)) {
-      issues.push(issue("invalid_revision", "meta.revision must be an integer", "invalid", "meta.revision"));
+      issues.push(
+        issue("invalid_revision", "meta.revision must be an integer", "invalid", "meta.revision")
+      );
     }
   }
 
@@ -265,7 +325,9 @@ export function validateMapDocument(document: unknown): ValidationIssue[] {
     issues.push(issue("invalid_grid", "grid is required", "invalid", "grid"));
   } else {
     if (value.grid.layout !== "flat-top-even-q") {
-      issues.push(issue("invalid_layout", "grid.layout must be flat-top-even-q", "invalid", "grid.layout"));
+      issues.push(
+        issue("invalid_layout", "grid.layout must be flat-top-even-q", "invalid", "grid.layout")
+      );
     }
     issues.push(...validateCoordinate(value.grid.origin ?? { row: NaN, col: NaN }, "grid.origin"));
     if (value.grid.origin && (value.grid.origin.row !== 0 || value.grid.origin.col !== 0)) {
@@ -281,7 +343,14 @@ export function validateMapDocument(document: unknown): ValidationIssue[] {
       issues.push(...validateDesignedCellRecord(cell, index));
       const key = `${cell.row},${cell.col}`;
       if (seen.has(key)) {
-        issues.push(issue("duplicate_cell", "duplicate coordinates are not allowed", "invalid", `cells[${index}]`));
+        issues.push(
+          issue(
+            "duplicate_cell",
+            "duplicate coordinates are not allowed",
+            "invalid",
+            `cells[${index}]`
+          )
+        );
       }
       seen.add(key);
     });
@@ -292,13 +361,22 @@ export function validateMapDocument(document: unknown): ValidationIssue[] {
       issues.push(issue("invalid_features", "features must be an object", "invalid", "features"));
     } else if (value.features.rivers !== undefined) {
       if (!Array.isArray(value.features.rivers)) {
-        issues.push(issue("invalid_rivers", "features.rivers must be an array", "invalid", "features.rivers"));
+        issues.push(
+          issue("invalid_rivers", "features.rivers must be an array", "invalid", "features.rivers")
+        );
       } else {
         const seenRiverIds = new Set<string>();
         value.features.rivers.forEach((river, index) => {
           issues.push(...validateRiverFeature(river, index));
           if (seenRiverIds.has(river.id)) {
-            issues.push(issue("duplicate_river", "duplicate river ids are not allowed", "invalid", `features.rivers[${index}]`));
+            issues.push(
+              issue(
+                "duplicate_river",
+                "duplicate river ids are not allowed",
+                "invalid",
+                `features.rivers[${index}]`
+              )
+            );
           }
           seenRiverIds.add(river.id);
         });

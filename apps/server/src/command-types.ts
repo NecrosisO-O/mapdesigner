@@ -1,4 +1,13 @@
-import type { CellChangeDetail, GridCoordinate, HistorySource, MapCommand, MapFeatures, MapRuntimeState, MapSummary, ValidationIssue } from "@mapdesigner/map-core";
+import type {
+  CellChangeDetail,
+  GridCoordinate,
+  HistorySource,
+  MapCommand,
+  MapFeatures,
+  MapRuntimeState,
+  MapSummary,
+  ValidationIssue
+} from "@mapdesigner/map-core";
 import type { HistoryStatus } from "./repository.js";
 
 export interface ApplyCommandsOptions {

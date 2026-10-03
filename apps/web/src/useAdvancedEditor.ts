@@ -21,7 +21,12 @@ import { useEditorTask } from "./useEditorTask.js";
 
 export type BatchField = "terrain" | "biome" | "tags" | "note";
 export type FieldMode = "keep" | "set" | "clear";
-const INITIAL_MODES: Record<BatchField, FieldMode> = { terrain: "keep", biome: "keep", tags: "keep", note: "keep" };
+const INITIAL_MODES: Record<BatchField, FieldMode> = {
+  terrain: "keep",
+  biome: "keep",
+  tags: "keep",
+  note: "keep"
+};
 const NONE_BIOME_VALUE = "__none__";
 
 export interface BatchEditDraft {
@@ -101,17 +106,23 @@ export function useAdvancedEditor(
     const next = typeof action === "function" ? action(previous) : action;
     draftRef.current = next;
     updateBatchDraft(next);
-    setBatchModes(modes => {
+    setBatchModes((modes) => {
       const updated = { ...modes };
       for (const field of ["terrain", "biome", "tags", "note"] as const) {
-        if (next[field] !== previous[field]) updated[field] = next[field] === "" || (Array.isArray(next[field]) && !next[field].length) ? (field === "terrain" ? "keep" : "clear") : "set";
+        if (next[field] !== previous[field])
+          updated[field] =
+            next[field] === "" || (Array.isArray(next[field]) && !next[field].length)
+              ? field === "terrain"
+                ? "keep"
+                : "clear"
+              : "set";
       }
       return updated;
     });
   }
   function setBatchFieldMode(field: BatchField, mode: FieldMode): void {
     if (field === "terrain" && mode === "clear") return;
-    setBatchModes(modes => ({ ...modes, [field]: mode }));
+    setBatchModes((modes) => ({ ...modes, [field]: mode }));
   }
 
   const batchFilteredTerrainCategories = batchDraft.biome
@@ -120,36 +131,47 @@ export function useAdvancedEditor(
   const batchTerrainOptions = batchDraft.terrainCategory
     ? getFilteredTerrainEntries(batchDraft.terrainCategory, batchDraft.biome || undefined)
     : [];
-  const batchBiomeOptions = batchDraft.terrain ? getAllowedBiomesForTerrain(batchDraft.terrain) : BIOME_KEYS;
+  const batchBiomeOptions = batchDraft.terrain
+    ? getAllowedBiomesForTerrain(batchDraft.terrain)
+    : BIOME_KEYS;
   const replaceTerrainOptions = replaceTerrainDraft.replacementCategory
     ? getFilteredTerrainEntries(replaceTerrainDraft.replacementCategory)
     : [];
 
   function toggleBatchCell(cell: ActiveCell): void {
-    setSelection(current => {
+    setSelection((current) => {
       const next = new Map(current);
-      if (next.has(cell.id)) next.delete(cell.id); else next.set(cell.id, cell);
+      if (next.has(cell.id)) next.delete(cell.id);
+      else next.set(cell.id, cell);
       return next;
     });
   }
 
-  function clearBatchSelection(): void { setSelection(new Map()); }
+  function clearBatchSelection(): void {
+    setSelection(new Map());
+  }
 
   function setBatchTerrainCategory(nextCategory: string): void {
-    setBatchDraft(current => ({ ...current, terrainCategory: nextCategory }));
+    setBatchDraft((current) => ({ ...current, terrainCategory: nextCategory }));
   }
   function setBatchTerrain(nextTerrain: string): void {
-    setBatchDraft(current => ({ ...current, terrainCategory: terrainCategoryOf(nextTerrain), terrain: nextTerrain }));
+    setBatchDraft((current) => ({
+      ...current,
+      terrainCategory: terrainCategoryOf(nextTerrain),
+      terrain: nextTerrain
+    }));
   }
   function setBatchBiome(nextBiome: string): void {
-    setBatchDraft(current => ({ ...current, biome: nextBiome }));
+    setBatchDraft((current) => ({ ...current, biome: nextBiome }));
   }
 
   function setBatchTag(tag: TagKey, checked: boolean): void {
     setBatchDraft((current) => ({
       ...current,
       tags: checked
-        ? current.tags.includes(tag) ? current.tags : [...current.tags, tag]
+        ? current.tags.includes(tag)
+          ? current.tags
+          : [...current.tags, tag]
         : current.tags.filter((entry) => entry !== tag)
     }));
   }
@@ -164,16 +186,30 @@ export function useAdvancedEditor(
     }
     const changes: Extract<MapCommand, { action: "patch_cells" }>["changes"] = {};
     if (batchModes.terrain === "set") changes.terrain = batchDraft.terrain as TerrainKey;
-    if (batchModes.biome !== "keep") changes.biome = batchModes.biome === "clear" ? null : batchDraft.biome as BiomeKey;
-    if (batchModes.tags !== "keep") changes.tags = batchModes.tags === "clear" ? [] : batchDraft.tags;
-    if (batchModes.note !== "keep") changes.note = batchModes.note === "clear" ? "" : batchDraft.note;
-    if (!Object.keys(changes).length) { setMessage("请选择需要修改的字段"); return null; }
+    if (batchModes.biome !== "keep")
+      changes.biome = batchModes.biome === "clear" ? null : (batchDraft.biome as BiomeKey);
+    if (batchModes.tags !== "keep")
+      changes.tags = batchModes.tags === "clear" ? [] : batchDraft.tags;
+    if (batchModes.note !== "keep")
+      changes.note = batchModes.note === "clear" ? "" : batchDraft.note;
+    if (!Object.keys(changes).length) {
+      setMessage("请选择需要修改的字段");
+      return null;
+    }
     const submitted = draftRef.current;
-    const result = await task.run(() => applyCommands([{
-      action: "patch_cells", source: "webui",
-      ...(changes.tags && batchModes.tags !== "clear" && batchTagMode !== "replace" ? { tagMode: batchTagMode } : {}),
-      targets: batchSelectedCells.map(cell => ({ row: cell.row, col: cell.col })), changes
-    }]));
+    const result = await task.run(() =>
+      applyCommands([
+        {
+          action: "patch_cells",
+          source: "webui",
+          ...(changes.tags && batchModes.tags !== "clear" && batchTagMode !== "replace"
+            ? { tagMode: batchTagMode }
+            : {}),
+          targets: batchSelectedCells.map((cell) => ({ row: cell.row, col: cell.col })),
+          changes
+        }
+      ])
+    );
     if (!result) {
       return null;
     }
@@ -184,7 +220,9 @@ export function useAdvancedEditor(
 
   function setReplacementTerrainCategory(nextCategory: string): void {
     setReplaceTerrainDraft((current) => {
-      const allowedTerrains = new Set(getFilteredTerrainEntries(nextCategory).map((entry) => entry.key));
+      const allowedTerrains = new Set(
+        getFilteredTerrainEntries(nextCategory).map((entry) => entry.key)
+      );
       return {
         ...current,
         replacementCategory: nextCategory,
@@ -198,7 +236,9 @@ export function useAdvancedEditor(
   function setReplacementTerrain(nextTerrain: string): void {
     setReplaceTerrainDraft((current) => ({
       ...current,
-      replacementCategory: nextTerrain ? terrainCategoryOf(nextTerrain) : current.replacementCategory,
+      replacementCategory: nextTerrain
+        ? terrainCategoryOf(nextTerrain)
+        : current.replacementCategory,
       replacementTerrain: nextTerrain
     }));
   }
@@ -215,18 +255,20 @@ export function useAdvancedEditor(
       setMessage("匹配 terrain 与目标 terrain 相同");
       return null;
     }
-    const commands: MapCommand[] = [{
-      action: "replace_terrain",
-      source: "webui",
-      match: {
-        terrain: replaceTerrainDraft.matchTerrain as TerrainKey
-      },
-      changes: {
-        terrain: replaceTerrainDraft.replacementTerrain as TerrainKey
+    const commands: MapCommand[] = [
+      {
+        action: "replace_terrain",
+        source: "webui",
+        match: {
+          terrain: replaceTerrainDraft.matchTerrain as TerrainKey
+        },
+        changes: {
+          terrain: replaceTerrainDraft.replacementTerrain as TerrainKey
+        }
       }
-    }];
+    ];
     const result = await task.run(async () => {
-      if (confirmReplacement && !await confirmReplacement(commands)) return null;
+      if (confirmReplacement && !(await confirmReplacement(commands))) return null;
       return applyCommands(commands);
     });
     if (!result) {
@@ -250,18 +292,20 @@ export function useAdvancedEditor(
       setMessage("匹配 biome 与目标 biome 相同");
       return null;
     }
-    const commands: MapCommand[] = [{
-      action: "replace_biome",
-      source: "webui",
-      match: {
-        biome: matchBiome
-      },
-      changes: {
-        biome: replacementBiome
+    const commands: MapCommand[] = [
+      {
+        action: "replace_biome",
+        source: "webui",
+        match: {
+          biome: matchBiome
+        },
+        changes: {
+          biome: replacementBiome
+        }
       }
-    }];
+    ];
     const result = await task.run(async () => {
-      if (confirmReplacement && !await confirmReplacement(commands)) return null;
+      if (confirmReplacement && !(await confirmReplacement(commands))) return null;
       return applyCommands(commands);
     });
     if (!result) {
@@ -278,8 +322,13 @@ export function useAdvancedEditor(
   }, [currentMap?.document.meta.id]);
 
   return {
-    pending: task.pending, batchModes, setBatchFieldMode, batchTagMode, setBatchTagMode,
-    batchDirty: batchSelectedCells.length > 0 && Object.values(batchModes).some(mode => mode !== "keep"),
+    pending: task.pending,
+    batchModes,
+    setBatchFieldMode,
+    batchTagMode,
+    setBatchTagMode,
+    batchDirty:
+      batchSelectedCells.length > 0 && Object.values(batchModes).some((mode) => mode !== "keep"),
     batchSelectedCellIds,
     batchSelectedCells,
     batchDraft,

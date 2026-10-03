@@ -20,10 +20,10 @@ function makeCell(row: number, col: number): ActiveCell {
 
 describe("buildHexLayout", () => {
   it("places positive rows upward and positive columns to the right", () => {
-    const result = buildHexLayout(
-      [makeCell(0, 0), makeCell(1, 1), makeCell(-1, 1)],
-      { size: 36, padding: 48 }
-    );
+    const result = buildHexLayout([makeCell(0, 0), makeCell(1, 1), makeCell(-1, 1)], {
+      size: 36,
+      padding: 48
+    });
 
     const origin = result.layout.find((entry) => entry.cell.row === 0 && entry.cell.col === 0);
     const upperRight = result.layout.find((entry) => entry.cell.row === 1 && entry.cell.col === 1);
@@ -45,14 +45,12 @@ describe("buildHexLayout", () => {
       { row: 5, col: -5 },
       { row: 5, col: 5 }
     ];
-    const full = buildHexLayout(
-      [makeCell(0, 0), makeCell(2, 2)],
-      { size: 36, padding: 48, boundsCoords }
-    );
-    const subset = buildHexLayout(
-      [makeCell(2, 2)],
-      { size: 36, padding: 48, boundsCoords }
-    );
+    const full = buildHexLayout([makeCell(0, 0), makeCell(2, 2)], {
+      size: 36,
+      padding: 48,
+      boundsCoords
+    });
+    const subset = buildHexLayout([makeCell(2, 2)], { size: 36, padding: 48, boundsCoords });
     const fullCell = full.layout.find((entry) => entry.cell.row === 2 && entry.cell.col === 2);
     const subsetCell = subset.layout.find((entry) => entry.cell.row === 2 && entry.cell.col === 2);
 
@@ -67,7 +65,9 @@ describe("buildHexLayout", () => {
 
 describe("river rendering", () => {
   it("renders river overlay bodies and includes river coordinates in scene bounds", () => {
-    const runtime = createRuntimeState(createEmptyDocument({ id: "river-render", name: "River Render" }));
+    const runtime = createRuntimeState(
+      createEmptyDocument({ id: "river-render", name: "River Render" })
+    );
     const result = applyCommand(runtime, {
       action: "create_river",
       source: "cli",
@@ -85,7 +85,9 @@ describe("river rendering", () => {
     const scene = buildMapScene(result.map);
     expect(scene.riverBodies).toHaveLength(1);
     expect(scene.riverBodies[0]?.bodyPath).toContain("M ");
-    expect(scene.riverBodies[0]?.widthRange.max).toBeGreaterThan(scene.riverBodies[0]?.widthRange.min ?? 0);
+    expect(scene.riverBodies[0]?.widthRange.max).toBeGreaterThan(
+      scene.riverBodies[0]?.widthRange.min ?? 0
+    );
     expect(scene.riverBodies[0]?.pointCount).toBeGreaterThan(3);
     const svg = renderSvgString(scene);
     expect(svg).toContain('data-river-id="main-river"');
@@ -112,11 +114,15 @@ describe("river rendering", () => {
     const lowDetail = buildMapScene(result.map, { riverDetail: "low" });
     expect(highDetail.riverBodies).toHaveLength(1);
     expect(lowDetail.riverBodies).toHaveLength(1);
-    expect(highDetail.riverBodies[0]?.pointCount).toBeGreaterThan(lowDetail.riverBodies[0]?.pointCount ?? 0);
+    expect(highDetail.riverBodies[0]?.pointCount).toBeGreaterThan(
+      lowDetail.riverBodies[0]?.pointCount ?? 0
+    );
   });
 
   it("renders water endpoint connections and preview river bodies", () => {
-    const runtime = createRuntimeState(createEmptyDocument({ id: "river-preview", name: "River Preview" }));
+    const runtime = createRuntimeState(
+      createEmptyDocument({ id: "river-preview", name: "River Preview" })
+    );
     const withLake = applyCommand(runtime, {
       action: "set_cell",
       source: "cli",
@@ -153,7 +159,9 @@ describe("river rendering", () => {
 
 describe("export rendering", () => {
   it("uses lightweight fills for png export while preserving river overlays", () => {
-    let runtime = createRuntimeState(createEmptyDocument({ id: "export-render", name: "Export Render" }));
+    let runtime = createRuntimeState(
+      createEmptyDocument({ id: "export-render", name: "Export Render" })
+    );
     const cellResult = applyCommand(runtime, {
       action: "set_cell",
       source: "cli",
@@ -203,7 +211,9 @@ describe("export rendering", () => {
   });
 
   it("omits the background rectangle for transparent export", () => {
-    const runtime = createRuntimeState(createEmptyDocument({ id: "transparent-export", name: "Transparent Export" }));
+    const runtime = createRuntimeState(
+      createEmptyDocument({ id: "transparent-export", name: "Transparent Export" })
+    );
     const svg = renderSvgString(
       buildExportScene({
         map: runtime,

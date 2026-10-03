@@ -13,10 +13,13 @@
     "dev:server": "pnpm --filter @mapdesigner/server dev",
     "start": "pnpm --filter @mapdesigner/server start",
     "test": "pnpm -r test",
-    "typecheck": "pnpm -r typecheck"
+    "typecheck": "pnpm -r typecheck",
+    "format:check": "prettier --check \"apps/*/src/**/*.{ts,tsx,css}\" \"packages/*/src/**/*.ts\"",
+    "backup": "node scripts/backup.mjs"
   },
   "devDependencies": {
-    "@types/node": "^24.5.2",
-    "typescript": "^5.9.2"
+    "@types/node": "^24.19.1",
+    "prettier": "^3.9.9",
+    "typescript": "^5.9.3"
   }
 }

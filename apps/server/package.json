@@ -14,17 +14,20 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@fastify/cors": "^11.1.0",
-    "@fastify/static": "^8.2.0",
+    "@fastify/cors": "^11.3.0",
+    "@fastify/static": "^10.1.5",
     "@mapdesigner/map-core": "workspace:*",
     "@mapdesigner/map-render": "workspace:*",
-    "better-sqlite3": "^12.10.0",
-    "fastify": "^5.6.0",
-    "sharp": "^0.34.3"
+    "better-sqlite3": "^12.11.1",
+    "fastify": "^5.12.5",
+    "sharp": "^0.35.5"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
-    "tsx": "^4.20.5",
-    "vitest": "^3.2.4"
-  }
+    "tsx": "^4.23.15",
+    "vitest": "^5.0.3"
+  },
+  "files": [
+    "dist"
+  ]
 }

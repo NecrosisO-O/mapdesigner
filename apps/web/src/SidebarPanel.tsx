@@ -1,5 +1,11 @@
 import { Dialog } from "./Dialog.js";
-import { TAG_ENTRIES, type ExportRenderOptions, type MapRuntimeState, type MapSummary, type TagKey } from "@mapdesigner/map-core";
+import {
+  TAG_ENTRIES,
+  type ExportRenderOptions,
+  type MapRuntimeState,
+  type MapSummary,
+  type TagKey
+} from "@mapdesigner/map-core";
 import { formatDateTime } from "./useMapWorkspace.js";
 
 interface SidebarPanelProps {
@@ -42,13 +48,25 @@ interface SidebarPanelProps {
 
 export function SidebarPanel(props: SidebarPanelProps) {
   const backgroundColorValue =
-    props.pngOptions.background === "transparent" ? props.lastOpaqueBackground : props.pngOptions.background;
-  const designedCellCount = props.mapSummary?.designed_cell_count ?? props.currentMap?.document.cells.length ?? 0;
+    props.pngOptions.background === "transparent"
+      ? props.lastOpaqueBackground
+      : props.pngOptions.background;
+  const designedCellCount =
+    props.mapSummary?.designed_cell_count ?? props.currentMap?.document.cells.length ?? 0;
 
   return (
     <aside className="sidebar">
-      <div className="panel-heading"><h2>内容与图层</h2><button className="drawer-close" aria-label="关闭内容栏" onClick={props.onClose}>×</button></div>
-      <section className="panel map-summary"><span className="eyebrow">当前文档</span><h3>{props.currentMap?.document.meta.name ?? "开始绘制你的世界"}</h3><p>{designedCellCount.toLocaleString()} 个已设计单元格</p></section>
+      <div className="panel-heading">
+        <h2>内容与图层</h2>
+        <button className="drawer-close" aria-label="关闭内容栏" onClick={props.onClose}>
+          ×
+        </button>
+      </div>
+      <section className="panel map-summary">
+        <span className="eyebrow">当前文档</span>
+        <h3>{props.currentMap?.document.meta.name ?? "开始绘制你的世界"}</h3>
+        <p>{designedCellCount.toLocaleString()} 个已设计单元格</p>
+      </section>
       <section className="panel tool-panel">
         <h2>视图</h2>
         <label className="checkbox-row switch-row">
@@ -81,12 +99,16 @@ export function SidebarPanel(props: SidebarPanelProps) {
             checked={props.showUndesigned}
             onChange={(event) => props.onShowUndesignedChange(event.target.checked)}
           />
-          显示 undesigned
+          显示待设计格
         </label>
         <div className="tag-filter-block" aria-label="标签筛选">
           <div className="panel-subtitle-row">
             <h3>标签筛选</h3>
-            <button type="button" onClick={props.onClearTagFilter} disabled={props.tagFilter.length === 0}>
+            <button
+              type="button"
+              onClick={props.onClearTagFilter}
+              disabled={props.tagFilter.length === 0}
+            >
               清除
             </button>
           </div>
@@ -108,8 +130,23 @@ export function SidebarPanel(props: SidebarPanelProps) {
         </div>
       </section>
 
-      <section className="panel"><h3>河流 · 当前区域</h3><div className="river-list">{props.currentMap?.document.features.rivers.slice(0, 200).map(river => <button key={river.id} onClick={() => props.onSelectRiver(river.id)}><span aria-hidden="true">≈</span>{river.name}<small>{river.points.length} 点</small></button>)}</div>{!props.currentMap?.document.features.rivers.length && <p className="muted">使用河流工具添加一条路径。</p>}</section>
-      {props.exportPanelOpen && <Dialog title="导出地图" onClose={props.onToggleExportPanel}>
+      <section className="panel">
+        <h3>河流 · 当前区域</h3>
+        <div className="river-list">
+          {props.currentMap?.document.features.rivers.slice(0, 200).map((river) => (
+            <button key={river.id} onClick={() => props.onSelectRiver(river.id)}>
+              <span aria-hidden="true">≈</span>
+              {river.name}
+              <small>{river.points.length} 点</small>
+            </button>
+          ))}
+        </div>
+        {!props.currentMap?.document.features.rivers.length && (
+          <p className="muted">使用河流工具添加一条路径。</p>
+        )}
+      </section>
+      {props.exportPanelOpen && (
+        <Dialog title="导出地图" onClose={props.onToggleExportPanel}>
           <div id="export-panel-content">
             <div className="export-action-row">
               <button
@@ -119,13 +156,20 @@ export function SidebarPanel(props: SidebarPanelProps) {
               >
                 {props.isExportingPng ? "导出中..." : "导出图片"}
               </button>
-              <button onClick={props.onExportJson} disabled={!props.currentMap || props.isExportingPng}>导出 JSON</button>
+              <button
+                onClick={props.onExportJson}
+                disabled={!props.currentMap || props.isExportingPng}
+              >
+                导出 JSON
+              </button>
             </div>
             <label>
               导出范围
               <select
                 value={props.pngRangeMode}
-                onChange={(event) => props.onPngRangeModeChange(event.target.value as "visible" | "full")}
+                onChange={(event) =>
+                  props.onPngRangeModeChange(event.target.value as "visible" | "full")
+                }
               >
                 <option value="visible">当前加载区域</option>
                 <option value="full">全图</option>
@@ -140,14 +184,16 @@ export function SidebarPanel(props: SidebarPanelProps) {
               预设
               <select
                 value={props.pngOptions.preset}
-                onChange={(event) => props.onPresetChange(event.target.value as ExportRenderOptions["preset"])}
+                onChange={(event) =>
+                  props.onPresetChange(event.target.value as ExportRenderOptions["preset"])
+                }
               >
                 <option value="clean">clean</option>
                 <option value="reference">reference</option>
               </select>
             </label>
             <label>
-              Scale
+              缩放倍率
               <select
                 value={props.pngOptions.scale}
                 onChange={(event) => props.onScaleChange(Number(event.target.value))}
@@ -158,7 +204,7 @@ export function SidebarPanel(props: SidebarPanelProps) {
               </select>
             </label>
             <label>
-              Padding
+              边距
               <select
                 value={props.pngOptions.padding}
                 onChange={(event) => props.onPaddingChange(Number(event.target.value))}
@@ -183,7 +229,9 @@ export function SidebarPanel(props: SidebarPanelProps) {
                 type="checkbox"
                 checked={props.pngOptions.background === "transparent"}
                 onChange={(event) =>
-                  props.onBackgroundChange(event.target.checked ? "transparent" : props.lastOpaqueBackground)
+                  props.onBackgroundChange(
+                    event.target.checked ? "transparent" : props.lastOpaqueBackground
+                  )
                 }
               />
               透明背景
@@ -202,7 +250,7 @@ export function SidebarPanel(props: SidebarPanelProps) {
                 checked={props.pngOptions.includeUndesigned}
                 onChange={(event) => props.onIncludeUndesignedChange(event.target.checked)}
               />
-              导出 undesigned
+              导出待设计格
             </label>
             <label className="checkbox-row">
               <input
@@ -221,7 +269,8 @@ export function SidebarPanel(props: SidebarPanelProps) {
               导出简写
             </label>
           </div>
-      </Dialog>}
+        </Dialog>
+      )}
     </aside>
   );
 }

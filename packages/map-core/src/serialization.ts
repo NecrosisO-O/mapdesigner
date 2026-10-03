@@ -142,7 +142,10 @@ export function createRuntimeState(document: MapDocument): MapRuntimeState {
   };
 }
 
-export function parseDocument(json: string): { document?: MapDocument; errors: ReturnType<typeof validateMapDocument> } {
+export function parseDocument(json: string): {
+  document?: MapDocument;
+  errors: ReturnType<typeof validateMapDocument>;
+} {
   let parsed: unknown;
   try {
     parsed = JSON.parse(json);

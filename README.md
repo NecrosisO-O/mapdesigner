@@ -1,7 +1,7 @@
 # MapDesigner
 
 [![Version](https://img.shields.io/badge/version-0.2.0-2563eb)](./package.json)
-[![Node.js](https://img.shields.io/badge/node-20_LTS-339933)](https://nodejs.org/)
+[![Node.js](https://img.shields.io/badge/node-24-339933)](https://nodejs.org/)
 [![pnpm](https://img.shields.io/badge/pnpm-10-f69220)](https://pnpm.io/)
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-dc2626.svg)](./LICENSE)
 
@@ -42,7 +42,7 @@ Then open `http://localhost:3010`.
 
 ```bash
 docker build -t mapdesigner:0.2.0 .
-docker run --rm -p 3010:3010 -e MAPDESIGNER_ROOT=/data -v "$(pwd)/mapdesigner-data:/data" mapdesigner:0.2.0
+docker run --rm -p 127.0.0.1:3010:3010 -e MAPDESIGNER_TOKEN=replace-with-a-long-random-token -v mapdesigner-data:/data mapdesigner:0.2.0
 ```
 
 Then open `http://localhost:3010`.
@@ -86,3 +86,5 @@ AI assistance was used during the development of this project.
 ## License
 
 This project is licensed under the [GNU General Public License v3.0](./LICENSE).
+
+The active refactor is tracked in [the implementation record](./docs/IMPLEMENTATION_PLAN.md). Container deployments require an access token, entered through the map menu connection settings.

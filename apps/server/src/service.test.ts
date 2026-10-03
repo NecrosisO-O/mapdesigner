@@ -2,7 +2,12 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createEmptyDocument, parseDocument, stringifyDocument, type MapCommand } from "@mapdesigner/map-core";
+import {
+  createEmptyDocument,
+  parseDocument,
+  stringifyDocument,
+  type MapCommand
+} from "@mapdesigner/map-core";
 
 async function loadService(tempRoot: string) {
   process.env.MAPDESIGNER_ROOT = tempRoot;
@@ -113,7 +118,11 @@ describe("server service", () => {
       maxCol: 2
     });
     expect(withUndesigned.cells.some((cell) => cell.status === "undesigned")).toBe(true);
-    expect(withUndesigned.cells.some((cell) => cell.display_coord === "R0C0" && cell.status === "designed")).toBe(true);
+    expect(
+      withUndesigned.cells.some(
+        (cell) => cell.display_coord === "R0C0" && cell.status === "designed"
+      )
+    ).toBe(true);
   });
 
   it("filters river features by expanded path range", async () => {
@@ -347,7 +356,11 @@ describe("server service", () => {
       id: "legacy-conflict",
       name: "Legacy Conflict"
     });
-    await fs.writeFile(path.join(mapsDir, "legacy-conflict.json"), stringifyDocument(legacy), "utf8");
+    await fs.writeFile(
+      path.join(mapsDir, "legacy-conflict.json"),
+      stringifyDocument(legacy),
+      "utf8"
+    );
 
     await expect(
       service.createMap({
@@ -480,7 +493,9 @@ describe("server service", () => {
       }
     ]);
 
-    await expect(service.exportPng(created.document.meta.id)).rejects.toThrow(/whole-map PNG export is limited/);
+    await expect(service.exportPng(created.document.meta.id)).rejects.toThrow(
+      /whole-map PNG export is limited/
+    );
     await expect(
       service.exportPng(created.document.meta.id, {
         range: {
@@ -762,7 +777,9 @@ describe("server service", () => {
     ]);
 
     const persisted = await service.getMap(mapId);
-    expect(persisted.document.features.rivers[0]?.points).toEqual(createdRiver.features?.rivers[0]?.points);
+    expect(persisted.document.features.rivers[0]?.points).toEqual(
+      createdRiver.features?.rivers[0]?.points
+    );
     expect(await service.getHistoryStatus(mapId)).toEqual({
       canUndo: true,
       canRedo: false,
@@ -912,7 +929,9 @@ describe("server service", () => {
     const area = await service.inspectArea(created.document.meta.id, { row: 0, col: 0 }, 1);
     expect(area.radius).toBe(1);
     expect(area.cells).toHaveLength(7);
-    expect(area.cells.some((entry) => entry.display_coord === "R0C0" && entry.status === "designed")).toBe(true);
+    expect(
+      area.cells.some((entry) => entry.display_coord === "R0C0" && entry.status === "designed")
+    ).toBe(true);
 
     const neighbors = await service.getNeighbors(created.document.meta.id, { row: 0, col: 0 });
     expect(neighbors.center.display_coord).toBe("R0C0");
@@ -976,12 +995,16 @@ describe("server service", () => {
 
     const reopened = await service.getMapSummary("large-import-test");
     expect(reopened.designed_cell_count).toBe(2200);
-    expect((await service.getMapFeaturesInRange("large-import-test", {
-      minRow: 0,
-      maxRow: 20,
-      minCol: 0,
-      maxCol: 20
-    })).rivers).toHaveLength(1);
+    expect(
+      (
+        await service.getMapFeaturesInRange("large-import-test", {
+          minRow: 0,
+          maxRow: 20,
+          minCol: 0,
+          maxCol: 20
+        })
+      ).rivers
+    ).toHaveLength(1);
   });
 
   it("can save a runtime document as a new map", async () => {
@@ -1027,7 +1050,9 @@ describe("server service", () => {
   it("rejects unsafe map ids before touching storage paths", async () => {
     const service = await loadService(tempRoot);
 
-    await expect(service.createMap({ name: "Unsafe", id: "../evil" })).rejects.toThrow(/map id may only contain/);
+    await expect(service.createMap({ name: "Unsafe", id: "../evil" })).rejects.toThrow(
+      /map id may only contain/
+    );
     await expect(service.getMap("bad/id")).rejects.toThrow(/map id may only contain/);
     await expect(service.deleteMap("")).rejects.toThrow(/map id is required/);
   });
@@ -1048,7 +1073,9 @@ describe("server service", () => {
       name: "Unsafe Import"
     });
 
-    await expect(service.importMap({ content: stringifyDocument(unsafe) })).rejects.toThrow(/map id may only contain/);
+    await expect(service.importMap({ content: stringifyDocument(unsafe) })).rejects.toThrow(
+      /map id may only contain/
+    );
     await expect(fs.access(path.join(tempRoot, "evil.json"))).rejects.toThrow();
   });
 
@@ -1107,34 +1134,36 @@ describe("server service", () => {
     const service = await loadService(tempRoot);
     const created = await service.createMap({ name: "Large Area Test" });
 
-    await expect(service.inspectArea(created.document.meta.id, { row: 0, col: 0 }, 51)).rejects.toThrow(
-      /less than or equal to 50/
-    );
+    await expect(
+      service.inspectArea(created.document.meta.id, { row: 0, col: 0 }, 51)
+    ).rejects.toThrow(/less than or equal to 50/);
   });
 
   it("rejects invalid png export options", async () => {
     const service = await loadService(tempRoot);
     const created = await service.createMap({ name: "Bad Export Test" });
 
-    await expect(service.exportPng(created.document.meta.id, { preset: "poster" as never })).rejects.toThrow(
-      /preset must be clean or reference/
-    );
+    await expect(
+      service.exportPng(created.document.meta.id, { preset: "poster" as never })
+    ).rejects.toThrow(/preset must be clean or reference/);
     await expect(service.exportPng(created.document.meta.id, { scale: 5 })).rejects.toThrow(
       /scale must be an integer between 1 and 4/
     );
     await expect(service.exportPng(created.document.meta.id, { padding: 300 })).rejects.toThrow(
       /padding must be an integer between 0 and 256/
     );
-    await expect(service.exportPng(created.document.meta.id, { background: "white" })).rejects.toThrow(
-      /background must be a #RRGGBB color or transparent/
-    );
+    await expect(
+      service.exportPng(created.document.meta.id, { background: "white" })
+    ).rejects.toThrow(/background must be a #RRGGBB color or transparent/);
   });
 
   it("exports png with a transparent background", async () => {
     const service = await loadService(tempRoot);
     const created = await service.createMap({ name: "Transparent Export Test" });
 
-    const pngExport = await service.exportPng(created.document.meta.id, { background: "transparent" });
+    const pngExport = await service.exportPng(created.document.meta.id, {
+      background: "transparent"
+    });
 
     await expect(fs.stat(pngExport.path)).resolves.toBeTruthy();
   });

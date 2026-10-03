@@ -51,7 +51,11 @@ export function useCellEditor(
   currentMap: MapRuntimeState | null,
   applyCommands: (commands: MapCommand[]) => Promise<MapRuntimeState | null>,
   setMessage: (message: string) => void,
-  brush?: { enabled: boolean; setEnabled: (enabled: boolean) => void; confirmDiscard?: () => Promise<boolean> }
+  brush?: {
+    enabled: boolean;
+    setEnabled: (enabled: boolean) => void;
+    confirmDiscard?: () => Promise<boolean>;
+  }
 ) {
   const [selectedCellId, setSelectedCellId] = useState<string | null>(null);
   const [draft, setDraft] = useState<CellDraft>(toDraft(null));
@@ -141,11 +145,15 @@ export function useCellEditor(
         return current;
       }
       const allowedTerrains = new Set(
-        getFilteredTerrainEntries(nextCategory, current.biome || undefined).map((entry) => entry.key)
+        getFilteredTerrainEntries(nextCategory, current.biome || undefined).map(
+          (entry) => entry.key
+        )
       );
       return {
         ...current,
-        terrain: allowedTerrains.has(current.terrain as keyof typeof TERRAIN_ENTRIES) ? current.terrain : ""
+        terrain: allowedTerrains.has(current.terrain as keyof typeof TERRAIN_ENTRIES)
+          ? current.terrain
+          : ""
       };
     });
   }
@@ -163,13 +171,18 @@ export function useCellEditor(
       return {
         ...current,
         terrain: nextTerrain,
-        biome: current.biome && !allowedBiomes.has(current.biome as keyof typeof BIOME_ENTRIES) ? "" : current.biome
+        biome:
+          current.biome && !allowedBiomes.has(current.biome as keyof typeof BIOME_ENTRIES)
+            ? ""
+            : current.biome
       };
     });
   }
 
   function handleBiomeChange(nextBiome: string): void {
-    const filteredCategories = nextBiome ? getAllowedTerrainCategoriesForBiome(nextBiome) : TERRAIN_CATEGORY_ORDER;
+    const filteredCategories = nextBiome
+      ? getAllowedTerrainCategoriesForBiome(nextBiome)
+      : TERRAIN_CATEGORY_ORDER;
     setTerrainCategory((current) => {
       if (!current || filteredCategories.includes(current as (typeof filteredCategories)[number])) {
         return current;
@@ -182,7 +195,10 @@ export function useCellEditor(
         ...current,
         biome: nextBiome,
         terrain:
-          nextBiome && current.terrain && allowedTerrains && !allowedTerrains.has(current.terrain as keyof typeof TERRAIN_ENTRIES)
+          nextBiome &&
+          current.terrain &&
+          allowedTerrains &&
+          !allowedTerrains.has(current.terrain as keyof typeof TERRAIN_ENTRIES)
             ? ""
             : current.terrain
       };
@@ -198,22 +214,26 @@ export function useCellEditor(
       return;
     }
     const submitted = draft;
-    const result = await task.run(() => applyCommands([{
-      action: "set_cell",
-      source: "webui",
-      target: { row: selectedCell.row, col: selectedCell.col },
-      changes: {
-        terrain: draft.terrain as keyof typeof TERRAIN_ENTRIES,
-        biome: draft.biome ? (draft.biome as keyof typeof BIOME_ENTRIES) : null,
-        tags: draft.tags as Array<keyof typeof TAG_ENTRIES>,
-        note: draft.note
-      }
-    }]));
+    const result = await task.run(() =>
+      applyCommands([
+        {
+          action: "set_cell",
+          source: "webui",
+          target: { row: selectedCell.row, col: selectedCell.col },
+          changes: {
+            terrain: draft.terrain as keyof typeof TERRAIN_ENTRIES,
+            biome: draft.biome ? (draft.biome as keyof typeof BIOME_ENTRIES) : null,
+            tags: draft.tags as Array<keyof typeof TAG_ENTRIES>,
+            note: draft.note
+          }
+        }
+      ])
+    );
     if (!result) {
       return;
     }
     if (latest.current.selectedCellId !== selectedCell.id) return;
-    const updated = result.activeCells.find(cell => cell.id === selectedCell.id) ?? selectedCell;
+    const updated = result.activeCells.find((cell) => cell.id === selectedCell.id) ?? selectedCell;
     setSelectedCell(updated);
     if (latest.current.draft === submitted) syncDraftFromCell(updated);
     setMessage("单元格修改已保存到服务器");
@@ -224,17 +244,23 @@ export function useCellEditor(
       return;
     }
     const submitted = draft;
-    const result = await task.run(() => applyCommands([{
-      action: "clear_cell",
-      source: "webui",
-      target: { row: selectedCell.row, col: selectedCell.col }
-    }]));
+    const result = await task.run(() =>
+      applyCommands([
+        {
+          action: "clear_cell",
+          source: "webui",
+          target: { row: selectedCell.row, col: selectedCell.col }
+        }
+      ])
+    );
     if (!result) {
       return;
     }
     if (latest.current.selectedCellId !== selectedCell.id) return;
     const updatedCell =
-      result.activeCells.find((cell) => cell.row === selectedCell.row && cell.col === selectedCell.col) ?? null;
+      result.activeCells.find(
+        (cell) => cell.row === selectedCell.row && cell.col === selectedCell.col
+      ) ?? null;
     setSelectedCellId(updatedCell?.id ?? null);
     setSelectedCell(updatedCell);
     if (latest.current.draft === submitted) syncDraftFromCell(updatedCell);
@@ -255,7 +281,9 @@ export function useCellEditor(
       return;
     }
     setFormatBrushEnabled(true);
-    setMessage(`已进入格式刷模式：${selectedCell.display_coord}，当前刷入 ${getFormatBrushLabel()}`);
+    setMessage(
+      `已进入格式刷模式：${selectedCell.display_coord}，当前刷入 ${getFormatBrushLabel()}`
+    );
   }
 
   async function applyFormatBrushStroke(targets: ActiveCell[]): Promise<void> {
@@ -263,21 +291,33 @@ export function useCellEditor(
       setFormatBrushEnabled(false);
       return;
     }
+    targets = [
+      ...new Map(
+        targets.filter((cell) => cell.id !== selectedCell.id).map((cell) => [cell.id, cell])
+      ).values()
+    ];
     if (!targets.length) return;
     if (Object.values(formatBrushScope).every((enabled) => !enabled)) {
       setMessage("请至少选择一个格式刷字段");
       return;
     }
-    const result = await task.run(() => applyCommands([{
-      action: "patch_cells", source: "webui",
-      targets: targets.filter(cell => cell.id !== selectedCell.id).map(cell => ({ row: cell.row, col: cell.col })),
-      changes: {
-        ...(formatBrushScope.terrain ? { terrain: selectedCell.terrain! } : {}),
-        ...(formatBrushScope.biome ? { biome: selectedCell.biome } : {}),
-        ...(formatBrushScope.tags ? { tags: selectedCell.tags } : {}),
-        ...(formatBrushScope.note ? { note: selectedCell.note } : {})
-      }
-    }]));
+    const result = await task.run(() =>
+      applyCommands([
+        {
+          action: "patch_cells",
+          source: "webui",
+          targets: targets
+            .filter((cell) => cell.id !== selectedCell.id)
+            .map((cell) => ({ row: cell.row, col: cell.col })),
+          changes: {
+            ...(formatBrushScope.terrain ? { terrain: selectedCell.terrain! } : {}),
+            ...(formatBrushScope.biome ? { biome: selectedCell.biome } : {}),
+            ...(formatBrushScope.tags ? { tags: selectedCell.tags } : {}),
+            ...(formatBrushScope.note ? { note: selectedCell.note } : {})
+          }
+        }
+      ])
+    );
     if (!result) return;
     setMessage("已将" + getFormatBrushLabel() + "应用到 " + targets.length + " 个格子");
   }
@@ -287,7 +327,11 @@ export function useCellEditor(
       void applyFormatBrushStroke([cell]);
       return;
     }
-    if (task.pending || (cellDirty && !(brush?.confirmDiscard ? await brush.confirmDiscard() : ensureCanLeaveSelection()))) {
+    if (
+      task.pending ||
+      (cellDirty &&
+        !(brush?.confirmDiscard ? await brush.confirmDiscard() : ensureCanLeaveSelection()))
+    ) {
       return;
     }
     setSelectedCellId(cell.id);
@@ -300,11 +344,14 @@ export function useCellEditor(
     }
   }, [canUseFormatBrush, formatBrushEnabled]);
 
-  useEffect(() => { resetEditor(); }, [currentMap?.document.meta.id]);
+  useEffect(() => {
+    resetEditor();
+  }, [currentMap?.document.meta.id]);
   useEffect(() => {
     if (cellDirty || !selectedCellId || task.pending) return;
-    const visible = currentMap?.activeCells.find(cell => cell.id === selectedCellId);
-    if (visible && JSON.stringify(toDraft(visible)) !== JSON.stringify(toDraft(selectedCell))) syncDraftFromCell(visible);
+    const visible = currentMap?.activeCells.find((cell) => cell.id === selectedCellId);
+    if (visible && JSON.stringify(toDraft(visible)) !== JSON.stringify(toDraft(selectedCell)))
+      syncDraftFromCell(visible);
   }, [currentMap, selectedCellId, cellDirty, task.pending]);
 
   return {
@@ -333,6 +380,7 @@ export function useCellEditor(
     applyDraft,
     clearSelected,
     toggleFormatBrush,
-    handleCanvasCellSelect, applyFormatBrushStroke
+    handleCanvasCellSelect,
+    applyFormatBrushStroke
   };
 }

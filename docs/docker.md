@@ -1,163 +1,33 @@
-# MapDesigner 0.2.0 Docker 部署说明
+# Docker 部署
 
-本文档面向希望使用 Docker 自行部署 `MapDesigner 0.2.0` 的用户，说明推荐的容器运行方式、数据挂载方式，以及启动后的访问方式。
+镜像构建阶段使用与 .nvmrc 对齐的 Node 24，最终镜像只包含服务器生产依赖、编译产物和 WebUI。
+运行账号为 node（UID 1000），默认监听 0.0.0.0:3010，必须配置 MAPDESIGNER_TOKEN。
 
-## 1. 当前支持的 Docker 形态
+## 构建与启动
 
-`MapDesigner 0.2.0` 当前提供的是最小可用的单容器部署方案：
+    docker build -t mapdesigner:local .
+    export MAPDESIGNER_TOKEN='替换为随机长令牌'
+    docker volume create mapdesigner-data
+    docker run --rm --name mapdesigner \
+      -p 127.0.0.1:3010:3010 \
+      -e MAPDESIGNER_TOKEN \
+      -v mapdesigner-data:/data \
+      mapdesigner:local
 
-- 一个容器同时运行后端服务与 WebUI
-- 容器内由 `server` 直接托管前端构建产物
-- 地图数据与导出文件通过 volume 持久化
+打开 http://127.0.0.1:3010 ，在“地图 → 连接设置”输入令牌。
+使用命名卷时 Docker 会保留数据目录权限。若改用宿主机目录挂载，提前让 UID 1000 可写。
+如需局域网访问，可将端口映射绑定到指定网卡地址，并根据部署说明配置公开来源与 HTTPS。
 
-这意味着容器启动后，你只需要通过浏览器访问映射端口，就可以直接打开 WebUI。
+## 数据与健康检查
 
-## 2. 前置要求
+/data/storage/mapdesigner.db 保存地图和历史，/data/storage/maps 用于旧 JSON 兼容，/data/storage/exports 保存导出产物。
+升级镜像时保留整个 /data 卷。镜像带有 /api/health 健康检查，可用 docker inspect 查看状态。
 
-请先准备：
+查看日志：
 
-- Docker
+    docker logs mapdesigner
 
-不需要额外安装 Node.js 或 `pnpm` 到宿主机。
+备份可停止容器后归档整个命名卷，或使用 SQLite 在线备份 API。
+恢复前保留原卷，建立新卷再验证。详细步骤见 deployment.md。
 
-## 3. 构建镜像
-
-在项目根目录执行：
-
-```bash
-docker build -t mapdesigner:0.2.0 .
-```
-
-如果构建成功，你会得到一个可直接运行的本地镜像：
-
-- `mapdesigner:0.2.0`
-
-## 4. 启动容器
-
-推荐使用一个本地目录来持久化数据，例如：
-
-```bash
-mkdir -p ./mapdesigner-data
-docker run --rm \
-  -p 3010:3010 \
-  -e MAPDESIGNER_ROOT=/data \
-  -v "$(pwd)/mapdesigner-data:/data" \
-  --name mapdesigner \
-  mapdesigner:0.2.0
-```
-
-启动后，在浏览器打开：
-
-- `http://localhost:3010`
-
-即可访问 WebUI。
-
-## 5. 容器内的数据目录
-
-推荐将容器内数据根目录统一挂载到：
-
-- `/data`
-
-当 `MAPDESIGNER_ROOT=/data` 时，项目会将数据写到：
-
-- `/data/storage/maps`
-- `/data/storage/exports`
-
-这两部分分别用于：
-
-- 保存地图主文件
-- 保存导出的图片文件
-
-如果删除容器，只要 volume 仍然保留，数据就不会丢失。
-
-## 6. 端口说明
-
-容器默认监听：
-
-- `3010`
-
-如果你想映射到宿主机的其他端口，可以调整 `-p` 参数，例如：
-
-```bash
-docker run --rm \
-  -p 4010:3010 \
-  -e MAPDESIGNER_ROOT=/data \
-  -v "$(pwd)/mapdesigner-data:/data" \
-  mapdesigner:0.2.0
-```
-
-此时浏览器访问：
-
-- `http://localhost:4010`
-
-## 7. 如何确认是否启动成功
-
-你可以通过以下方式确认服务可用：
-
-1. 浏览器访问 `http://localhost:3010`
-2. 调用健康接口：
-
-```bash
-curl http://localhost:3010/api/health
-```
-
-如果服务正常，应返回包含 `status: "ok"` 的 JSON。
-
-## 8. Docker 模式下的使用方式
-
-在 Docker 部署下，使用体验与本地发布态基本一致：
-
-- WebUI 仍然通过浏览器访问
-- API 仍然由同一个服务地址提供
-- 地图保存与图片导出仍然写入 `storage` 目录
-
-因此对普通用户来说，主要差别只是：
-
-- 运行方式从 `pnpm build && pnpm start` 变成 `docker build` 与 `docker run`
-
-## 9. 常见问题
-
-### 9.1 浏览器打不开页面
-
-请优先检查：
-
-- 容器是否已经启动
-- 宿主机端口是否映射正确
-- 浏览器访问的端口是否与 `docker run -p` 一致
-
-### 9.2 地图没有持久化
-
-请确认：
-
-- 已使用 `-v` 挂载宿主机目录
-- `MAPDESIGNER_ROOT` 指向 `/data`
-
-### 9.3 导出的图片保存在哪里
-
-如果你按推荐方式挂载数据目录，导出文件会保存在宿主机的：
-
-- `./mapdesigner-data/storage/exports`
-
-### 9.4 如何备份数据
-
-直接备份你挂载到容器的宿主机目录即可，例如：
-
-- `./mapdesigner-data`
-
-## 10. 推荐的 Docker 使用流程
-
-推荐的最小流程如下：
-
-1. 构建镜像：`docker build -t mapdesigner:0.2.0 .`
-2. 准备宿主机数据目录
-3. 启动容器并映射端口与 volume
-4. 浏览器打开 `http://localhost:3010`
-5. 创建地图并确认宿主机挂载目录下出现 `storage/maps`
-
-## 11. 与源码部署的关系
-
-如果你更希望直接以源码方式运行项目，可参考：
-
-- [部署说明](./deployment.md)
-
-如果你只是想直接使用当前版本，Docker 部署通常会更省事。
+本仓库 CI 会实际构建镜像并验证非 root 用户、静态界面、健康接口、未认证拒绝和认证后的地图创建、后台渲染和 PNG 下载。
