@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type {
   CellRange,
   ExportPreview,
+  TileExportPreview,
   ExportRenderOptions,
   MapRuntimeState,
   MapSummary
@@ -24,7 +25,7 @@ export function ExportDialog({
   viewOptions: Partial<ExportRenderOptions>;
 }) {
   const [zoomed, setZoomed] = useState(false);
-  const [preview, setPreview] = useState<ExportPreview | null>(null),
+  const [preview, setPreview] = useState<ExportPreview | TileExportPreview | null>(null),
     [loading, setLoading] = useState(true),
     [error, setError] = useState(""),
     [retry, setRetry] = useState(0);
@@ -43,12 +44,21 @@ export function ExportDialog({
       (options.range.maxCol - options.range.minCol + 1)
     : 0;
   const budgetError =
-    c.pngRangeMode === "full" && (summary?.designed_cell_count ?? 0) > 10000
-      ? "全图 PNG 最多 10,000 格。请选择当前区域，或导出 JSON 保留全图。"
-      : rangeSize > 25000
-        ? "当前区域超过 25,000 格。请先放大地图以缩小导出范围。"
-        : "";
-  const key = JSON.stringify([map.document.meta.id, map.document.meta.revision, options, retry]);
+    c.pngMode === "tiles"
+      ? ""
+      : c.pngRangeMode === "full" && (summary?.designed_cell_count ?? 0) > 10000
+        ? "单张全图 PNG 最多 10,000 格。请选择分块图片包，或缩小导出区域。"
+        : rangeSize > 25000
+          ? "当前区域超过 25,000 格。请先放大地图以缩小导出范围。"
+          : "";
+  const key = JSON.stringify([
+    map.document.meta.id,
+    map.document.meta.revision,
+    options,
+    retry,
+    c.pngMode,
+    c.tileSize
+  ]);
   useEffect(() => {
     let active = true;
     const controller = new AbortController();
@@ -57,14 +67,18 @@ export function ExportDialog({
     setLoading(!budgetError);
     if (budgetError) return;
     const timeout = window.setTimeout(() => {
-      void api
-        .previewPng(map.document.meta.id, options, { signal: controller.signal })
-        .then((result) => {
-          if (!active) return;
-          setLoading(false);
-          if (result.ok && result.result) setPreview(result.result);
-          else setError(result.errors[0]?.message ?? "预览失败，请重试。");
-        });
+      void (
+        c.pngMode === "tiles"
+          ? api.previewTiles(map.document.meta.id, options, c.tileSize, {
+              signal: controller.signal
+            })
+          : api.previewPng(map.document.meta.id, options, { signal: controller.signal })
+      ).then((result) => {
+        if (!active) return;
+        setLoading(false);
+        if (result.ok && result.result) setPreview(result.result);
+        else setError(result.errors[0]?.message ?? "预览失败，请重试。");
+      });
     }, 300);
     return () => {
       active = false;
@@ -87,6 +101,36 @@ export function ExportDialog({
       <div className="export-layout" id="export-panel-content">
         <div className="export-options">
           <fieldset disabled={c.isExportingPng}>
+            <label>
+              导出方式
+              <select
+                value={c.pngMode}
+                onChange={(e) => c.setPngMode(e.target.value as "single" | "tiles")}
+              >
+                <option value="single">单张 PNG</option>
+                <option value="tiles">分块图片包</option>
+              </select>
+            </label>
+            {c.pngMode === "tiles" && (
+              <>
+                <label>
+                  每块最大尺寸
+                  <select
+                    value={c.tileSize}
+                    onChange={(e) => c.setTileSize(Number(e.target.value))}
+                  >
+                    {[1024, 2048, 4096].map((n) => (
+                      <option key={n} value={n}>
+                        {n.toLocaleString()} × {n.toLocaleString()} 像素
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <p className="field-help">
+                  分块图片可按位置无缝拼接。标题、说明与图例放在图片包的索引页。
+                </p>
+              </>
+            )}
             <label>
               导出范围
               <select
@@ -239,7 +283,10 @@ export function ExportDialog({
             aria-busy={loading}
           >
             {preview ? (
-              <img src={preview.image} alt="实际范围的成图预览" />
+              <img
+                src={preview.image}
+                alt={"tileCount" in preview ? "中央分块的实际成图样例" : "实际范围的成图预览"}
+              />
             ) : (
               <div className="empty-state">
                 <strong>
@@ -265,8 +312,10 @@ export function ExportDialog({
                   {preview.width.toLocaleString()} × {preview.height.toLocaleString()} 像素
                 </strong>
                 <span>
-                  {preview.cellCount.toLocaleString()} 个已设计格 · 修订 {preview.revision} ·
-                  预览缩放显示
+                  {"tileCount" in preview
+                    ? `${preview.columns} 列 × ${preview.rows} 行，共 ${preview.tileCount.toLocaleString()} 张 · 样例为第 ${preview.sampleRow + 1} 行第 ${preview.sampleCol + 1} 列`
+                    : `${preview.cellCount.toLocaleString()} 个已设计格`}{" "}
+                  · 修订 {preview.revision} · 预览缩放显示
                 </span>
               </>
             ) : (
@@ -274,7 +323,9 @@ export function ExportDialog({
             )}
           </figcaption>
           <p className="field-help">
-            图片上限：单边 32,768 px、总计 4,000 万像素；全图 10,000 格、区域 25,000 格。
+            {c.pngMode === "tiles"
+              ? "图片包包含 PNG、位置清单和可打开的索引页；最多 2048 张、2 GiB。上方图片展示中央分块，尺寸表示整套图片拼接后的范围。"
+              : "单张图片上限：单边 32,768 px、总计 4,000 万像素；全图 10,000 格、区域 25,000 格。"}
           </p>
         </figure>
       </div>
@@ -302,7 +353,7 @@ export function ExportDialog({
               })
             }
           >
-            {c.isExportingPng ? "导出中..." : "导出图片"}
+            {c.isExportingPng ? "导出中..." : c.pngMode === "tiles" ? "导出图片包" : "导出图片"}
           </button>
         </div>
       </div>

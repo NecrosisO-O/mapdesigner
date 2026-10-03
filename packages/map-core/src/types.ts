@@ -100,6 +100,46 @@ export interface CellRange {
   maxCol: number;
 }
 
+export interface TileExportPlan {
+  mapId: string;
+  revision: number;
+  range: CellRange;
+  minX: number;
+  minY: number;
+  width: number;
+  height: number;
+  tileSize: number;
+  columns: number;
+  rows: number;
+  tileCount: number;
+  options: ExportRenderOptions;
+}
+export interface TileExportPreview extends TileExportPlan {
+  image: string;
+  sampleRow: number;
+  sampleCol: number;
+}
+export interface MergeMapInput {
+  sourceId: string;
+  offsetRow: number;
+  offsetCol: number;
+  conflict: "keep-target" | "replace-target";
+  expectedSourceRevision?: number;
+  expectedTargetRevision?: number;
+}
+export interface MergeMapPreview {
+  input: MergeMapInput;
+  target: MapSummary;
+  source: MapSummary;
+  added: number;
+  overlapping: number;
+  replaced: number;
+  rivers: number;
+  targetOverview: MapOverview;
+  sourceOverview: MapOverview;
+  conflicts: GridCoordinate[];
+}
+
 export interface MapOverview {
   rivers?: Array<{
     id: string;

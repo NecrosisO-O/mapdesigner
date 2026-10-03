@@ -328,7 +328,7 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
     return operation;
   }
   async function acceptResult(
-    result: CommandApplyResponse | HistoryMoveResult,
+    result: Pick<CommandApplyResponse, "summary" | "map" | "features" | "changes">,
     epoch: number,
     id: string
   ): Promise<WorkspaceMap | null> {
@@ -384,9 +384,15 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
   function historyMove(direction: "undo" | "redo"): Promise<WorkspaceMap | null> {
     return enqueue(direction, async (current, epoch) => {
       const id = current.summary.meta.id;
-      const response = await (direction === "undo"
-        ? api.undoMap(id, false)
-        : api.redoMap(id, false));
+      const seq = (current.history?.status.cursor ?? 0) + (direction === "redo" ? 1 : 0);
+      const bulk = current.history?.entries.some(
+        (entry) => entry.seq === seq && entry.action === "merge_maps"
+      );
+      const response = await (bulk
+        ? api.historyJob(id, direction, current.summary.meta.revision, { onProgress: setMessage })
+        : direction === "undo"
+          ? api.undoMap(id, false)
+          : api.redoMap(id, false));
       if (!valid(epoch, id)) return null;
       if (!response.ok) {
         setMessage(errorMessage(response, "历史操作失败"));
@@ -502,8 +508,8 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
   }
   async function importFile(file: File): Promise<MapRuntimeState | null> {
     if (importAbort.current) return null;
-    if (file.size > 64 * 1024 * 1024) {
-      setMessage("导入文件超过 64 MiB 限制");
+    if (file.size > 2 * 1024 * 1024 * 1024) {
+      setMessage("导入文件超过 2 GiB 限制");
       return null;
     }
     const epoch = beginSwitch();
@@ -627,6 +633,11 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
     refreshMapSummary,
     refreshMapFeatures,
     refreshMapHistory,
+    refreshMergedMap: (summary: MapSummary) =>
+      enqueue("merge-refresh", async (current, epoch) => {
+        if (current.summary.meta.id !== summary.meta.id) return null;
+        return acceptResult({ summary }, epoch, summary.meta.id);
+      }),
     requestVisibleRange,
     openMap,
     ensureCanLeaveMap,

@@ -3,6 +3,7 @@ import path from "node:path";
 import Database from "better-sqlite3";
 import { DATABASE_FILE, STORAGE_DIR } from "./config.js";
 import { storageError } from "./errors.js";
+import { initializeDerivedSchema } from "./derived-data.js";
 
 let connection: Database.Database | null = null;
 
@@ -96,6 +97,19 @@ export function getDatabase(): Database.Database {
     connection.exec(`
       CREATE INDEX IF NOT EXISTS idx_features_map_kind_bounds
         ON features(map_id, kind, bounds_min_row, bounds_max_row, bounds_min_col, bounds_max_col);
+    `);
+    initializeDerivedSchema(connection);
+    connection.exec(`
+      CREATE TABLE IF NOT EXISTS operation_cells (
+        map_id TEXT, seq INTEGER, row INTEGER, col INTEGER, before_json TEXT, after_json TEXT,
+        PRIMARY KEY(map_id,seq,row,col),
+        FOREIGN KEY(map_id,seq) REFERENCES operations(map_id,seq) ON DELETE CASCADE
+      ) WITHOUT ROWID;
+      CREATE TABLE IF NOT EXISTS operation_features (
+        map_id TEXT, seq INTEGER, feature_id TEXT, after_json TEXT NOT NULL,
+        PRIMARY KEY(map_id,seq,feature_id),
+        FOREIGN KEY(map_id,seq) REFERENCES operations(map_id,seq) ON DELETE CASCADE
+      ) WITHOUT ROWID;
     `);
     return connection;
   } catch (error) {
