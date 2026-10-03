@@ -36,13 +36,90 @@ const sampleMap: MapRuntimeState = {
     ]
   },
   activeCells: [
-    { id: "cell@-1,0", display_coord: "R-1C0", row: -1, col: 0, status: "undesigned", terrain: null, biome: null, tags: [], note: "", is_seed: false },
-    { id: "cell@-1,1", display_coord: "R-1C1", row: -1, col: 1, status: "undesigned", terrain: null, biome: null, tags: [], note: "", is_seed: false },
-    { id: "cell@0,-1", display_coord: "R0C-1", row: 0, col: -1, status: "undesigned", terrain: null, biome: null, tags: [], note: "", is_seed: false },
-    { id: "cell@0,0", display_coord: "R0C0", row: 0, col: 0, status: "designed", terrain: "plain", biome: "grassland", tags: [], note: "", is_seed: false },
-    { id: "cell@0,1", display_coord: "R0C1", row: 0, col: 1, status: "undesigned", terrain: null, biome: null, tags: [], note: "", is_seed: false },
-    { id: "cell@1,0", display_coord: "R1C0", row: 1, col: 0, status: "undesigned", terrain: null, biome: null, tags: [], note: "", is_seed: false },
-    { id: "cell@1,1", display_coord: "R1C1", row: 1, col: 1, status: "undesigned", terrain: null, biome: null, tags: [], note: "", is_seed: false }
+    {
+      id: "cell@-1,0",
+      display_coord: "R-1C0",
+      row: -1,
+      col: 0,
+      status: "undesigned",
+      terrain: null,
+      biome: null,
+      tags: [],
+      note: "",
+      is_seed: false
+    },
+    {
+      id: "cell@-1,1",
+      display_coord: "R-1C1",
+      row: -1,
+      col: 1,
+      status: "undesigned",
+      terrain: null,
+      biome: null,
+      tags: [],
+      note: "",
+      is_seed: false
+    },
+    {
+      id: "cell@0,-1",
+      display_coord: "R0C-1",
+      row: 0,
+      col: -1,
+      status: "undesigned",
+      terrain: null,
+      biome: null,
+      tags: [],
+      note: "",
+      is_seed: false
+    },
+    {
+      id: "cell@0,0",
+      display_coord: "R0C0",
+      row: 0,
+      col: 0,
+      status: "designed",
+      terrain: "plain",
+      biome: "grassland",
+      tags: [],
+      note: "",
+      is_seed: false
+    },
+    {
+      id: "cell@0,1",
+      display_coord: "R0C1",
+      row: 0,
+      col: 1,
+      status: "undesigned",
+      terrain: null,
+      biome: null,
+      tags: [],
+      note: "",
+      is_seed: false
+    },
+    {
+      id: "cell@1,0",
+      display_coord: "R1C0",
+      row: 1,
+      col: 0,
+      status: "undesigned",
+      terrain: null,
+      biome: null,
+      tags: [],
+      note: "",
+      is_seed: false
+    },
+    {
+      id: "cell@1,1",
+      display_coord: "R1C1",
+      row: 1,
+      col: 1,
+      status: "undesigned",
+      terrain: null,
+      biome: null,
+      tags: [],
+      note: "",
+      is_seed: false
+    }
   ],
   history: {
     past: [],
@@ -104,8 +181,10 @@ function mockCanvasRect(container: HTMLDivElement) {
 }
 
 function countCoordinateLabels() {
-  const svg = screen.getByLabelText("Map canvas");
-  return Array.from(svg.querySelectorAll("text")).filter((node) => /^R-?\d+C-?\d+$/.test(node.textContent ?? "")).length;
+  const svg = screen.getByLabelText("地图画布");
+  return Array.from(svg.querySelectorAll("text")).filter((node) =>
+    /^R-?\d+C-?\d+$/.test(node.textContent ?? "")
+  ).length;
 }
 
 describe("MapCanvas", () => {
@@ -128,16 +207,16 @@ describe("MapCanvas", () => {
       />
     );
 
-    const container = screen.getByLabelText("Map canvas").parentElement as HTMLDivElement;
+    const container = screen.getByLabelText("地图画布").parentElement as HTMLDivElement;
     mockCanvasRect(container);
 
     fireEvent(window, new Event("resize"));
 
     await waitFor(() => {
-      expect(screen.getByLabelText("Map canvas").getAttribute("data-render-detail")).toBe("near");
+      expect(screen.getByLabelText("地图画布").getAttribute("data-render-detail")).toBe("near");
       expect(screen.getByText("R0C0")).toBeTruthy();
       expect(screen.getByText("PLN-GRS")).toBeTruthy();
-      expect(screen.getByRole("button", { name: "R0C0 designed" })).toBeTruthy();
+      expect(screen.getByRole("button", { name: "R0C0 已设计" })).toBeTruthy();
     });
 
     for (let index = 0; index < 25; index += 1) {
@@ -147,8 +226,8 @@ describe("MapCanvas", () => {
     await waitFor(() => {
       expect(screen.queryByText("R0C0")).toBeNull();
       expect(screen.queryByText("PLN-GRS")).toBeNull();
-      expect(screen.getByRole("button", { name: "R0C0 designed" })).toBeTruthy();
-      expect(screen.getByLabelText("Map canvas").getAttribute("data-render-detail")).toMatch(/far/);
+      expect(screen.getByRole("button", { name: "R0C0 已设计" })).toBeTruthy();
+      expect(screen.getByLabelText("地图画布").getAttribute("data-render-detail")).toMatch(/far/);
     });
   });
 
@@ -167,8 +246,8 @@ describe("MapCanvas", () => {
       />
     );
 
-    const container = screen.getByLabelText("Map canvas").parentElement as HTMLDivElement;
-    const designedCell = screen.getByRole("button", { name: "R0C0 designed" });
+    const container = screen.getByLabelText("地图画布").parentElement as HTMLDivElement;
+    const designedCell = screen.getByRole("button", { name: "R0C0 已设计" });
     mockCanvasRect(container);
     fireEvent(window, new Event("resize"));
 
@@ -216,8 +295,8 @@ describe("MapCanvas", () => {
       />
     );
 
-    const container = screen.getByLabelText("Map canvas").parentElement as HTMLDivElement;
-    const designedCell = screen.getByRole("button", { name: "R0C0 designed" });
+    const container = screen.getByLabelText("地图画布").parentElement as HTMLDivElement;
+    const designedCell = screen.getByRole("button", { name: "R0C0 已设计" });
     mockCanvasRect(container);
     fireEvent(window, new Event("resize"));
 
@@ -228,9 +307,15 @@ describe("MapCanvas", () => {
     expect(onRiverPointAdd).toHaveBeenLastCalledWith(expect.objectContaining({ id: "cell@0,0" }));
     expect(onSelectCell).not.toHaveBeenCalled();
     expect(screen.getByLabelText("河流绘制工具").textContent).toContain("路径点 2");
-    expect(screen.getByLabelText("Map canvas").querySelector('[data-river-preview="true"]')).toBeTruthy();
-    expect(screen.getByLabelText("Map canvas").querySelector('[data-river-control-point="start"]')).toBeTruthy();
-    expect(screen.getByLabelText("Map canvas").querySelector('[data-river-control-point="end"]')).toBeTruthy();
+    expect(
+      screen.getByLabelText("地图画布").querySelector('[data-river-preview="true"]')
+    ).toBeTruthy();
+    expect(
+      screen.getByLabelText("地图画布").querySelector('[data-river-control-point="start"]')
+    ).toBeTruthy();
+    expect(
+      screen.getByLabelText("地图画布").querySelector('[data-river-control-point="end"]')
+    ).toBeTruthy();
   });
 
   it("toggles batch selection in batch mode without normal cell selection", async () => {
@@ -252,12 +337,17 @@ describe("MapCanvas", () => {
       />
     );
 
-    const container = screen.getByLabelText("Map canvas").parentElement as HTMLDivElement;
-    const designedCell = screen.getByRole("button", { name: "R0C0 designed" });
+    const container = screen.getByLabelText("地图画布").parentElement as HTMLDivElement;
+    const designedCell = screen.getByRole("button", { name: "R0C0 已设计" });
     mockCanvasRect(container);
     fireEvent(window, new Event("resize"));
 
-    expect(screen.getByLabelText("Map canvas").querySelector('[data-cell-id="cell@0,0"]')?.getAttribute("data-batch-selected")).toBe("true");
+    expect(
+      screen
+        .getByLabelText("地图画布")
+        .querySelector('[data-cell-id="cell@0,0"]')
+        ?.getAttribute("data-batch-selected")
+    ).toBe("true");
 
     fireEvent.pointerDown(designedCell, { button: 0, pointerId: 1, clientX: 400, clientY: 300 });
     fireEvent.pointerUp(container, { pointerId: 1, clientX: 400, clientY: 300 });
@@ -289,7 +379,7 @@ describe("MapCanvas", () => {
       />
     );
 
-    const container = screen.getByLabelText("Map canvas").parentElement as HTMLDivElement;
+    const container = screen.getByLabelText("地图画布").parentElement as HTMLDivElement;
     mockCanvasRect(container);
     fireEvent(window, new Event("resize"));
 
@@ -305,6 +395,8 @@ describe("MapCanvas", () => {
     });
   });
 
+  // JSDOM constructs 1,681 SVG cell trees on shared CI runners. The deadline is not a frame budget;
+  // browser performance is measured independently by the visual QA runner.
   it("limits coordinate labels by viewport and density instead of rendering every cell at once", async () => {
     const largeMap = buildLargeMap();
     render(
@@ -320,27 +412,30 @@ describe("MapCanvas", () => {
       />
     );
 
-    const container = screen.getByLabelText("Map canvas").parentElement as HTMLDivElement;
+    const container = screen.getByLabelText("地图画布").parentElement as HTMLDivElement;
     mockCanvasRect(container);
     fireEvent(window, new Event("resize"));
 
     await waitFor(() => {
-      expect(screen.getByLabelText("Map canvas").getAttribute("data-coordinate-label-mode")).toBe("hidden");
+      expect(screen.getByLabelText("地图画布").getAttribute("data-coordinate-label-mode")).toBe(
+        "hidden"
+      );
       expect(countCoordinateLabels()).toBe(0);
     });
 
-    for (let index = 0; index < 12; index += 1) {
-      fireEvent.wheel(container, { deltaY: -120, clientX: 400, clientY: 300 });
-    }
+    // This checks density at the final scale; gesture sequences are covered separately.
+    fireEvent.wheel(container, { deltaY: -1440, clientX: 400, clientY: 300 });
 
     await waitFor(() => {
-      const labelMode = screen.getByLabelText("Map canvas").getAttribute("data-coordinate-label-mode");
+      const labelMode = screen
+        .getByLabelText("地图画布")
+        .getAttribute("data-coordinate-label-mode");
       const coordinateCount = countCoordinateLabels();
       expect(labelMode).toMatch(/sparse|medium|full/);
       expect(coordinateCount).toBeGreaterThan(0);
       expect(coordinateCount).toBeLessThan(largeMap.activeCells.length / 2);
     });
-  });
+  }, 15000);
 
   it("keeps coordinate labels culled to the visible map area at deep zoom", async () => {
     const largeMap = buildLargeMap();
@@ -357,19 +452,100 @@ describe("MapCanvas", () => {
       />
     );
 
-    const container = screen.getByLabelText("Map canvas").parentElement as HTMLDivElement;
+    const container = screen.getByLabelText("地图画布").parentElement as HTMLDivElement;
     mockCanvasRect(container);
     fireEvent(window, new Event("resize"));
 
-    for (let index = 0; index < 24; index += 1) {
-      fireEvent.wheel(container, { deltaY: -120, clientX: 400, clientY: 300 });
-    }
+    fireEvent.wheel(container, { deltaY: -2880, clientX: 400, clientY: 300 });
 
     await waitFor(() => {
-      expect(screen.getByLabelText("Map canvas").getAttribute("data-coordinate-label-mode")).toBe("full");
+      expect(screen.getByLabelText("地图画布").getAttribute("data-coordinate-label-mode")).toBe(
+        "full"
+      );
       const coordinateCount = countCoordinateLabels();
       expect(coordinateCount).toBeGreaterThan(0);
       expect(coordinateCount).toBeLessThan(largeMap.activeCells.length / 3);
     });
+  }, 15000);
+});
+
+describe("canvas gestures", () => {
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
+  const props = {
+    map: sampleMap,
+    selectedCell: null,
+    selectedCellId: null,
+    showCoordinates: true,
+    showShorthand: false,
+    showGrid: true,
+    showUndesigned: true
+  };
+  function pointer(target: Element, type: string, x: number, y: number) {
+    const event = new MouseEvent(type, { bubbles: true, clientX: x, clientY: y, button: 0 });
+    Object.defineProperty(event, "pointerId", { value: 1 });
+    fireEvent(target, event);
+  }
+  function screenCenter(id: string) {
+    const svg = screen.getByLabelText("地图画布"),
+      group = svg.querySelector("g[transform]")!;
+    const match = group
+      .getAttribute("transform")!
+      .match(/translate\(([-\d.eE]+) ([-\d.eE]+)\) scale\(([-\d.eE]+)\)/)!;
+    const points = svg
+      .querySelector('[data-cell-id="' + id + '"] polygon')!
+      .getAttribute("points")!
+      .split(" ")
+      .map((p) => p.split(",").map(Number));
+    const x = points.reduce((sum, p) => sum + p[0]!, 0) / 6,
+      y = points.reduce((sum, p) => sum + p[1]!, 0) / 6;
+    return {
+      x: Number(match[1]) + x * Number(match[3]),
+      y: Number(match[2]) + y * Number(match[3])
+    };
+  }
+  it("submits one brush stroke on release and drops a cancelled gesture", () => {
+    const brush = vi.fn();
+    render(
+      <MapCanvas {...props} interactionMode="brush" onSelectCell={vi.fn()} onBrushStroke={brush} />
+    );
+    const canvas = screen.getByLabelText("地图编辑区域");
+    mockCanvasRect(canvas as HTMLDivElement);
+    fireEvent(window, new Event("resize"));
+    const a = screenCenter("cell@0,0"),
+      b = screenCenter("cell@0,1");
+    pointer(screen.getByRole("button", { name: "R0C0 已设计" }), "pointerdown", a.x, a.y);
+    pointer(canvas, "pointermove", b.x, b.y);
+    expect(brush).not.toHaveBeenCalled();
+    pointer(canvas, "pointerup", b.x, b.y);
+    expect(brush).toHaveBeenCalledTimes(1);
+    expect(brush.mock.calls[0]?.[0].map((cell: ActiveCell) => cell.id)).toEqual([
+      "cell@0,0",
+      "cell@0,1"
+    ]);
+    pointer(screen.getByRole("button", { name: "R0C0 已设计" }), "pointerdown", a.x, a.y);
+    pointer(canvas, "pointermove", b.x, b.y);
+    pointer(canvas, "pointercancel", b.x, b.y);
+    expect(brush).toHaveBeenCalledTimes(1);
+  });
+  it("supports directional navigation and visible zoom controls", () => {
+    const select = vi.fn();
+    render(
+      <MapCanvas
+        {...props}
+        selectedCell={sampleMap.activeCells[3]!}
+        selectedCellId="cell@0,0"
+        onSelectCell={select}
+      />
+    );
+    const canvas = screen.getByLabelText("地图编辑区域");
+    fireEvent.keyDown(canvas, { key: "ArrowRight" });
+    fireEvent.keyDown(canvas, { key: "Enter" });
+    expect(select).toHaveBeenCalledWith(expect.objectContaining({ id: "cell@0,1" }));
+    const before = screen.getByLabelText("缩放比例").textContent;
+    fireEvent.click(screen.getByRole("button", { name: "放大" }));
+    expect(screen.getByLabelText("缩放比例").textContent).not.toBe(before);
   });
 });

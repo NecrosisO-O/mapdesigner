@@ -1,23 +1,17 @@
 import { sameCoord } from "./coords.js";
-import type { ActiveCell, DesignedCellRecord, GridCoordinate, RiverFeature, RiverPathSample, RiverPoint, TerrainKey } from "./types.js";
+import { isOpenWaterTerrain } from "./materials.js";
+import type {
+  ActiveCell,
+  DesignedCellRecord,
+  GridCoordinate,
+  RiverFeature,
+  RiverPathSample,
+  RiverPoint
+} from "./types.js";
 
 export const DEFAULT_RIVER_WIDTH = 4;
 export const MIN_RIVER_WIDTH = 0.5;
 export const MAX_RIVER_WIDTH = 64;
-
-const RIVER_ENDPOINT_WATER_TERRAINS = new Set<TerrainKey>([
-  "ocean",
-  "sea",
-  "lagoon",
-  "estuary",
-  "lake",
-  "salt_lake",
-  "river",
-  "delta",
-  "wetland",
-  "tidal_flat",
-  "coast"
-]);
 
 function axialToCube(coord: GridCoordinate): { x: number; y: number; z: number } {
   const x = coord.col;
@@ -64,6 +58,8 @@ export function getHexDistance(left: GridCoordinate, right: GridCoordinate): num
 
 export function buildHexLine(start: GridCoordinate, end: GridCoordinate): GridCoordinate[] {
   const distance = getHexDistance(start, end);
+  if (!Number.isSafeInteger(distance) || distance > 500_000)
+    throw new Error("hex line exceeds the 500000 cell budget");
   if (distance === 0) {
     return [{ row: start.row, col: start.col }];
   }
@@ -71,6 +67,7 @@ export function buildHexLine(start: GridCoordinate, end: GridCoordinate): GridCo
   const startCube = axialToCube(start);
   const endCube = axialToCube(end);
   const line: GridCoordinate[] = [];
+  const seen = new Set<string>();
 
   for (let index = 0; index <= distance; index += 1) {
     const amount = index / distance;
@@ -80,7 +77,9 @@ export function buildHexLine(start: GridCoordinate, end: GridCoordinate): GridCo
       z: lerp(startCube.z, endCube.z, amount)
     });
     const coord = cubeToAxial(rounded);
-    if (!line.some((entry) => sameCoord(entry, coord))) {
+    const key = coord.row + "," + coord.col;
+    if (!seen.has(key)) {
+      seen.add(key);
       line.push(coord);
     }
   }
@@ -95,53 +94,90 @@ function normalizeRiverWidth(value: number | null | undefined): number | null {
   return Math.min(MAX_RIVER_WIDTH, Math.max(MIN_RIVER_WIDTH, value));
 }
 
-function getPointWidth(points: RiverPoint[], index: number): number {
-  const ownWidth = normalizeRiverWidth(points[index]?.width);
-  if (ownWidth !== null) {
-    return ownWidth;
+export function getRiverPointWidths(
+  points: RiverPoint[],
+  mode: "legacy" | "distance" = "distance"
+): number[] {
+  const widths = points.map((point) => normalizeRiverWidth(point.width));
+  const positions = [0];
+  for (let i = 1; i < points.length; i++)
+    positions.push(
+      positions[i - 1]! + (mode === "legacy" ? 1 : getHexDistance(points[i - 1]!, points[i]!))
+    );
+  const next = new Array<number>(points.length).fill(-1);
+  let following = -1;
+  for (let i = points.length - 1; i >= 0; i--) {
+    if (widths[i] !== null) following = i;
+    next[i] = following;
   }
-
-  let previousIndex = -1;
-  let previousWidth: number | null = null;
-  for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
-    const width = normalizeRiverWidth(points[cursor]?.width);
+  let previous = -1;
+  return widths.map((width, i) => {
     if (width !== null) {
-      previousIndex = cursor;
-      previousWidth = width;
-      break;
+      previous = i;
+      return width!;
     }
-  }
+    const after = next[i]!;
+    if (previous >= 0 && after >= 0)
+      return lerp(
+        widths[previous]!,
+        widths[after]!,
+        (positions[i]! - positions[previous]!) / (positions[after]! - positions[previous]! || 1)
+      );
+    return previous >= 0 ? widths[previous]! : after >= 0 ? widths[after]! : DEFAULT_RIVER_WIDTH;
+  });
+}
 
-  let nextIndex = -1;
-  let nextWidth: number | null = null;
-  for (let cursor = index + 1; cursor < points.length; cursor += 1) {
-    const width = normalizeRiverWidth(points[cursor]?.width);
-    if (width !== null) {
-      nextIndex = cursor;
-      nextWidth = width;
-      break;
-    }
-  }
+/** Preserve old effective widths when a legacy river enters the new editor. */
+export function upgradeRiverWidths(river: RiverFeature): RiverFeature {
+  if (river.width_mode !== "legacy") return { ...river, width_mode: "distance" };
+  const widths = getRiverPointWidths(river.points, "legacy");
+  return {
+    ...river,
+    width_mode: "distance",
+    points: river.points.map((point, i) => ({ ...point, width: widths[i]! }))
+  };
+}
 
-  if (previousWidth !== null && nextWidth !== null) {
-    const span = nextIndex - previousIndex;
-    const amount = span > 0 ? (index - previousIndex) / span : 0;
-    return lerp(previousWidth, nextWidth, amount);
-  }
-  return previousWidth ?? nextWidth ?? DEFAULT_RIVER_WIDTH;
+export function prepareRiverEdit(
+  river: RiverFeature,
+  points?: RiverPoint[],
+  mode: "legacy" | "distance" = "distance"
+): RiverFeature {
+  if (mode === "legacy") return { ...river, width_mode: mode, points: points ?? river.points };
+  const upgraded = upgradeRiverWidths(river);
+  if (!points) return upgraded;
+  const inherited = new Map(
+    river.points.map((point, i) => [
+      point.row + "," + point.col,
+      { point, width: upgraded.points[i]!.width }
+    ])
+  );
+  return {
+    ...upgraded,
+    points: points.map((point) => {
+      const before = inherited.get(point.row + "," + point.col);
+      return river.width_mode === "legacy" &&
+        point.width === undefined &&
+        before &&
+        before.point.width === undefined
+        ? { ...point, width: before.width }
+        : { ...point };
+    })
+  };
 }
 
 export function expandRiverPath(river: RiverFeature): RiverPathSample[] {
   if (river.points.length === 0) {
     return [];
   }
+  const widths = getRiverPointWidths(river.points, river.width_mode ?? "distance");
   if (river.points.length === 1) {
     const point = river.points[0]!;
     return [
       {
         row: point.row,
         col: point.col,
-        width: getPointWidth(river.points, 0),
+        width: widths[0]!,
         river_id: river.id,
         river_name: river.name,
         index: 0
@@ -153,8 +189,8 @@ export function expandRiverPath(river: RiverFeature): RiverPathSample[] {
   for (let pointIndex = 0; pointIndex < river.points.length - 1; pointIndex += 1) {
     const start = river.points[pointIndex]!;
     const end = river.points[pointIndex + 1]!;
-    const startWidth = getPointWidth(river.points, pointIndex);
-    const endWidth = getPointWidth(river.points, pointIndex + 1);
+    const startWidth = widths[pointIndex]!;
+    const endWidth = widths[pointIndex + 1]!;
     const line = buildHexLine(start, end);
 
     line.forEach((coord, lineIndex) => {
@@ -176,14 +212,19 @@ export function expandRiverPath(river: RiverFeature): RiverPathSample[] {
   return samples;
 }
 
-export function findRiversAtCell(rivers: RiverFeature[], target: GridCoordinate): RiverPathSample[] {
-  return rivers.flatMap((river) => expandRiverPath(river).filter((sample) => sameCoord(sample, target)));
+export function findRiversAtCell(
+  rivers: RiverFeature[],
+  target: GridCoordinate
+): RiverPathSample[] {
+  return rivers.flatMap((river) =>
+    expandRiverPath(river).filter((sample) => sameCoord(sample, target))
+  );
 }
 
 export function isRiverWaterEndpointCell(
   cell: Pick<ActiveCell | DesignedCellRecord, "terrain"> | null | undefined
 ): boolean {
-  return Boolean(cell?.terrain && RIVER_ENDPOINT_WATER_TERRAINS.has(cell.terrain));
+  return isOpenWaterTerrain(cell?.terrain ?? null);
 }
 
 export function getRiverEndpointConnections(
@@ -198,7 +239,13 @@ export function getRiverEndpointConnections(
   const startCell = cells.find((cell) => sameCoord(cell, first));
   const endCell = cells.find((cell) => sameCoord(cell, last));
   return {
-    startConnected: isRiverWaterEndpointCell(startCell),
-    endConnected: isRiverWaterEndpointCell(endCell)
+    startConnected:
+      (river.start_kind === undefined ||
+        river.start_kind === "auto" ||
+        river.start_kind === "water") &&
+      isRiverWaterEndpointCell(startCell),
+    endConnected:
+      (river.end_kind === undefined || river.end_kind === "auto" || river.end_kind === "water") &&
+      isRiverWaterEndpointCell(endCell)
   };
 }

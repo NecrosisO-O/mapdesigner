@@ -1,0 +1,12 @@
+{
+  "node": "v24.16.0",
+  "platform": "darwin/arm64",
+  "probes": {
+    "import_150000_cells": {
+      "cells": 150000,
+      "bytes": 10862289,
+      "durationMs": 493.969292,
+      "error": null
+    }
+  }
+}

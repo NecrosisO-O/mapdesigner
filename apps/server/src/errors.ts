@@ -1,11 +1,7 @@
 import type { ValidationIssue } from "@mapdesigner/map-core";
 
 export type ServiceErrorCode =
-  | "bad_request"
-  | "map_not_found"
-  | "validation_failed"
-  | "revision_conflict"
-  | "storage_error";
+  "bad_request" | "map_not_found" | "validation_failed" | "revision_conflict" | "storage_error";
 
 export class ServiceError extends Error {
   code: ServiceErrorCode;

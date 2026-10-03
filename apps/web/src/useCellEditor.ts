@@ -4,17 +4,21 @@ import {
   TAG_ENTRIES,
   TERRAIN_ENTRIES,
   TERRAIN_CATEGORY_ORDER,
-  createCellId,
   getAllowedBiomesForTerrain,
   getAllowedTerrainCategoriesForBiome,
   getAllowedTerrainsForBiome,
   getFilteredTerrainEntries,
   getTerrainCategoryKey,
+  resolveMaterial,
+  type BiomeKey,
+  type TerrainKey,
   type ActiveCell,
   type MapCommand,
   type MapRuntimeState
 } from "@mapdesigner/map-core";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+
+import { useEditorTask } from "./useEditorTask.js";
 
 export interface CellDraft {
   terrain: string;
@@ -49,12 +53,19 @@ function resolveTerrainCategory(terrain: string | null | undefined): string {
 export function useCellEditor(
   currentMap: MapRuntimeState | null,
   applyCommands: (commands: MapCommand[]) => Promise<MapRuntimeState | null>,
-  setMessage: (message: string) => void
+  setMessage: (message: string) => void,
+  brush?: {
+    enabled: boolean;
+    setEnabled: (enabled: boolean) => void;
+    confirmDiscard?: () => Promise<boolean>;
+  }
 ) {
   const [selectedCellId, setSelectedCellId] = useState<string | null>(null);
   const [draft, setDraft] = useState<CellDraft>(toDraft(null));
   const [terrainCategory, setTerrainCategory] = useState<string>("");
-  const [formatBrushEnabled, setFormatBrushEnabled] = useState(false);
+  const [materialNotice, setMaterialNotice] = useState<string | null>(null);
+  const formatBrushEnabled = brush?.enabled ?? false;
+  const setFormatBrushEnabled = (enabled: boolean) => brush?.setEnabled(enabled);
   const [formatBrushScope, setFormatBrushScope] = useState<FormatBrushScope>({
     terrain: true,
     biome: true,
@@ -62,8 +73,10 @@ export function useCellEditor(
     note: false
   });
 
-  const selectedCell =
-    currentMap?.activeCells.find((cell) => cell.id === selectedCellId) ?? null;
+  const [selectedCell, setSelectedCell] = useState<ActiveCell | null>(null);
+  const latest = useRef({ selectedCellId, draft });
+  latest.current = { selectedCellId, draft };
+  const task = useEditorTask(currentMap?.document.meta.id);
 
   const cellDirty =
     selectedCell !== null &&
@@ -72,18 +85,15 @@ export function useCellEditor(
       draft.note !== selectedCell.note ||
       draft.tags.join("|") !== selectedCell.tags.join("|"));
 
-  const filteredTerrainCategories = draft.biome
-    ? getAllowedTerrainCategoriesForBiome(draft.biome)
-    : TERRAIN_CATEGORY_ORDER;
-
-  const terrainOptions = terrainCategory
-    ? getFilteredTerrainEntries(terrainCategory, draft.biome || undefined)
-    : [];
+  const filteredTerrainCategories = TERRAIN_CATEGORY_ORDER;
+  const terrainOptions = terrainCategory ? getFilteredTerrainEntries(terrainCategory) : [];
 
   const biomeOptions = draft.terrain ? getAllowedBiomesForTerrain(draft.terrain) : BIOME_KEYS;
   const canUseFormatBrush = selectedCell?.status === "designed";
 
   function syncDraftFromCell(cell: ActiveCell | null): void {
+    setSelectedCell(cell);
+    setMaterialNotice(null);
     setDraft(toDraft(cell));
     setTerrainCategory(resolveTerrainCategory(cell?.terrain));
   }
@@ -99,6 +109,7 @@ export function useCellEditor(
   }
 
   function ensureCanLeaveSelection(): boolean {
+    if (task.pending) return false;
     if (!cellDirty) {
       return true;
     }
@@ -134,35 +145,37 @@ export function useCellEditor(
         return current;
       }
       const allowedTerrains = new Set(
-        getFilteredTerrainEntries(nextCategory, current.biome || undefined).map((entry) => entry.key)
+        getFilteredTerrainEntries(nextCategory).map((entry) => entry.key)
       );
       return {
         ...current,
-        terrain: allowedTerrains.has(current.terrain as keyof typeof TERRAIN_ENTRIES) ? current.terrain : ""
+        terrain: allowedTerrains.has(current.terrain as keyof typeof TERRAIN_ENTRIES)
+          ? current.terrain
+          : ""
       };
     });
   }
 
   function handleTerrainChange(nextTerrain: string): void {
     setTerrainCategory(nextTerrain ? resolveTerrainCategory(nextTerrain) : terrainCategory);
-    setDraft((current) => {
-      if (!nextTerrain) {
-        return {
-          ...current,
-          terrain: ""
-        };
-      }
-      const allowedBiomes = new Set(getAllowedBiomesForTerrain(nextTerrain));
-      return {
-        ...current,
-        terrain: nextTerrain,
-        biome: current.biome && !allowedBiomes.has(current.biome as keyof typeof BIOME_ENTRIES) ? "" : current.biome
-      };
-    });
+    const resolved = nextTerrain
+      ? resolveMaterial(
+          nextTerrain as TerrainKey,
+          (latest.current.draft.biome || null) as BiomeKey | null
+        )
+      : null;
+    setMaterialNotice(resolved?.notice ?? null);
+    setDraft((current) =>
+      resolved
+        ? { ...current, terrain: resolved.terrain, biome: resolved.biome ?? "" }
+        : { ...current, terrain: "" }
+    );
   }
 
   function handleBiomeChange(nextBiome: string): void {
-    const filteredCategories = nextBiome ? getAllowedTerrainCategoriesForBiome(nextBiome) : TERRAIN_CATEGORY_ORDER;
+    const filteredCategories = nextBiome
+      ? getAllowedTerrainCategoriesForBiome(nextBiome)
+      : TERRAIN_CATEGORY_ORDER;
     setTerrainCategory((current) => {
       if (!current || filteredCategories.includes(current as (typeof filteredCategories)[number])) {
         return current;
@@ -175,7 +188,10 @@ export function useCellEditor(
         ...current,
         biome: nextBiome,
         terrain:
-          nextBiome && current.terrain && allowedTerrains && !allowedTerrains.has(current.terrain as keyof typeof TERRAIN_ENTRIES)
+          nextBiome &&
+          current.terrain &&
+          allowedTerrains &&
+          !allowedTerrains.has(current.terrain as keyof typeof TERRAIN_ENTRIES)
             ? ""
             : current.terrain
       };
@@ -187,27 +203,32 @@ export function useCellEditor(
       return;
     }
     if (!draft.terrain) {
-      setMessage("设置为 designed 时必须选择 terrain");
+      setMessage("请先选择地形，再应用修改。");
       return;
     }
-    const result = await applyCommands([{
-      action: "set_cell",
-      source: "webui",
-      target: { row: selectedCell.row, col: selectedCell.col },
-      changes: {
-        terrain: draft.terrain as keyof typeof TERRAIN_ENTRIES,
-        biome: draft.biome ? (draft.biome as keyof typeof BIOME_ENTRIES) : null,
-        tags: draft.tags as Array<keyof typeof TAG_ENTRIES>,
-        note: draft.note
-      }
-    }]);
+    const submitted = draft;
+    const result = await task.run(() =>
+      applyCommands([
+        {
+          action: "set_cell",
+          source: "webui",
+          target: { row: selectedCell.row, col: selectedCell.col },
+          changes: {
+            terrain: draft.terrain as keyof typeof TERRAIN_ENTRIES,
+            biome: draft.biome ? (draft.biome as keyof typeof BIOME_ENTRIES) : null,
+            tags: draft.tags as Array<keyof typeof TAG_ENTRIES>,
+            note: draft.note
+          }
+        }
+      ])
+    );
     if (!result) {
       return;
     }
-    setSelectedCellId(createCellId(selectedCell.row, selectedCell.col));
-    syncDraftFromCell(
-      result.activeCells.find((cell) => cell.row === selectedCell.row && cell.col === selectedCell.col) ?? null
-    );
+    if (latest.current.selectedCellId !== selectedCell.id) return;
+    const updated = result.activeCells.find((cell) => cell.id === selectedCell.id) ?? selectedCell;
+    setSelectedCell(updated);
+    if (latest.current.draft === submitted) syncDraftFromCell(updated);
     setMessage("单元格修改已保存到服务器");
   }
 
@@ -215,18 +236,27 @@ export function useCellEditor(
     if (!currentMap || !selectedCell) {
       return;
     }
-    const result = await applyCommands([{
-      action: "clear_cell",
-      source: "webui",
-      target: { row: selectedCell.row, col: selectedCell.col }
-    }]);
+    const submitted = draft;
+    const result = await task.run(() =>
+      applyCommands([
+        {
+          action: "clear_cell",
+          source: "webui",
+          target: { row: selectedCell.row, col: selectedCell.col }
+        }
+      ])
+    );
     if (!result) {
       return;
     }
+    if (latest.current.selectedCellId !== selectedCell.id) return;
     const updatedCell =
-      result.activeCells.find((cell) => cell.row === selectedCell.row && cell.col === selectedCell.col) ?? null;
+      result.activeCells.find(
+        (cell) => cell.row === selectedCell.row && cell.col === selectedCell.col
+      ) ?? null;
     setSelectedCellId(updatedCell?.id ?? null);
-    syncDraftFromCell(updatedCell);
+    setSelectedCell(updatedCell);
+    if (latest.current.draft === submitted) syncDraftFromCell(updatedCell);
     if (updatedCell?.status !== "designed") {
       setFormatBrushEnabled(false);
     }
@@ -244,67 +274,62 @@ export function useCellEditor(
       return;
     }
     setFormatBrushEnabled(true);
-    setMessage(`已进入格式刷模式：${selectedCell.display_coord}，当前刷入 ${getFormatBrushLabel()}`);
+    setMessage(
+      `已进入格式刷模式：${selectedCell.display_coord}，当前刷入 ${getFormatBrushLabel()}`
+    );
   }
 
-  async function applyFormatBrush(targetCell: ActiveCell): Promise<void> {
+  async function applyFormatBrushStroke(targets: ActiveCell[]): Promise<void> {
     if (!currentMap || !selectedCell || selectedCell.status !== "designed") {
       setFormatBrushEnabled(false);
       return;
     }
-    if (targetCell.id === selectedCell.id) {
-      return;
-    }
+    targets = [
+      ...new Map(
+        targets.filter((cell) => cell.id !== selectedCell.id).map((cell) => [cell.id, cell])
+      ).values()
+    ];
+    if (!targets.length) return;
     if (Object.values(formatBrushScope).every((enabled) => !enabled)) {
       setMessage("请至少选择一个格式刷字段");
       return;
     }
-    if (!formatBrushScope.terrain && !targetCell.terrain) {
-      setMessage("只刷生态时，目标格必须已有地形");
-      return;
-    }
-
-    const nextTerrain = formatBrushScope.terrain ? selectedCell.terrain : targetCell.terrain;
-    const nextBiome = formatBrushScope.biome ? selectedCell.biome : targetCell.biome;
-    if (!nextTerrain) {
-      setMessage("格式刷结果缺少 terrain，无法应用");
-      return;
-    }
-
-    const result = await applyCommands([{
-      action: "set_cell",
-      source: "webui",
-      target: { row: targetCell.row, col: targetCell.col },
-      changes: {
-        terrain: nextTerrain as keyof typeof TERRAIN_ENTRIES,
-        biome: nextBiome ? (nextBiome as keyof typeof BIOME_ENTRIES) : null,
-        tags: (formatBrushScope.tags ? selectedCell.tags : targetCell.tags) as Array<keyof typeof TAG_ENTRIES>,
-        note: formatBrushScope.note ? selectedCell.note : targetCell.note
-      }
-    }]);
-    if (!result) {
-      return;
-    }
-
-    setSelectedCellId(createCellId(selectedCell.row, selectedCell.col));
-    syncDraftFromCell(
-      result.activeCells.find((cell) => cell.row === selectedCell.row && cell.col === selectedCell.col) ?? null
+    const result = await task.run(() =>
+      applyCommands([
+        {
+          action: "patch_cells",
+          source: "webui",
+          targets: targets
+            .filter((cell) => cell.id !== selectedCell.id)
+            .map((cell) => ({ row: cell.row, col: cell.col })),
+          changes: {
+            ...(formatBrushScope.terrain ? { terrain: selectedCell.terrain! } : {}),
+            ...(formatBrushScope.biome ? { biome: selectedCell.biome } : {}),
+            ...(formatBrushScope.tags ? { tags: selectedCell.tags } : {}),
+            ...(formatBrushScope.note ? { note: selectedCell.note } : {})
+          }
+        }
+      ])
     );
-    setMessage(
-      `已将 ${selectedCell.display_coord} 的${getFormatBrushLabel()}刷到 ${targetCell.display_coord} 并保存到服务器`
-    );
+    if (!result) return;
+    setMessage("已将" + getFormatBrushLabel() + "应用到 " + targets.length + " 个格子");
   }
 
-  function handleCanvasCellSelect(cell: ActiveCell): void {
+  async function handleCanvasCellSelect(cell: ActiveCell): Promise<boolean> {
     if (formatBrushEnabled) {
-      void applyFormatBrush(cell);
-      return;
+      void applyFormatBrushStroke([cell]);
+      return false;
     }
-    if (!ensureCanLeaveSelection()) {
-      return;
+    if (
+      task.pending ||
+      (cellDirty &&
+        !(brush?.confirmDiscard ? await brush.confirmDiscard() : ensureCanLeaveSelection()))
+    ) {
+      return false;
     }
     setSelectedCellId(cell.id);
     syncDraftFromCell(cell);
+    return true;
   }
 
   useEffect(() => {
@@ -314,20 +339,22 @@ export function useCellEditor(
   }, [canUseFormatBrush, formatBrushEnabled]);
 
   useEffect(() => {
-    if (!currentMap && selectedCellId) {
-      resetEditor();
-      return;
-    }
-    if (currentMap && selectedCellId && !selectedCell) {
-      resetEditor();
-    }
-  }, [currentMap, selectedCell, selectedCellId]);
+    resetEditor();
+  }, [currentMap?.document.meta.id]);
+  useEffect(() => {
+    if (cellDirty || !selectedCellId || task.pending) return;
+    const visible = currentMap?.activeCells.find((cell) => cell.id === selectedCellId);
+    if (visible && JSON.stringify(toDraft(visible)) !== JSON.stringify(toDraft(selectedCell)))
+      syncDraftFromCell(visible);
+  }, [currentMap, selectedCellId, cellDirty, task.pending]);
 
   return {
+    pending: task.pending,
     selectedCellId,
     selectedCell,
     draft,
     terrainCategory,
+    materialNotice,
     formatBrushEnabled,
     formatBrushScope,
     cellDirty,
@@ -348,6 +375,7 @@ export function useCellEditor(
     applyDraft,
     clearSelected,
     toggleFormatBrush,
-    handleCanvasCellSelect
+    handleCanvasCellSelect,
+    applyFormatBrushStroke
   };
 }

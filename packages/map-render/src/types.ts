@@ -1,4 +1,13 @@
-import type { ActiveCell, CellRange, ExportRenderOptions, GridCoordinate, MapRuntimeState, RiverFeature, TagKey } from "@mapdesigner/map-core";
+import type {
+  ActiveCell,
+  CellRange,
+  ExportRenderOptions,
+  GridCoordinate,
+  MapRuntimeState,
+  MapStyle,
+  RiverFeature,
+  TagKey
+} from "@mapdesigner/map-core";
 
 export interface HexLayoutOptions {
   size: number;
@@ -17,6 +26,7 @@ export interface HexCellLayout {
 export interface RiverBodyLayout {
   id: string;
   riverId: string;
+  networkId: string;
   riverName: string;
   bankPath: string | null;
   bodyPath: string;
@@ -53,6 +63,12 @@ export interface RiverControlPointLayout {
 }
 
 export interface MapRenderOptions {
+  mapStyle?: MapStyle;
+  includeTerrain?: boolean;
+  includeTerrainSymbols?: boolean;
+  includeBiomes?: boolean;
+  includeRivers?: boolean;
+  includeTags?: boolean;
   size?: number;
   padding?: number;
   background?: string;
@@ -76,6 +92,7 @@ export interface MapScene {
   minY: number;
   background: string;
   layout: HexCellLayout[];
+  water: { surfacePath: string; shorePath: string };
   riverBodies: RiverBodyLayout[];
   riverControlPoints: RiverControlPointLayout[];
   defs: string[];
@@ -83,6 +100,19 @@ export interface MapScene {
     previewRivers: RiverFeature[];
     boundsCoords?: GridCoordinate[];
     riverClipRange?: CellRange;
+  };
+  composition?: {
+    mapWidth: number;
+    mapHeight: number;
+    headerHeight: number;
+    legendWidth: number;
+    footerHeight: number;
+    titleLines: string[];
+    captionLines: string[];
+    scale: number;
+    northArrow: boolean;
+    gridScale: boolean;
+    legend: Array<{ kind: "terrain" | "biome" | "tag" | "river"; key: string }>;
   };
 }
 

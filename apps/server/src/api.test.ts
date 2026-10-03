@@ -166,8 +166,12 @@ describe("server api", () => {
       expect(exported.statusCode).toBe(200);
       const exportedBody = exported.json();
       expect(exportedBody.ok).toBe(true);
-      expect(exportedBody.result.fileName).toMatch(/download-test-reference-r-1_1-c-1_1\.png$/);
-      expect(exportedBody.result.downloadUrl).toBe(`/api/exports/${encodeURIComponent(exportedBody.result.fileName)}`);
+      expect(exportedBody.result.fileName).toMatch(
+        /download-test-reference-r-1_1-c-1_1-[a-f0-9-]+\.png$/
+      );
+      expect(exportedBody.result.downloadUrl).toContain(
+        `/api/exports/${encodeURIComponent(exportedBody.result.fileName)}`
+      );
 
       const downloaded = await app.inject({
         method: "GET",
@@ -185,8 +189,8 @@ describe("server api", () => {
       expect(exportedJson.statusCode).toBe(200);
       const exportedJsonBody = exportedJson.json();
       expect(exportedJsonBody.ok).toBe(true);
-      expect(exportedJsonBody.result.fileName).toMatch(/download-test\.json$/);
-      expect(exportedJsonBody.result.downloadUrl).toBe(
+      expect(exportedJsonBody.result.fileName).toMatch(/download-test-[a-f0-9-]+\.json$/);
+      expect(exportedJsonBody.result.downloadUrl).toContain(
         `/api/exports/${encodeURIComponent(exportedJsonBody.result.fileName)}`
       );
 
@@ -196,7 +200,9 @@ describe("server api", () => {
       });
       expect(downloadedJson.statusCode).toBe(200);
       expect(downloadedJson.headers["content-type"]).toContain("application/json");
-      expect(downloadedJson.headers["content-disposition"]).toContain(exportedJsonBody.result.fileName);
+      expect(downloadedJson.headers["content-disposition"]).toContain(
+        exportedJsonBody.result.fileName
+      );
       expect(JSON.parse(downloadedJson.body).meta.id).toBe(mapId);
     } finally {
       await app.close();
@@ -298,8 +304,15 @@ describe("server api", () => {
       });
       expect(range.statusCode).toBe(200);
       const rangeBody = range.json();
-      expect(rangeBody.result.cells.some((cell: { display_coord: string; status: string }) => cell.display_coord === "R0C0" && cell.status === "designed")).toBe(true);
-      expect(rangeBody.result.cells.some((cell: { status: string }) => cell.status === "undesigned")).toBe(true);
+      expect(
+        rangeBody.result.cells.some(
+          (cell: { display_coord: string; status: string }) =>
+            cell.display_coord === "R0C0" && cell.status === "designed"
+        )
+      ).toBe(true);
+      expect(
+        rangeBody.result.cells.some((cell: { status: string }) => cell.status === "undesigned")
+      ).toBe(true);
     } finally {
       await app.close();
     }
@@ -433,7 +446,9 @@ describe("server api", () => {
       expect(riverLight.statusCode).toBe(200);
       const riverLightBody = riverLight.json();
       expect(riverLightBody.result.map).toBeUndefined();
-      expect(riverLightBody.result.features.rivers.map((river: { id: string }) => river.id)).toEqual(["light-api-river"]);
+      expect(
+        riverLightBody.result.features.rivers.map((river: { id: string }) => river.id)
+      ).toEqual(["light-api-river"]);
       expect(riverLightBody.result.summary.feature_counts.rivers).toBe(1);
       expect(riverLightBody.result.stats.feature_stats).toEqual({
         river_created_count: 1,
@@ -482,8 +497,12 @@ describe("server api", () => {
       expect(mixedLightBody.result.map).toBeUndefined();
       expect(mixedLightBody.result.summary.designed_cell_count).toBe(2);
       expect(mixedLightBody.result.summary.feature_counts.rivers).toBe(1);
-      expect(mixedLightBody.result.features.rivers.map((river: { id: string }) => river.id)).toEqual(["mixed-api-river"]);
-      expect(mixedLightBody.result.command_results.map((entry: { index: number }) => entry.index)).toEqual([0, 1]);
+      expect(
+        mixedLightBody.result.features.rivers.map((river: { id: string }) => river.id)
+      ).toEqual(["mixed-api-river"]);
+      expect(
+        mixedLightBody.result.command_results.map((entry: { index: number }) => entry.index)
+      ).toEqual([0, 1]);
       expect(mixedLightBody.result.changes).toHaveLength(1);
     } finally {
       await app.close();
@@ -581,7 +600,9 @@ describe("server api", () => {
       });
       expect(features.statusCode).toBe(200);
       const featuresBody = features.json();
-      expect(featuresBody.result.rivers.map((river: { id: string }) => river.id)).toEqual(["near-river-b"]);
+      expect(featuresBody.result.rivers.map((river: { id: string }) => river.id)).toEqual([
+        "near-river-b"
+      ]);
       expect(featuresBody.result.page).toEqual({
         total: 2,
         limit: 1,
@@ -749,14 +770,14 @@ describe("server api", () => {
       });
       expect(index.statusCode).toBe(200);
       expect(index.headers["content-type"]).toContain("text/html");
-      expect(index.body).toContain("<div id=\"root\"></div>");
+      expect(index.body).toContain('<div id="root"></div>');
 
       const appRoute = await app.inject({
         method: "GET",
         url: "/maps/demo"
       });
       expect(appRoute.statusCode).toBe(200);
-      expect(appRoute.body).toContain("<div id=\"root\"></div>");
+      expect(appRoute.body).toContain('<div id="root"></div>');
 
       const api = await app.inject({
         method: "GET",

@@ -2,6 +2,7 @@ export type LayoutType = "flat-top-even-q";
 export type CellStatus = "designed" | "undesigned";
 export type IssueSeverity = "warning" | "invalid";
 export type HistorySource = "webui" | "cli" | "system";
+export type MapStyle = "classic-v1" | "atlas-v1";
 
 export interface GridCoordinate {
   row: number;
@@ -16,6 +17,7 @@ export interface MapMeta {
   created_at: string;
   updated_at: string;
   revision: number;
+  map_style?: MapStyle;
 }
 
 export interface GridConfig {
@@ -32,7 +34,10 @@ export interface DesignedCellRecord extends GridCoordinate {
 
 export interface RiverPoint extends GridCoordinate {
   width?: number | null;
+  junction_id?: string | null;
 }
+export type RiverFlow = "unspecified" | "forward" | "reverse";
+export type RiverEndpoint = "auto" | "spring" | "water" | "open";
 
 export interface RiverFeature {
   id: string;
@@ -40,6 +45,10 @@ export interface RiverFeature {
   points: RiverPoint[];
   color?: string | null;
   opacity?: number | null;
+  width_mode?: "legacy" | "distance";
+  flow_direction?: RiverFlow;
+  start_kind?: RiverEndpoint;
+  end_kind?: RiverEndpoint;
 }
 
 export interface MapFeatures {
@@ -77,6 +86,7 @@ export interface MapSummary {
   meta: MapMeta;
   grid: GridConfig;
   bounds: MapBounds;
+  render_bounds?: MapBounds;
   designed_cell_count: number;
   feature_counts: {
     rivers: number;
@@ -88,6 +98,29 @@ export interface CellRange {
   maxRow: number;
   minCol: number;
   maxCol: number;
+}
+
+export interface MapOverview {
+  rivers?: Array<{
+    id: string;
+    name: string;
+    color: string;
+    width: number;
+    paths: GridCoordinate[][];
+  }>;
+  river_detail_limited?: boolean;
+  map_id: string;
+  revision: number;
+  range: CellRange;
+  bucket_size: number;
+  designed_cell_count: number;
+  tiles: Array<{
+    row: number;
+    col: number;
+    count: number;
+    terrain: TerrainKey | null;
+    river: boolean;
+  }>;
 }
 
 export interface CellRangeResult {
@@ -206,6 +239,13 @@ export interface ClearCellCommand extends MapCommandBase {
   target: GridCoordinate;
 }
 
+export interface PatchCellsCommand extends MapCommandBase {
+  action: "patch_cells";
+  tagMode?: "replace" | "add" | "remove";
+  targets: GridCoordinate[];
+  changes: Partial<SetCellCommand["changes"]>;
+}
+
 export interface ReplaceTerrainCommand extends MapCommandBase {
   action: "replace_terrain";
   match: {
@@ -243,6 +283,10 @@ export interface CreateRiverCommand extends MapCommandBase {
     points: RiverPoint[];
     color?: string | null;
     opacity?: number | null;
+    width_mode?: RiverFeature["width_mode"];
+    flow_direction?: RiverFlow;
+    start_kind?: RiverEndpoint;
+    end_kind?: RiverEndpoint;
   };
 }
 
@@ -254,6 +298,10 @@ export interface UpdateRiverCommand extends MapCommandBase {
     points?: RiverPoint[];
     color?: string | null;
     opacity?: number | null;
+    width_mode?: RiverFeature["width_mode"];
+    flow_direction?: RiverFlow;
+    start_kind?: RiverEndpoint;
+    end_kind?: RiverEndpoint;
   };
 }
 
@@ -276,6 +324,11 @@ export interface SetRiverWidthCommand extends MapCommandBase {
 }
 
 export type MapCommand =
+  | (MapCommandBase & { action: "set_map_style"; style: MapStyle })
+  | (MapCommandBase & { action: "connect_river_points"; points: RiverPointReference[] })
+  | (MapCommandBase & { action: "disconnect_river_point"; point: RiverPointReference })
+  | (MapCommandBase & { action: "restore_rivers"; rivers: RiverFeature[]; remove_ids: string[] })
+  | PatchCellsCommand
   | SetCellCommand
   | SetCellsCommand
   | ClearCellCommand
@@ -287,6 +340,11 @@ export type MapCommand =
   | DeleteRiverCommand
   | SetRiverPathCommand
   | SetRiverWidthCommand;
+
+export interface RiverPointReference {
+  river_id: string;
+  point_index: number;
+}
 
 export interface CommandResult {
   ok: boolean;
@@ -393,6 +451,7 @@ export type TagKey =
   | "fault_line";
 
 export interface ExportRenderOptions {
+  expectedRevision?: number;
   preset: "clean" | "reference";
   includeCoordinates: boolean;
   includeShorthand: boolean;
@@ -402,4 +461,31 @@ export interface ExportRenderOptions {
   padding: number;
   scale: number;
   range?: CellRange | null;
+  includeTerrain?: boolean;
+  includeTerrainSymbols?: boolean;
+  includeBiomes?: boolean;
+  includeRivers?: boolean;
+  includeTags?: boolean;
+  includeLegend?: boolean;
+  title?: string;
+  caption?: string;
+  northArrow?: boolean;
+  gridScale?: boolean;
+}
+
+export interface MapMaterialUsage {
+  map_id: string;
+  revision: number;
+  terrains: TerrainKey[];
+  biomes: BiomeKey[];
+  tags: TagKey[];
+  river_count: number;
+}
+
+export interface ExportPreview {
+  image: string;
+  width: number;
+  height: number;
+  revision: number;
+  cellCount: number;
 }

@@ -1,0 +1,2707 @@
+{
+  "schema_version": 1,
+  "meta": {
+    "id": "visual-estuary",
+    "name": "星湾 · 视觉验收",
+    "description": "地形、河口与工作区固定样例",
+    "tags": [
+      "visual-fixture"
+    ],
+    "created_at": "2026-10-03T00:00:00.000Z",
+    "updated_at": "2026-10-03T00:00:00.000Z",
+    "revision": 1
+  },
+  "grid": {
+    "layout": "flat-top-even-q",
+    "origin": {
+      "row": 0,
+      "col": 0
+    }
+  },
+  "cells": [
+    {
+      "row": -10,
+      "col": 0,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -10,
+      "col": 1,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -10,
+      "col": 2,
+      "terrain": "plain",
+      "biome": "grassland",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -10,
+      "col": 3,
+      "terrain": "beach",
+      "biome": "bare",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -10,
+      "col": 4,
+      "terrain": "sea",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -10,
+      "col": 5,
+      "terrain": "sea",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -10,
+      "col": 6,
+      "terrain": "ocean",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -10,
+      "col": 7,
+      "terrain": "ocean",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -10,
+      "col": 8,
+      "terrain": "ocean",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -10,
+      "col": 9,
+      "terrain": "ocean",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -10,
+      "col": 10,
+      "terrain": "ocean",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -9,
+      "col": -1,
+      "terrain": "plain",
+      "biome": "grassland",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -9,
+      "col": 0,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -9,
+      "col": 1,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -9,
+      "col": 2,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -9,
+      "col": 3,
+      "terrain": "beach",
+      "biome": "bare",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -9,
+      "col": 4,
+      "terrain": "sea",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -9,
+      "col": 5,
+      "terrain": "sea",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -9,
+      "col": 6,
+      "terrain": "ocean",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -9,
+      "col": 7,
+      "terrain": "ocean",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -9,
+      "col": 8,
+      "terrain": "ocean",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -9,
+      "col": 9,
+      "terrain": "ocean",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -9,
+      "col": 10,
+      "terrain": "ocean",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -8,
+      "col": -2,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -8,
+      "col": -1,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -8,
+      "col": 0,
+      "terrain": "plain",
+      "biome": "grassland",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -8,
+      "col": 1,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -8,
+      "col": 2,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -8,
+      "col": 3,
+      "terrain": "beach",
+      "biome": "bare",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -8,
+      "col": 4,
+      "terrain": "sea",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -8,
+      "col": 5,
+      "terrain": "sea",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -8,
+      "col": 6,
+      "terrain": "ocean",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -8,
+      "col": 7,
+      "terrain": "ocean",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -8,
+      "col": 8,
+      "terrain": "ocean",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -8,
+      "col": 9,
+      "terrain": "ocean",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -8,
+      "col": 10,
+      "terrain": "ocean",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -7,
+      "col": -3,
+      "terrain": "plain",
+      "biome": "grassland",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -7,
+      "col": -2,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -7,
+      "col": -1,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -7,
+      "col": 0,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -7,
+      "col": 1,
+      "terrain": "plain",
+      "biome": "grassland",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -7,
+      "col": 2,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -7,
+      "col": 3,
+      "terrain": "beach",
+      "biome": "bare",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -7,
+      "col": 4,
+      "terrain": "sea",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -7,
+      "col": 5,
+      "terrain": "sea",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -7,
+      "col": 6,
+      "terrain": "ocean",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -7,
+      "col": 7,
+      "terrain": "ocean",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -7,
+      "col": 8,
+      "terrain": "ocean",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -7,
+      "col": 9,
+      "terrain": "ocean",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -7,
+      "col": 10,
+      "terrain": "ocean",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -6,
+      "col": -4,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -6,
+      "col": -3,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -6,
+      "col": -2,
+      "terrain": "plain",
+      "biome": "grassland",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -6,
+      "col": -1,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -6,
+      "col": 0,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -6,
+      "col": 1,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -6,
+      "col": 2,
+      "terrain": "beach",
+      "biome": "bare",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -6,
+      "col": 3,
+      "terrain": "sea",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -6,
+      "col": 4,
+      "terrain": "sea",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -6,
+      "col": 5,
+      "terrain": "ocean",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -6,
+      "col": 6,
+      "terrain": "ocean",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -6,
+      "col": 7,
+      "terrain": "ocean",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -6,
+      "col": 8,
+      "terrain": "ocean",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -6,
+      "col": 9,
+      "terrain": "ocean",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -6,
+      "col": 10,
+      "terrain": "ocean",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -5,
+      "col": -5,
+      "terrain": "plain",
+      "biome": "grassland",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -5,
+      "col": -4,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -5,
+      "col": -3,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -5,
+      "col": -2,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -5,
+      "col": -1,
+      "terrain": "plain",
+      "biome": "grassland",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -5,
+      "col": 0,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -5,
+      "col": 1,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -5,
+      "col": 2,
+      "terrain": "beach",
+      "biome": "bare",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -5,
+      "col": 3,
+      "terrain": "sea",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -5,
+      "col": 4,
+      "terrain": "sea",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -5,
+      "col": 5,
+      "terrain": "ocean",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -5,
+      "col": 6,
+      "terrain": "ocean",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -5,
+      "col": 7,
+      "terrain": "ocean",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -5,
+      "col": 8,
+      "terrain": "ocean",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -5,
+      "col": 9,
+      "terrain": "ocean",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -5,
+      "col": 10,
+      "terrain": "ocean",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -4,
+      "col": -6,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -4,
+      "col": -5,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -4,
+      "col": -4,
+      "terrain": "plain",
+      "biome": "grassland",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -4,
+      "col": -3,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -4,
+      "col": -2,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -4,
+      "col": -1,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -4,
+      "col": 0,
+      "terrain": "plain",
+      "biome": "grassland",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -4,
+      "col": 1,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -4,
+      "col": 2,
+      "terrain": "beach",
+      "biome": "bare",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -4,
+      "col": 3,
+      "terrain": "sea",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -4,
+      "col": 4,
+      "terrain": "sea",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -4,
+      "col": 5,
+      "terrain": "ocean",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -4,
+      "col": 6,
+      "terrain": "ocean",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -4,
+      "col": 7,
+      "terrain": "ocean",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -4,
+      "col": 8,
+      "terrain": "ocean",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -4,
+      "col": 9,
+      "terrain": "ocean",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -4,
+      "col": 10,
+      "terrain": "ocean",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -3,
+      "col": -7,
+      "terrain": "plain",
+      "biome": "grassland",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -3,
+      "col": -6,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -3,
+      "col": -5,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -3,
+      "col": -4,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -3,
+      "col": -3,
+      "terrain": "plain",
+      "biome": "grassland",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -3,
+      "col": -2,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -3,
+      "col": -1,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -3,
+      "col": 0,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -3,
+      "col": 1,
+      "terrain": "plain",
+      "biome": "grassland",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -3,
+      "col": 2,
+      "terrain": "beach",
+      "biome": "bare",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -3,
+      "col": 3,
+      "terrain": "sea",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -3,
+      "col": 4,
+      "terrain": "sea",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -3,
+      "col": 5,
+      "terrain": "ocean",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -3,
+      "col": 6,
+      "terrain": "ocean",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -3,
+      "col": 7,
+      "terrain": "ocean",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -3,
+      "col": 8,
+      "terrain": "ocean",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -3,
+      "col": 9,
+      "terrain": "ocean",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -3,
+      "col": 10,
+      "terrain": "ocean",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -2,
+      "col": -8,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -2,
+      "col": -7,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -2,
+      "col": -6,
+      "terrain": "plain",
+      "biome": "grassland",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -2,
+      "col": -5,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -2,
+      "col": -4,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -2,
+      "col": -3,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -2,
+      "col": -2,
+      "terrain": "plain",
+      "biome": "grassland",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -2,
+      "col": -1,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -2,
+      "col": 0,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -2,
+      "col": 1,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -2,
+      "col": 2,
+      "terrain": "beach",
+      "biome": "bare",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -2,
+      "col": 3,
+      "terrain": "sea",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -2,
+      "col": 4,
+      "terrain": "sea",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -2,
+      "col": 5,
+      "terrain": "ocean",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -2,
+      "col": 6,
+      "terrain": "ocean",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -2,
+      "col": 7,
+      "terrain": "ocean",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -2,
+      "col": 8,
+      "terrain": "ocean",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -2,
+      "col": 9,
+      "terrain": "ocean",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -2,
+      "col": 10,
+      "terrain": "ocean",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -1,
+      "col": -9,
+      "terrain": "plain",
+      "biome": "grassland",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -1,
+      "col": -8,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -1,
+      "col": -7,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -1,
+      "col": -6,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -1,
+      "col": -5,
+      "terrain": "plain",
+      "biome": "grassland",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -1,
+      "col": -4,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -1,
+      "col": -3,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -1,
+      "col": -2,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -1,
+      "col": -1,
+      "terrain": "plain",
+      "biome": "grassland",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -1,
+      "col": 0,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -1,
+      "col": 1,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -1,
+      "col": 2,
+      "terrain": "beach",
+      "biome": "bare",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -1,
+      "col": 3,
+      "terrain": "sea",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -1,
+      "col": 4,
+      "terrain": "sea",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -1,
+      "col": 5,
+      "terrain": "ocean",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -1,
+      "col": 6,
+      "terrain": "ocean",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -1,
+      "col": 7,
+      "terrain": "ocean",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -1,
+      "col": 8,
+      "terrain": "ocean",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -1,
+      "col": 9,
+      "terrain": "ocean",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": -1,
+      "col": 10,
+      "terrain": "ocean",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 0,
+      "col": -10,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 0,
+      "col": -9,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 0,
+      "col": -8,
+      "terrain": "plain",
+      "biome": "grassland",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 0,
+      "col": -7,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 0,
+      "col": -6,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 0,
+      "col": -5,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 0,
+      "col": -4,
+      "terrain": "plain",
+      "biome": "grassland",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 0,
+      "col": -3,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 0,
+      "col": -2,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 0,
+      "col": -1,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 0,
+      "col": 0,
+      "terrain": "plain",
+      "biome": "grassland",
+      "tags": [],
+      "note": "固定视觉验收样例"
+    },
+    {
+      "row": 0,
+      "col": 1,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 0,
+      "col": 2,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 0,
+      "col": 3,
+      "terrain": "beach",
+      "biome": "bare",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 0,
+      "col": 4,
+      "terrain": "sea",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 0,
+      "col": 5,
+      "terrain": "sea",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 0,
+      "col": 6,
+      "terrain": "ocean",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 0,
+      "col": 7,
+      "terrain": "ocean",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 0,
+      "col": 8,
+      "terrain": "ocean",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 0,
+      "col": 9,
+      "terrain": "ocean",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 0,
+      "col": 10,
+      "terrain": "ocean",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 1,
+      "col": -10,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 1,
+      "col": -9,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 1,
+      "col": -8,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 1,
+      "col": -7,
+      "terrain": "plain",
+      "biome": "grassland",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 1,
+      "col": -6,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 1,
+      "col": -5,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 1,
+      "col": -4,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 1,
+      "col": -3,
+      "terrain": "plain",
+      "biome": "grassland",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 1,
+      "col": -2,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 1,
+      "col": -1,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 1,
+      "col": 0,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 1,
+      "col": 1,
+      "terrain": "plain",
+      "biome": "grassland",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 1,
+      "col": 2,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 1,
+      "col": 3,
+      "terrain": "beach",
+      "biome": "bare",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 1,
+      "col": 4,
+      "terrain": "sea",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 1,
+      "col": 5,
+      "terrain": "sea",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 1,
+      "col": 6,
+      "terrain": "ocean",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 1,
+      "col": 7,
+      "terrain": "ocean",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 1,
+      "col": 8,
+      "terrain": "ocean",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 1,
+      "col": 9,
+      "terrain": "ocean",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 2,
+      "col": -10,
+      "terrain": "plain",
+      "biome": "grassland",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 2,
+      "col": -9,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 2,
+      "col": -8,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 2,
+      "col": -7,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 2,
+      "col": -6,
+      "terrain": "plain",
+      "biome": "grassland",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 2,
+      "col": -5,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 2,
+      "col": -4,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 2,
+      "col": -3,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 2,
+      "col": -2,
+      "terrain": "plain",
+      "biome": "grassland",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 2,
+      "col": -1,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 2,
+      "col": 0,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 2,
+      "col": 1,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 2,
+      "col": 2,
+      "terrain": "plain",
+      "biome": "grassland",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 2,
+      "col": 3,
+      "terrain": "beach",
+      "biome": "bare",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 2,
+      "col": 4,
+      "terrain": "sea",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 2,
+      "col": 5,
+      "terrain": "sea",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 2,
+      "col": 6,
+      "terrain": "ocean",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 2,
+      "col": 7,
+      "terrain": "ocean",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 2,
+      "col": 8,
+      "terrain": "ocean",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 3,
+      "col": -10,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 3,
+      "col": -9,
+      "terrain": "plain",
+      "biome": "grassland",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 3,
+      "col": -8,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 3,
+      "col": -7,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 3,
+      "col": -6,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 3,
+      "col": -5,
+      "terrain": "plain",
+      "biome": "grassland",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 3,
+      "col": -4,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 3,
+      "col": -3,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 3,
+      "col": -2,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 3,
+      "col": -1,
+      "terrain": "plain",
+      "biome": "grassland",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 3,
+      "col": 0,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 3,
+      "col": 1,
+      "terrain": "hill",
+      "biome": "conifer_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 3,
+      "col": 2,
+      "terrain": "hill",
+      "biome": "conifer_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 3,
+      "col": 3,
+      "terrain": "beach",
+      "biome": "bare",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 3,
+      "col": 4,
+      "terrain": "sea",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 3,
+      "col": 5,
+      "terrain": "sea",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 3,
+      "col": 6,
+      "terrain": "ocean",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 3,
+      "col": 7,
+      "terrain": "ocean",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 4,
+      "col": -10,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 4,
+      "col": -9,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 4,
+      "col": -8,
+      "terrain": "plain",
+      "biome": "grassland",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 4,
+      "col": -7,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 4,
+      "col": -6,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 4,
+      "col": -5,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 4,
+      "col": -4,
+      "terrain": "plain",
+      "biome": "grassland",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 4,
+      "col": -3,
+      "terrain": "hill",
+      "biome": "conifer_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 4,
+      "col": -2,
+      "terrain": "hill",
+      "biome": "conifer_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 4,
+      "col": -1,
+      "terrain": "hill",
+      "biome": "conifer_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 4,
+      "col": 0,
+      "terrain": "hill",
+      "biome": "conifer_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 4,
+      "col": 1,
+      "terrain": "hill",
+      "biome": "conifer_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 4,
+      "col": 2,
+      "terrain": "hill",
+      "biome": "conifer_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 4,
+      "col": 3,
+      "terrain": "beach",
+      "biome": "bare",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 4,
+      "col": 4,
+      "terrain": "sea",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 4,
+      "col": 5,
+      "terrain": "sea",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 4,
+      "col": 6,
+      "terrain": "ocean",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 5,
+      "col": -10,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 5,
+      "col": -9,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 5,
+      "col": -8,
+      "terrain": "plain",
+      "biome": "deciduous_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 5,
+      "col": -7,
+      "terrain": "hill",
+      "biome": "conifer_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 5,
+      "col": -6,
+      "terrain": "hill",
+      "biome": "conifer_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 5,
+      "col": -5,
+      "terrain": "hill",
+      "biome": "conifer_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 5,
+      "col": -4,
+      "terrain": "hill",
+      "biome": "conifer_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 5,
+      "col": -3,
+      "terrain": "hill",
+      "biome": "conifer_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 5,
+      "col": -2,
+      "terrain": "hill",
+      "biome": "conifer_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 5,
+      "col": -1,
+      "terrain": "hill",
+      "biome": "conifer_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 5,
+      "col": 0,
+      "terrain": "hill",
+      "biome": "conifer_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 5,
+      "col": 1,
+      "terrain": "mountain",
+      "biome": "alpine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 5,
+      "col": 2,
+      "terrain": "mountain",
+      "biome": "alpine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 5,
+      "col": 3,
+      "terrain": "beach",
+      "biome": "bare",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 5,
+      "col": 4,
+      "terrain": "sea",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 5,
+      "col": 5,
+      "terrain": "sea",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 6,
+      "col": -10,
+      "terrain": "hill",
+      "biome": "conifer_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 6,
+      "col": -9,
+      "terrain": "hill",
+      "biome": "conifer_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 6,
+      "col": -8,
+      "terrain": "hill",
+      "biome": "conifer_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 6,
+      "col": -7,
+      "terrain": "hill",
+      "biome": "conifer_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 6,
+      "col": -6,
+      "terrain": "hill",
+      "biome": "conifer_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 6,
+      "col": -5,
+      "terrain": "hill",
+      "biome": "conifer_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 6,
+      "col": -4,
+      "terrain": "hill",
+      "biome": "conifer_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 6,
+      "col": -3,
+      "terrain": "mountain",
+      "biome": "alpine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 6,
+      "col": -2,
+      "terrain": "mountain",
+      "biome": "alpine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 6,
+      "col": -1,
+      "terrain": "mountain",
+      "biome": "alpine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 6,
+      "col": 0,
+      "terrain": "mountain",
+      "biome": "alpine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 6,
+      "col": 1,
+      "terrain": "mountain",
+      "biome": "alpine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 6,
+      "col": 2,
+      "terrain": "mountain",
+      "biome": "alpine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 6,
+      "col": 3,
+      "terrain": "beach",
+      "biome": "bare",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 6,
+      "col": 4,
+      "terrain": "sea",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 7,
+      "col": -10,
+      "terrain": "hill",
+      "biome": "conifer_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 7,
+      "col": -9,
+      "terrain": "hill",
+      "biome": "conifer_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 7,
+      "col": -8,
+      "terrain": "hill",
+      "biome": "conifer_forest",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 7,
+      "col": -7,
+      "terrain": "mountain",
+      "biome": "alpine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 7,
+      "col": -6,
+      "terrain": "mountain",
+      "biome": "alpine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 7,
+      "col": -5,
+      "terrain": "mountain",
+      "biome": "alpine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 7,
+      "col": -4,
+      "terrain": "mountain",
+      "biome": "alpine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 7,
+      "col": -3,
+      "terrain": "mountain",
+      "biome": "alpine",
+      "tags": [
+        "peak"
+      ],
+      "note": ""
+    },
+    {
+      "row": 7,
+      "col": -2,
+      "terrain": "mountain",
+      "biome": "alpine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 7,
+      "col": -1,
+      "terrain": "mountain",
+      "biome": "alpine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 7,
+      "col": 0,
+      "terrain": "mountain",
+      "biome": "alpine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 7,
+      "col": 1,
+      "terrain": "mountain",
+      "biome": "alpine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 7,
+      "col": 2,
+      "terrain": "beach",
+      "biome": "bare",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 7,
+      "col": 3,
+      "terrain": "sea",
+      "biome": "marine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 8,
+      "col": -10,
+      "terrain": "mountain",
+      "biome": "alpine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 8,
+      "col": -9,
+      "terrain": "mountain",
+      "biome": "alpine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 8,
+      "col": -8,
+      "terrain": "mountain",
+      "biome": "alpine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 8,
+      "col": -7,
+      "terrain": "mountain",
+      "biome": "alpine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 8,
+      "col": -6,
+      "terrain": "mountain",
+      "biome": "alpine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 8,
+      "col": -5,
+      "terrain": "mountain",
+      "biome": "alpine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 8,
+      "col": -4,
+      "terrain": "mountain",
+      "biome": "alpine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 8,
+      "col": -3,
+      "terrain": "mountain",
+      "biome": "alpine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 8,
+      "col": -2,
+      "terrain": "mountain",
+      "biome": "alpine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 8,
+      "col": -1,
+      "terrain": "mountain",
+      "biome": "alpine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 8,
+      "col": 0,
+      "terrain": "mountain",
+      "biome": "alpine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 8,
+      "col": 1,
+      "terrain": "mountain",
+      "biome": "alpine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 8,
+      "col": 2,
+      "terrain": "beach",
+      "biome": "bare",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 9,
+      "col": -10,
+      "terrain": "mountain",
+      "biome": "alpine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 9,
+      "col": -9,
+      "terrain": "mountain",
+      "biome": "alpine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 9,
+      "col": -8,
+      "terrain": "mountain",
+      "biome": "alpine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 9,
+      "col": -7,
+      "terrain": "mountain",
+      "biome": "alpine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 9,
+      "col": -6,
+      "terrain": "mountain",
+      "biome": "alpine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 9,
+      "col": -5,
+      "terrain": "mountain",
+      "biome": "alpine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 9,
+      "col": -4,
+      "terrain": "mountain",
+      "biome": "alpine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 9,
+      "col": -3,
+      "terrain": "mountain",
+      "biome": "alpine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 9,
+      "col": -2,
+      "terrain": "mountain",
+      "biome": "alpine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 9,
+      "col": -1,
+      "terrain": "mountain",
+      "biome": "alpine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 9,
+      "col": 0,
+      "terrain": "mountain",
+      "biome": "alpine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 9,
+      "col": 1,
+      "terrain": "mountain",
+      "biome": "alpine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 10,
+      "col": -10,
+      "terrain": "mountain",
+      "biome": "alpine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 10,
+      "col": -9,
+      "terrain": "mountain",
+      "biome": "alpine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 10,
+      "col": -8,
+      "terrain": "mountain",
+      "biome": "alpine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 10,
+      "col": -7,
+      "terrain": "mountain",
+      "biome": "alpine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 10,
+      "col": -6,
+      "terrain": "mountain",
+      "biome": "alpine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 10,
+      "col": -5,
+      "terrain": "mountain",
+      "biome": "alpine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 10,
+      "col": -4,
+      "terrain": "mountain",
+      "biome": "alpine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 10,
+      "col": -3,
+      "terrain": "mountain",
+      "biome": "alpine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 10,
+      "col": -2,
+      "terrain": "mountain",
+      "biome": "alpine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 10,
+      "col": -1,
+      "terrain": "mountain",
+      "biome": "alpine",
+      "tags": [],
+      "note": ""
+    },
+    {
+      "row": 10,
+      "col": 0,
+      "terrain": "mountain",
+      "biome": "alpine",
+      "tags": [],
+      "note": ""
+    }
+  ],
+  "features": {
+    "rivers": [
+      {
+        "id": "star-river",
+        "name": "星湾河",
+        "width_mode": "distance",
+        "points": [
+          {
+            "row": 7,
+            "col": -3,
+            "width": 2
+          },
+          {
+            "row": 3,
+            "col": -2
+          },
+          {
+            "row": 0,
+            "col": 0,
+            "width": 7
+          },
+          {
+            "row": -3,
+            "col": 2
+          },
+          {
+            "row": -4,
+            "col": 6,
+            "width": 15
+          }
+        ]
+      }
+    ]
+  }
+}

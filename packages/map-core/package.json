@@ -1,6 +1,6 @@
 {
   "name": "@mapdesigner/map-core",
-  "version": "0.2.0",
+  "version": "0.3.0-rc.1",
   "private": true,
   "type": "module",
   "main": "./dist/index.js",
@@ -17,6 +17,9 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {
-    "vitest": "^3.2.4"
-  }
+    "vitest": "^5.0.3"
+  },
+  "files": [
+    "dist"
+  ]
 }

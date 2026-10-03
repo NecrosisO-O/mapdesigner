@@ -94,7 +94,9 @@ function readOptionalColorFlag(args: string[], name: string): string | undefined
 }
 
 function readOptionalRangeFlags(args: string[]) {
-  const hasAnyRangeFlag = ["--min-row", "--max-row", "--min-col", "--max-col"].some((flag) => hasFlag(args, flag));
+  const hasAnyRangeFlag = ["--min-row", "--max-row", "--min-col", "--max-col"].some((flag) =>
+    hasFlag(args, flag)
+  );
   if (!hasAnyRangeFlag) {
     return undefined;
   }
@@ -161,7 +163,9 @@ function parseCoordToken(value: string): { row: number; col: number } {
   return parsed;
 }
 
-function parseWidthAnchors(value: string | undefined): Map<string, { coord: { row: number; col: number }; width: number }> {
+function parseWidthAnchors(
+  value: string | undefined
+): Map<string, { coord: { row: number; col: number }; width: number }> {
   const widths = new Map<string, { coord: { row: number; col: number }; width: number }>();
   if (!value) {
     return widths;
@@ -207,7 +211,9 @@ function parseRiverPoints(pointsRaw: string | undefined, widthsRaw?: string): Ri
     let inserted = false;
     for (let index = 0; index < points.length - 1; index += 1) {
       const line = buildHexLine(points[index]!, points[index + 1]!);
-      const lineIndex = line.findIndex((coord) => coord.row === anchor.coord.row && coord.col === anchor.coord.col);
+      const lineIndex = line.findIndex(
+        (coord) => coord.row === anchor.coord.row && coord.col === anchor.coord.col
+      );
       if (lineIndex > 0 && lineIndex < line.length - 1) {
         points.splice(index + 1, 0, { ...anchor.coord, width: anchor.width });
         inserted = true;
@@ -215,7 +221,9 @@ function parseRiverPoints(pointsRaw: string | undefined, widthsRaw?: string): Ri
       }
     }
     if (!inserted) {
-      throw badRequest(`width anchor ${createDisplayCoord(anchor.coord.row, anchor.coord.col)} is not on the river path`);
+      throw badRequest(
+        `width anchor ${createDisplayCoord(anchor.coord.row, anchor.coord.col)} is not on the river path`
+      );
     }
   }
   return points;
@@ -225,13 +233,19 @@ function normalizeCommands(input: unknown): MapCommand[] {
   if (Array.isArray(input)) {
     return input as MapCommand[];
   }
-  if (input && typeof input === "object" && Array.isArray((input as { commands?: unknown }).commands)) {
+  if (
+    input &&
+    typeof input === "object" &&
+    Array.isArray((input as { commands?: unknown }).commands)
+  ) {
     return (input as { commands: MapCommand[] }).commands;
   }
   if (input && typeof input === "object" && "action" in input) {
     return [input as MapCommand];
   }
-  throw badRequest("maps apply input must be a MapCommand, a MapCommand[], or an object with a commands array");
+  throw badRequest(
+    "maps apply input must be a MapCommand, a MapCommand[], or an object with a commands array"
+  );
 }
 
 function parseCommandsJson(content: string): MapCommand[] {
@@ -267,7 +281,9 @@ async function main(): Promise<void> {
   const [group, action] = args;
 
   if (group !== "maps" || !action) {
-    printFailure("usage: mapdesigner maps <list|create|summary|cells|inspect|inspect-cell|inspect-area|neighbors|apply|undo|redo|history-status|rivers|import|export-json|export-png|duplicate|delete>");
+    printFailure(
+      "usage: mapdesigner maps <list|create|summary|cells|inspect|inspect-cell|inspect-area|neighbors|apply|undo|redo|history-status|rivers|import|export-json|export-png|duplicate|delete>"
+    );
   }
 
   try {
@@ -297,7 +313,14 @@ async function main(): Promise<void> {
         break;
       }
       case "cells": {
-        assertKnownFlags(args, ["--map-id", "--min-row", "--max-row", "--min-col", "--max-col", "--include-undesigned"]);
+        assertKnownFlags(args, [
+          "--map-id",
+          "--min-row",
+          "--max-row",
+          "--min-col",
+          "--max-col",
+          "--include-undesigned"
+        ]);
         const id = readFlag(args, "--map-id");
         if (!id) {
           printFailure("maps cells requires --map-id");
@@ -412,7 +435,16 @@ async function main(): Promise<void> {
         }
         switch (riverAction) {
           case "list": {
-            assertKnownFlags(args, ["--map-id", "--min-row", "--max-row", "--min-col", "--max-col", "--limit", "--offset", "--page"]);
+            assertKnownFlags(args, [
+              "--map-id",
+              "--min-row",
+              "--max-row",
+              "--min-col",
+              "--max-col",
+              "--limit",
+              "--offset",
+              "--page"
+            ]);
             const id = readFlag(args, "--map-id");
             if (!id) {
               printFailure("maps rivers list requires --map-id");
@@ -422,8 +454,12 @@ async function main(): Promise<void> {
               limit: readOptionalIntegerFlag(args, "--limit"),
               offset: readOptionalIntegerFlag(args, "--offset")
             };
-            const features = range ? await getMapFeaturesInRange(id, range, options) : await getMapFeatures(id);
-            printResult(createEnvelope({ result: hasFlag(args, "--page") ? features : features.rivers }));
+            const features = range
+              ? await getMapFeaturesInRange(id, range, options)
+              : await getMapFeatures(id);
+            printResult(
+              createEnvelope({ result: hasFlag(args, "--page") ? features : features.rivers })
+            );
             break;
           }
           case "inspect": {
@@ -442,7 +478,16 @@ async function main(): Promise<void> {
             break;
           }
           case "create": {
-            assertKnownFlags(args, ["--map-id", "--id", "--name", "--points", "--widths", "--color", "--opacity", "--summary"]);
+            assertKnownFlags(args, [
+              "--map-id",
+              "--id",
+              "--name",
+              "--points",
+              "--widths",
+              "--color",
+              "--opacity",
+              "--summary"
+            ]);
             const id = readFlag(args, "--map-id");
             const name = readFlag(args, "--name");
             if (!id || !name) {
@@ -462,12 +507,28 @@ async function main(): Promise<void> {
                 }
               }
             ];
-            const result = summaryOnly ? await applyCommandsLight(id, commands) : await applyCommands(id, commands);
-            printResult(createEnvelope({ result: summaryOnly ? buildApplySummary(result) : result, warnings: result.warnings }));
+            const result = summaryOnly
+              ? await applyCommandsLight(id, commands)
+              : await applyCommands(id, commands);
+            printResult(
+              createEnvelope({
+                result: summaryOnly ? buildApplySummary(result) : result,
+                warnings: result.warnings
+              })
+            );
             break;
           }
           case "update": {
-            assertKnownFlags(args, ["--map-id", "--river-id", "--name", "--points", "--widths", "--color", "--opacity", "--summary"]);
+            assertKnownFlags(args, [
+              "--map-id",
+              "--river-id",
+              "--name",
+              "--points",
+              "--widths",
+              "--color",
+              "--opacity",
+              "--summary"
+            ]);
             const id = readFlag(args, "--map-id");
             const riverId = readFlag(args, "--river-id");
             if (!id || !riverId) {
@@ -482,14 +543,27 @@ async function main(): Promise<void> {
                 river_id: riverId,
                 changes: {
                   ...(readFlag(args, "--name") ? { name: readFlag(args, "--name") } : {}),
-                  ...(pointsRaw ? { points: parseRiverPoints(pointsRaw, readFlag(args, "--widths")) } : {}),
-                  ...(readFlag(args, "--color") ? { color: readOptionalColorFlag(args, "--color") } : {}),
-                  ...(readFlag(args, "--opacity") ? { opacity: readOptionalNumberFlag(args, "--opacity") } : {})
+                  ...(pointsRaw
+                    ? { points: parseRiverPoints(pointsRaw, readFlag(args, "--widths")) }
+                    : {}),
+                  ...(readFlag(args, "--color")
+                    ? { color: readOptionalColorFlag(args, "--color") }
+                    : {}),
+                  ...(readFlag(args, "--opacity")
+                    ? { opacity: readOptionalNumberFlag(args, "--opacity") }
+                    : {})
                 }
               }
             ];
-            const result = summaryOnly ? await applyCommandsLight(id, commands) : await applyCommands(id, commands);
-            printResult(createEnvelope({ result: summaryOnly ? buildApplySummary(result) : result, warnings: result.warnings }));
+            const result = summaryOnly
+              ? await applyCommandsLight(id, commands)
+              : await applyCommands(id, commands);
+            printResult(
+              createEnvelope({
+                result: summaryOnly ? buildApplySummary(result) : result,
+                warnings: result.warnings
+              })
+            );
             break;
           }
           case "delete": {
@@ -507,8 +581,15 @@ async function main(): Promise<void> {
                 river_id: riverId
               }
             ];
-            const result = summaryOnly ? await applyCommandsLight(id, commands) : await applyCommands(id, commands);
-            printResult(createEnvelope({ result: summaryOnly ? buildApplySummary(result) : result, warnings: result.warnings }));
+            const result = summaryOnly
+              ? await applyCommandsLight(id, commands)
+              : await applyCommands(id, commands);
+            printResult(
+              createEnvelope({
+                result: summaryOnly ? buildApplySummary(result) : result,
+                warnings: result.warnings
+              })
+            );
             break;
           }
           default:
@@ -529,7 +610,12 @@ async function main(): Promise<void> {
           generateNewId: hasFlag(args, "--generate-new-id"),
           includeMap: !summaryOnly
         });
-        printResult(createEnvelope({ result: summaryOnly ? { summary: result.summary } : result.map, warnings: result.warnings }));
+        printResult(
+          createEnvelope({
+            result: summaryOnly ? { summary: result.summary } : result.map,
+            warnings: result.warnings
+          })
+        );
         break;
       }
       case "export-json": {

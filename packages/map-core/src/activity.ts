@@ -1,11 +1,6 @@
 import { createCellId, createDisplayCoord } from "./coords.js";
 import { getNeighborCoords } from "./neighbors.js";
-import type {
-  ActiveCell,
-  DesignedCellRecord,
-  GridCoordinate,
-  MapDocument
-} from "./types.js";
+import type { ActiveCell, DesignedCellRecord, GridCoordinate, MapDocument } from "./types.js";
 
 function sortCoords(a: GridCoordinate, b: GridCoordinate): number {
   if (a.row !== b.row) {
@@ -39,21 +34,19 @@ export function buildActiveCells(document: MapDocument): ActiveCell[] {
     }
   }
 
-  return [...coords.values()]
-    .sort(sortCoords)
-    .map((coord) => {
-      const designed = designedById.get(createCellId(coord.row, coord.col));
-      return {
-        id: createCellId(coord.row, coord.col),
-        display_coord: createDisplayCoord(coord.row, coord.col),
-        row: coord.row,
-        col: coord.col,
-        status: designed ? "designed" : "undesigned",
-        terrain: designed?.terrain ?? null,
-        biome: designed?.biome ?? null,
-        tags: designed?.tags ?? [],
-        note: designed?.note ?? "",
-        is_seed: document.cells.length === 0
-      } satisfies ActiveCell;
-    });
+  return [...coords.values()].sort(sortCoords).map((coord) => {
+    const designed = designedById.get(createCellId(coord.row, coord.col));
+    return {
+      id: createCellId(coord.row, coord.col),
+      display_coord: createDisplayCoord(coord.row, coord.col),
+      row: coord.row,
+      col: coord.col,
+      status: designed ? "designed" : "undesigned",
+      terrain: designed?.terrain ?? null,
+      biome: designed?.biome ?? null,
+      tags: designed?.tags ?? [],
+      note: designed?.note ?? "",
+      is_seed: document.cells.length === 0
+    } satisfies ActiveCell;
+  });
 }
