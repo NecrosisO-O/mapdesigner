@@ -73,6 +73,7 @@ const PNG_EXPORT_TIMEOUT_SECONDS = 20;
 const MAX_WHOLE_MAP_PNG_EXPORT_CELLS = 10_000;
 
 export type { MapListItem } from "./repository.js";
+export { searchMapFeatures } from "./repository.js";
 
 export interface SaveMapInput {
   document: MapDocument;

@@ -9,6 +9,9 @@ import {
   getAllowedTerrainsForBiome,
   getFilteredTerrainEntries,
   getTerrainCategoryKey,
+  resolveMaterial,
+  type BiomeKey,
+  type TerrainKey,
   type ActiveCell,
   type MapCommand,
   type MapRuntimeState
@@ -60,6 +63,7 @@ export function useCellEditor(
   const [selectedCellId, setSelectedCellId] = useState<string | null>(null);
   const [draft, setDraft] = useState<CellDraft>(toDraft(null));
   const [terrainCategory, setTerrainCategory] = useState<string>("");
+  const [materialNotice, setMaterialNotice] = useState<string | null>(null);
   const formatBrushEnabled = brush?.enabled ?? false;
   const setFormatBrushEnabled = (enabled: boolean) => brush?.setEnabled(enabled);
   const [formatBrushScope, setFormatBrushScope] = useState<FormatBrushScope>({
@@ -81,19 +85,15 @@ export function useCellEditor(
       draft.note !== selectedCell.note ||
       draft.tags.join("|") !== selectedCell.tags.join("|"));
 
-  const filteredTerrainCategories = draft.biome
-    ? getAllowedTerrainCategoriesForBiome(draft.biome)
-    : TERRAIN_CATEGORY_ORDER;
-
-  const terrainOptions = terrainCategory
-    ? getFilteredTerrainEntries(terrainCategory, draft.biome || undefined)
-    : [];
+  const filteredTerrainCategories = TERRAIN_CATEGORY_ORDER;
+  const terrainOptions = terrainCategory ? getFilteredTerrainEntries(terrainCategory) : [];
 
   const biomeOptions = draft.terrain ? getAllowedBiomesForTerrain(draft.terrain) : BIOME_KEYS;
   const canUseFormatBrush = selectedCell?.status === "designed";
 
   function syncDraftFromCell(cell: ActiveCell | null): void {
     setSelectedCell(cell);
+    setMaterialNotice(null);
     setDraft(toDraft(cell));
     setTerrainCategory(resolveTerrainCategory(cell?.terrain));
   }
@@ -145,9 +145,7 @@ export function useCellEditor(
         return current;
       }
       const allowedTerrains = new Set(
-        getFilteredTerrainEntries(nextCategory, current.biome || undefined).map(
-          (entry) => entry.key
-        )
+        getFilteredTerrainEntries(nextCategory).map((entry) => entry.key)
       );
       return {
         ...current,
@@ -167,15 +165,12 @@ export function useCellEditor(
           terrain: ""
         };
       }
-      const allowedBiomes = new Set(getAllowedBiomesForTerrain(nextTerrain));
-      return {
-        ...current,
-        terrain: nextTerrain,
-        biome:
-          current.biome && !allowedBiomes.has(current.biome as keyof typeof BIOME_ENTRIES)
-            ? ""
-            : current.biome
-      };
+      const resolved = resolveMaterial(
+        nextTerrain as TerrainKey,
+        (current.biome || null) as BiomeKey | null
+      );
+      setMaterialNotice(resolved.notice);
+      return { ...current, terrain: resolved.terrain, biome: resolved.biome ?? "" };
     });
   }
 
@@ -210,7 +205,7 @@ export function useCellEditor(
       return;
     }
     if (!draft.terrain) {
-      setMessage("设置为 designed 时必须选择 terrain");
+      setMessage("请先选择地形，再应用修改。");
       return;
     }
     const submitted = draft;
@@ -322,20 +317,21 @@ export function useCellEditor(
     setMessage("已将" + getFormatBrushLabel() + "应用到 " + targets.length + " 个格子");
   }
 
-  async function handleCanvasCellSelect(cell: ActiveCell): Promise<void> {
+  async function handleCanvasCellSelect(cell: ActiveCell): Promise<boolean> {
     if (formatBrushEnabled) {
       void applyFormatBrushStroke([cell]);
-      return;
+      return false;
     }
     if (
       task.pending ||
       (cellDirty &&
         !(brush?.confirmDiscard ? await brush.confirmDiscard() : ensureCanLeaveSelection()))
     ) {
-      return;
+      return false;
     }
     setSelectedCellId(cell.id);
     syncDraftFromCell(cell);
+    return true;
   }
 
   useEffect(() => {
@@ -360,6 +356,7 @@ export function useCellEditor(
     selectedCell,
     draft,
     terrainCategory,
+    materialNotice,
     formatBrushEnabled,
     formatBrushScope,
     cellDirty,

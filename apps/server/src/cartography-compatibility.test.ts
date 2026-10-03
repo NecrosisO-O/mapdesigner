@@ -131,3 +131,33 @@ it("releases database iterators when opening an export file fails", async () => 
   ]);
   expect((await service.getMap(map.document.meta.id)).document.meta.map_style).toBe("classic-v1");
 });
+
+it("finds objects beyond the first 200 independently of the visible region", async () => {
+  const service = await import("./service.js");
+  const map = await service.createMap({ name: "Object search" });
+  const doc = map.document;
+  doc.features.rivers = Array.from({ length: 253 }, (_, index) => ({
+    id: "river-" + String(index).padStart(3, "0"),
+    name: index === 252 ? "Target 远方支流" : "River " + index,
+    points: [
+      { row: index * 10, col: 0 },
+      { row: index * 10, col: 2 }
+    ]
+  }));
+  await service.saveMap({ document: doc, expectedRevision: doc.meta.revision });
+  const page = await service.searchMapFeatures(doc.meta.id, { offset: 250, limit: 50 });
+  expect(page.page).toMatchObject({ total: 253, returned: 3, has_more: false });
+  expect(page.rivers.at(-1)?.id).toBe("river-252");
+  expect(
+    (await service.searchMapFeatures(doc.meta.id, { search: "target" })).rivers.map((r) => r.id)
+  ).toEqual(["river-252"]);
+  expect(
+    (
+      await service.searchMapFeatures(
+        doc.meta.id,
+        { search: "远方" },
+        { minRow: 0, maxRow: 10, minCol: 0, maxCol: 10 }
+      )
+    ).rivers
+  ).toEqual([]);
+});

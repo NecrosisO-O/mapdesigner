@@ -1,4 +1,12 @@
-import type { MapCommand, TagKey } from "@mapdesigner/map-core";
+import { usePanelLayout } from "./usePanelLayout.js";
+import { PanelControls } from "./PanelControls.js";
+import { HistoryPanel } from "./HistoryPanel.js";
+import { Icon } from "./Icon.js";
+import { useMaterialBrush } from "./useMaterialBrush.js";
+import { MaterialLibrary } from "./MaterialLibrary.js";
+import { ObjectBrowser } from "./ObjectBrowser.js";
+import { LegendPanel, type LegendHighlight } from "./LegendPanel.js";
+import type { GridCoordinate, MapCommand, RiverFeature, TagKey } from "@mapdesigner/map-core";
 import { useEffect, useState } from "react";
 import { Dialog, useDialogPrompt } from "./Dialog.js";
 import { ToolRail } from "./ToolRail.js";
@@ -16,7 +24,7 @@ import { useRiverEditor } from "./useRiverEditor.js";
 
 export default function App() {
   const [message, setMessage] = useState<string>("准备就绪");
-  const [showCoordinates, setShowCoordinates] = useState(true);
+  const [showCoordinates, setShowCoordinates] = useState(false);
   const [showShorthand, setShowShorthand] = useState(false);
   const [showGrid, setShowGrid] = useState(true);
   const [showUndesigned, setShowUndesigned] = useState(true);
@@ -24,17 +32,31 @@ export default function App() {
   const [lastOpaqueExportBackground, setLastOpaqueExportBackground] = useState("#F4F0E6");
   const [interactionMode, setInteractionMode] = useState<InteractionMode>("select");
   const prompt = useDialogPrompt();
-  const [contentOpen, setContentOpen] = useState(() => window.innerWidth > 1180),
-    [inspectorOpen, setInspectorOpen] = useState(() => window.innerWidth > 760);
-  const [inspectorTab, setInspectorTab] = useState<"cell" | "batch" | "river" | "history">("cell");
+  const [contentOpen, setContentOpen] = useState(() => window.innerWidth > 760),
+    [inspectorOpen, setInspectorOpen] = useState(false);
+  const panelLayout = usePanelLayout();
+  const [contentTab, setContentTab] = useState<"materials" | "objects" | "legend" | "display">(
+    "materials"
+  );
+  const [layers, setLayers] = useState({ terrain: true, biomes: true, rivers: true, tags: true });
+  const [highlight, setHighlight] = useState<LegendHighlight | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [focusRequest, setFocusRequest] = useState<{ coord: GridCoordinate; token: number } | null>(
+    null
+  );
+  const [inspectorTab, setInspectorTab] = useState<"cell" | "batch" | "river">("cell");
   const [focusMode, setFocusMode] = useState(false),
     [dark, setDark] = useState(false),
     [helpOpen, setHelpOpen] = useState(false);
+  useEffect(() => {
+    document.documentElement.dataset.theme = dark ? "dark" : "light";
+  }, [dark]);
   const workspace = useMapWorkspace(setMessage);
   const activeMap = workspace.visibleMap ?? workspace.currentMap;
+  const materialBrush = useMaterialBrush(workspace.applyCommands, setMessage);
   const editor = useCellEditor(activeMap, workspace.applyCommands, setMessage, {
-    enabled: interactionMode === "brush",
-    setEnabled: (enabled) => setInteractionMode(enabled ? "brush" : "select"),
+    enabled: interactionMode === "format-brush",
+    setEnabled: (enabled) => setInteractionMode(enabled ? "format-brush" : "select"),
     confirmDiscard: async () =>
       !!(await prompt.ask({
         title: "放弃单元格草稿？",
@@ -54,7 +76,7 @@ export default function App() {
   function revealInspector(): void {
     setInspectorOpen(true);
     setFocusMode(false);
-    if (window.innerWidth <= 1180) setContentOpen(false);
+    if (!panelLayout.pinned || window.innerWidth <= 1180) setContentOpen(false);
   }
 
   useEffect(() => {
@@ -106,20 +128,85 @@ export default function App() {
     return true;
   }
   async function changeTool(mode: InteractionMode): Promise<void> {
-    if (mode === interactionMode || !(await ensureCanLeave())) return;
-    if (mode === "brush" && !editor.canUseFormatBrush) {
-      setMessage("请先选择一个已设计单元格作为笔刷来源");
+    if (mode === interactionMode) return;
+    if (workspace.pendingCount || editor.pending || riverEditor.pending || advancedEditor.pending) {
+      setMessage("请等待当前操作完成");
       return;
     }
-    if (riverEditor.riverDrawingStatus === "drawing") riverEditor.cancelRiverDrawing();
-    setInteractionMode(mode);
-    setInspectorTab(mode === "river-draw" ? "river" : mode === "batch-select" ? "batch" : "cell");
-    if (mode === "brush" || mode === "batch-select") revealInspector();
-    if (mode === "river-draw" && window.innerWidth <= 760) {
-      setContentOpen(false);
-      setInspectorOpen(false);
+    if (mode === "format-brush" && editor.cellDirty) {
+      setMessage("先应用当前格子的修改，再复制其格式。");
+      return;
     }
-    if (mode === "river-draw") riverEditor.startRiverDrawing();
+    if (mode === "format-brush" && !editor.canUseFormatBrush) {
+      setMessage("请先选中已设计格作为格式刷来源");
+      return;
+    }
+    if (
+      mode === "river-draw" &&
+      riverEditor.riverDirty &&
+      riverEditor.riverDrawingStatus !== "drawing"
+    ) {
+      if (
+        !(await prompt.ask({
+          title: "开始新的河流？",
+          message: "当前河流属性还有未应用修改。",
+          confirm: "放弃并绘制"
+        }))
+      )
+        return;
+    }
+    setInteractionMode(mode);
+    setFocusMode(false);
+    if (mode === "brush") {
+      setContentTab("materials");
+      setContentOpen(true);
+      if (!panelLayout.pinned || window.innerWidth <= 1180) setInspectorOpen(false);
+    }
+    if (mode === "batch-select" || mode === "format-brush") {
+      setInspectorTab(mode === "batch-select" ? "batch" : "cell");
+      revealInspector();
+    }
+    if (mode === "river-draw") {
+      setLayers((current) => ({ ...current, rivers: true }));
+      setInspectorTab("river");
+      riverEditor.startRiverDrawing();
+      if (window.innerWidth > 760) revealInspector();
+      else {
+        setContentOpen(false);
+        setInspectorOpen(false);
+      }
+    }
+  }
+  async function selectKnownRiver(river: RiverFeature): Promise<void> {
+    if (
+      river.id !== riverEditor.selectedRiverId &&
+      riverEditor.riverDirty &&
+      !(await prompt.ask({
+        title: "切换河流？",
+        message: "当前河流还有未应用修改。",
+        confirm: "放弃并切换"
+      }))
+    )
+      return;
+    if (river.id !== riverEditor.selectedRiverId) riverEditor.selectRiver(river.id, river);
+    setInteractionMode("select");
+    setInspectorTab("river");
+    revealInspector();
+    const point = river.points[Math.floor(river.points.length / 2)];
+    if (point) setFocusRequest({ coord: point, token: Date.now() });
+  }
+  function panelHeader(title: string, onClose: () => void, closeLabel: string) {
+    return (
+      <PanelControls
+        title={title}
+        pinned={panelLayout.pinned}
+        drawer={panelLayout.drawer}
+        onPin={panelLayout.togglePin}
+        onDrawer={() => panelLayout.setDrawer(panelLayout.drawer === "half" ? "full" : "half")}
+        onClose={onClose}
+        closeLabel={closeLabel}
+      />
+    );
   }
   async function moveHistory(direction: "undo" | "redo"): Promise<void> {
     if (!(await ensureCanLeave())) return;
@@ -171,6 +258,7 @@ export default function App() {
   useEffect(() => {
     const listener = (event: KeyboardEvent) => {
       if (
+        historyOpen ||
         prompt.open ||
         helpOpen ||
         exportPanel.exportPanelOpen ||
@@ -193,6 +281,7 @@ export default function App() {
           v: "select",
           h: "pan",
           b: "brush",
+          i: "sample",
           r: "river-draw",
           m: "batch-select"
         };
@@ -297,6 +386,8 @@ export default function App() {
   return (
     <div
       className={"app-shell" + (dark ? " theme-dark" : "") + (focusMode ? " focus-mode" : "")}
+      style={panelLayout.style}
+      data-drawer={panelLayout.drawer}
       data-content-open={contentOpen}
       data-inspector-open={inspectorOpen}
     >
@@ -332,11 +423,27 @@ export default function App() {
         onInteractionModeChange={(mode) => void changeTool(mode)}
         onUndo={() => void moveHistory("undo")}
         onRedo={() => void moveHistory("redo")}
+        error={workspace.writeError}
+        onRetry={
+          workspace.canRetryCommands
+            ? () =>
+                void (editor.cellDirty
+                  ? editor.applyDraft()
+                  : riverEditor.riverDirty
+                    ? riverEditor.applyRiverDraft()
+                    : advancedEditor.batchDirty
+                      ? advancedEditor.applyBatchEdit()
+                      : workspace.retryLastCommands())
+            : workspace.mapDirty
+              ? () => void workspace.saveMap()
+              : undefined
+        }
         pending={workspace.pendingCount > 0}
         onExport={() => exportPanel.setExportPanelOpen(true)}
         onToggleTheme={() => setDark((value) => !value)}
         onToggleFocus={() => setFocusMode((value) => !value)}
         onAccessToken={() => void configureAccess()}
+        onHistory={() => setHistoryOpen(true)}
       />
 
       {(workspace.importProgress ||
@@ -354,25 +461,94 @@ export default function App() {
         <button
           onClick={() => {
             setContentOpen((value) => !value);
-            if (!contentOpen && window.innerWidth <= 760) setInspectorOpen(false);
+            if (!contentOpen && (!panelLayout.pinned || window.innerWidth <= 1180))
+              setInspectorOpen(false);
             setFocusMode(false);
           }}
           aria-expanded={contentOpen}
         >
-          内容与图层
+          <Icon name="library" size={17} /> 材料与对象
         </button>
         <button
           onClick={() => {
             setInspectorOpen((value) => !value);
-            if (!inspectorOpen && window.innerWidth <= 1180) setContentOpen(false);
+            if (!inspectorOpen && (!panelLayout.pinned || window.innerWidth <= 1180))
+              setContentOpen(false);
             setFocusMode(false);
           }}
           aria-expanded={inspectorOpen}
         >
-          属性
+          <Icon name="inspector" size={17} /> 属性
         </button>
+        <div className="tool-context">
+          <strong>
+            {
+              {
+                select: "选择对象",
+                pan: "平移地图",
+                brush: "材料笔刷",
+                "format-brush": "格式刷",
+                sample: "取样材料",
+                "river-draw": "绘制河流",
+                "batch-select": "多选格子"
+              }[interactionMode]
+            }
+          </strong>
+          {interactionMode === "brush" ? (
+            <>
+              <label>
+                范围
+                <select
+                  aria-label="笔刷范围"
+                  value={materialBrush.radius}
+                  onChange={(e) => materialBrush.setRadius(Number(e.target.value))}
+                >
+                  <option value="0">单格</option>
+                  <option value="1">7 格</option>
+                  <option value="2">19 格</option>
+                </select>
+              </label>
+              {(["terrain", "biome"] as const).map((key) => (
+                <label className="checkbox-row" key={key}>
+                  <input
+                    type="checkbox"
+                    checked={materialBrush.fields[key]}
+                    onChange={(e) => {
+                      if (
+                        e.target.checked ||
+                        materialBrush.fields[key === "terrain" ? "biome" : "terrain"]
+                      )
+                        materialBrush.setFields((current) => ({
+                          ...current,
+                          [key]: e.target.checked
+                        }));
+                    }}
+                  />
+                  {key === "terrain" ? "地形" : "生态"}
+                </label>
+              ))}
+            </>
+          ) : (
+            <span>
+              {
+                {
+                  select: "点击格子或河流查看属性",
+                  pan: "拖动地图 · 滚轮缩放",
+                  brush: "",
+                  "format-brush": "拖动复制选中字段",
+                  sample: "点击已设计格取样",
+                  "river-draw": "点击添加节点 · Enter 完成 · Esc 取消",
+                  "batch-select": "点击格子增减选择"
+                }[interactionMode]
+              }
+            </span>
+          )}
+        </div>
       </div>
-      <main className="layout" inert={prompt.open || helpOpen || exportPanel.exportPanelOpen}>
+      <main
+        className="layout"
+        inert={prompt.open || helpOpen || historyOpen || exportPanel.exportPanelOpen}
+      >
         <ToolRail
           mode={interactionMode}
           disabled={!activeMap || workspace.pendingCount > 0}
@@ -380,6 +556,32 @@ export default function App() {
           onHelp={() => setHelpOpen(true)}
         />
         <SidebarPanel
+          tab={contentTab}
+          onTabChange={setContentTab}
+          panelHeader={panelHeader("材料与对象", () => setContentOpen(false), "关闭内容栏")}
+          resizeHandle={
+            <div className="panel-resize-edge right" {...panelLayout.resizeProps("left")} />
+          }
+          materialLibrary={
+            <MaterialLibrary
+              brush={materialBrush}
+              style={activeMap?.document.meta.map_style ?? "classic-v1"}
+              onPaint={() => void changeTool("brush")}
+            />
+          }
+          objectBrowser={
+            <ObjectBrowser
+              mapId={workspace.currentMapId}
+              revision={workspace.mapSummary?.meta.revision ?? 0}
+              range={workspace.visibleRange}
+              selectedId={riverEditor.selectedRiverId}
+              onSelect={(river) => void selectKnownRiver(river)}
+              onCreate={() => void changeTool("river-draw")}
+            />
+          }
+          legend={<LegendPanel map={activeMap} highlight={highlight} onHighlight={setHighlight} />}
+          layers={layers}
+          onLayerChange={(key, visible) => setLayers((current) => ({ ...current, [key]: visible }))}
           onClose={() => setContentOpen(false)}
           onSelectRiver={(id) => {
             riverEditor.selectRiver(id);
@@ -492,11 +694,36 @@ export default function App() {
               selectedCell={editor.selectedCell}
               selectedCellId={editor.selectedCellId}
               onSelectCell={(cell) => {
-                void editor.handleCanvasCellSelect(cell);
-                setInspectorTab("cell");
-                revealInspector();
+                if (interactionMode === "sample") {
+                  if (materialBrush.sample(cell)) {
+                    setInteractionMode("brush");
+                    setContentTab("materials");
+                    setContentOpen(true);
+                    if (!panelLayout.pinned) setInspectorOpen(false);
+                  }
+                  return;
+                }
+                void editor.handleCanvasCellSelect(cell).then((selected) => {
+                  if (selected) {
+                    setInspectorTab("cell");
+                    revealInspector();
+                  }
+                });
               }}
-              onBrushStroke={(cells) => void editor.applyFormatBrushStroke(cells)}
+              onBrushStroke={(cells) =>
+                void (interactionMode === "format-brush"
+                  ? editor.applyFormatBrushStroke(cells)
+                  : materialBrush.paint(cells))
+              }
+              brushRadius={interactionMode === "brush" ? materialBrush.radius : 0}
+              brushMaterial={interactionMode === "brush" ? materialBrush.material : undefined}
+              brushFields={materialBrush.fields}
+              focusRequest={focusRequest}
+              legendHighlight={highlight}
+              showTerrain={layers.terrain}
+              showBiomes={layers.biomes}
+              showRivers={layers.rivers}
+              showTags={layers.tags}
               interactionMode={interactionMode}
               batchSelectedCellIds={advancedEditor.batchSelectedCellIds}
               onBatchCellToggle={advancedEditor.toggleBatchCell}
@@ -533,7 +760,19 @@ export default function App() {
 
         <DetailPanel
           activeTab={inspectorTab}
-          onTabChange={setInspectorTab}
+          panelHeader={panelHeader(
+            inspectorTab === "river"
+              ? "河流属性"
+              : inspectorTab === "batch"
+                ? "批量属性"
+                : "格子属性",
+            () => setInspectorOpen(false),
+            "关闭属性"
+          )}
+          resizeHandle={
+            <div className="panel-resize-edge left" {...panelLayout.resizeProps("right")} />
+          }
+          materialNotice={editor.materialNotice}
           onClose={() => setInspectorOpen(false)}
           pending={workspace.pendingCount > 0}
           currentMap={activeMap}
@@ -554,6 +793,8 @@ export default function App() {
           riverDrawingPointCount={riverEditor.riverDrawingPoints.length}
           batchModeActive={interactionMode === "batch-select"}
           batchSelectedCount={advancedEditor.batchSelectedCells.length}
+          batchMixedFields={advancedEditor.mixedFields}
+          batchPlannedCount={advancedEditor.plannedCount}
           batchTagMode={advancedEditor.batchTagMode}
           onBatchTagModeChange={advancedEditor.setBatchTagMode}
           batchDraft={advancedEditor.batchDraft}
@@ -572,7 +813,7 @@ export default function App() {
           onRevertDraft={() => editor.syncDraftFromCell(editor.selectedCell)}
           onClearSelected={() => void editor.clearSelected()}
           onToggleFormatBrush={() =>
-            void changeTool(interactionMode === "brush" ? "select" : "brush")
+            void changeTool(interactionMode === "format-brush" ? "select" : "format-brush")
           }
           onFormatBrushScopeChange={editor.setFormatBrushScopeField}
           onTerrainCategoryChange={editor.handleTerrainCategoryChange}
@@ -697,11 +938,19 @@ export default function App() {
         </span>
       </footer>
       {prompt.dialog}
+      {historyOpen && (
+        <Dialog title="编辑历史" onClose={() => setHistoryOpen(false)}>
+          <HistoryPanel history={workspace.mapHistory} />
+        </Dialog>
+      )}
       {helpOpen && (
         <Dialog title="快捷键" onClose={() => setHelpOpen(false)}>
+          <p>
+            选择材料后用笔刷拖动绘制；一次拖动对应一次撤销。使用取样工具复制地图上的地形和生态。窄屏可用“展开”查看完整属性，用关闭按钮返回地图。
+          </p>
           <dl className="shortcut-list">
-            <dt>V / H / B / R / M</dt>
-            <dd>选择 / 平移 / 笔刷 / 河流 / 多选</dd>
+            <dt>V / H / B / I / R / M</dt>
+            <dd>选择 / 平移 / 材料笔刷 / 取样 / 河流 / 多选</dd>
             <dt>空格 + 拖动</dt>
             <dd>临时平移</dd>
             <dt>方向键 / Enter</dt>

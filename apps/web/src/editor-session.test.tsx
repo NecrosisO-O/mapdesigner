@@ -122,6 +122,39 @@ describe("draft ownership", () => {
     expect(result.current.riverDirty).toBe(false);
     expect(apply).not.toHaveBeenCalled();
   });
+  it("preserves explicit junctions and endpoint semantics when editing a river name", async () => {
+    const map = makeMap();
+    map.document.features.rivers = [
+      {
+        id: "network",
+        name: "River",
+        width_mode: "distance",
+        flow_direction: "reverse",
+        start_kind: "water",
+        end_kind: "spring",
+        points: [
+          { row: 0, col: 0, width: 2, junction_id: "junction-1" },
+          { row: 0, col: 3, width: 8 }
+        ]
+      }
+    ];
+    const apply = vi.fn(async (_commands: MapCommand[]) => null);
+    const { result } = renderHook(() => useRiverEditor(map, apply, vi.fn()));
+    act(() => result.current.selectRiver("network"));
+    act(() => result.current.setRiverDraft((draft) => ({ ...draft, name: "Renamed" })));
+    await act(() => result.current.applyRiverDraft());
+    expect(apply.mock.calls[0]?.[0]).toEqual([
+      expect.objectContaining({
+        action: "update_river",
+        changes: expect.objectContaining({
+          flow_direction: "reverse",
+          start_kind: "water",
+          end_kind: "spring",
+          points: map.document.features.rivers[0]!.points
+        })
+      })
+    ]);
+  });
 });
 
 function mockWorkspace() {

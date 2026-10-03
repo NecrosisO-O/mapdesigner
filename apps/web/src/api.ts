@@ -201,6 +201,17 @@ async function runJob<T>(
 }
 
 export const api = {
+  searchMapFeatures: (id: string, search: string, offset = 0, range: CellRange | null = null) => {
+    const params = new URLSearchParams({
+      search,
+      offset: String(offset),
+      limit: "50",
+      ...(range
+        ? Object.fromEntries(Object.entries(range).map(([key, value]) => [key, String(value)]))
+        : {})
+    });
+    return request<MapFeaturePage>("/api/maps/" + id + "/features/search?" + params.toString());
+  },
   listMaps: () => request<MapListItem[]>("/api/maps"),
   getMap: (id: string) => request<MapRuntimeState>(`/api/maps/${id}`),
   getMapSummary: (id: string) => request<MapSummary>(`/api/maps/${id}/summary`),
