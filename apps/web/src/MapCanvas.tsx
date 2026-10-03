@@ -281,7 +281,7 @@ function CellGroup(props: {
       data-cell-id={cell.id}
       data-batch-selected={props.batchSelected ? "true" : undefined}
       data-filter-match={props.dimmed ? "false" : "true"}
-      aria-label={`${cell.display_coord} ${cell.status}`}
+      aria-label={`${cell.display_coord} ${cell.status === "designed" ? "已设计" : "待设计"}`}
       onClick={props.onSelect}
       role="button"
       tabIndex={props.selected ? 0 : -1}
@@ -924,7 +924,9 @@ export function MapCanvas(props: MapCanvasProps) {
         <button aria-label="缩小" onClick={() => zoomAtCenter(0.8)}>
           −
         </button>
-        <output aria-label="缩放比例">{Math.round(effectiveScale * 100)}%</output>
+        <output aria-label="缩放比例">
+          {effectiveScale < 0.01 ? "<1" : Math.round(effectiveScale * 100)}%
+        </output>
         <button aria-label="放大" onClick={() => zoomAtCenter(1.25)}>
           +
         </button>
@@ -938,7 +940,8 @@ export function MapCanvas(props: MapCanvasProps) {
       {props.selectedCell ? (
         <div className="canvas-selection-overlay" aria-label="当前选中信息">
           <span>
-            {props.selectedCell.display_coord} | {props.selectedCell.status}
+            {props.selectedCell.display_coord} |{" "}
+            {props.selectedCell.status === "designed" ? "已设计" : "待设计"}
           </span>
         </div>
       ) : null}
@@ -979,7 +982,7 @@ export function MapCanvas(props: MapCanvasProps) {
         height="100%"
         viewBox={`0 0 ${viewportSize.width} ${viewportSize.height}`}
         preserveAspectRatio="none"
-        aria-label="Map canvas"
+        aria-label="地图画布"
         data-render-detail={renderDetail}
         data-coordinate-label-mode={coordinateLabelMode}
       >

@@ -1,5 +1,5 @@
 import type { MapRuntimeState } from "@mapdesigner/map-core";
-import type { ChangeEvent, RefObject } from "react";
+import { useEffect, useRef, type ChangeEvent, type RefObject } from "react";
 import type { MapHistory, MapListItem } from "./api.js";
 
 export type InteractionMode = "select" | "pan" | "brush" | "river-draw" | "batch-select";
@@ -38,6 +38,19 @@ interface TopToolbarProps {
 }
 
 export function TopToolbar(props: TopToolbarProps) {
+  const menu = useRef<HTMLDetailsElement>(null);
+  function closeMenu(restoreFocus = false): void {
+    if (!menu.current) return;
+    menu.current.open = false;
+    if (restoreFocus) menu.current.querySelector("summary")?.focus();
+  }
+  useEffect(() => {
+    const outside = (event: PointerEvent) => {
+      if (menu.current?.open && !menu.current.contains(event.target as Node)) closeMenu();
+    };
+    document.addEventListener("pointerdown", outside);
+    return () => document.removeEventListener("pointerdown", outside);
+  }, []);
   const canUndo = !!props.currentMap && (props.mapHistory?.status.canUndo ?? false);
   const canRedo = !!props.currentMap && (props.mapHistory?.status.canRedo ?? false);
 
@@ -58,17 +71,34 @@ export function TopToolbar(props: TopToolbarProps) {
         </span>
         <strong>MapDesigner</strong>
       </div>
-      <details className="document-menu">
+      <details
+        ref={menu}
+        className="document-menu"
+        onKeyDown={(event) => {
+          if (event.key === "Escape") {
+            event.stopPropagation();
+            closeMenu(true);
+          }
+        }}
+      >
         <summary>
           地图 <span aria-hidden="true">⌄</span>
         </summary>
-        <div className="document-menu-content">
+        <div
+          className="document-menu-content"
+          onClick={(event) => {
+            if ((event.target as HTMLElement).closest("button")) closeMenu(true);
+          }}
+        >
           <label>
             选择地图
             <select
               aria-label="选择地图"
               value={props.currentMapId}
-              onChange={(event) => props.onSelectMap(event.target.value)}
+              onChange={(event) => {
+                props.onSelectMap(event.target.value);
+                closeMenu(true);
+              }}
             >
               <option value="">选择地图</option>
               {props.displayMaps.map((map) => (

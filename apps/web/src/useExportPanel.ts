@@ -31,7 +31,12 @@ export function useExportPanel(setMessage: (message: string) => void) {
   const [pngRangeMode, setPngRangeMode] = useState<"visible" | "full">("visible");
   const [isExportingPng, setIsExportingPng] = useState(false);
   const [progress, setProgress] = useState("");
+  const [resultMessage, setResultMessage] = useState("");
   const controller = useRef<AbortController | null>(null);
+  function reportResult(message: string): void {
+    setMessage(message);
+    setResultMessage(message);
+  }
 
   async function handleExportPng(
     currentMap: MapRuntimeState | null,
@@ -45,6 +50,7 @@ export function useExportPanel(setMessage: (message: string) => void) {
       range: pngRangeMode === "visible" ? (visibleRange ?? null) : null
     };
     controller.current = new AbortController();
+    setResultMessage("");
     setIsExportingPng(true);
     setMessage("正在导出 PNG...");
     try {
@@ -53,7 +59,7 @@ export function useExportPanel(setMessage: (message: string) => void) {
         onProgress: setProgress
       });
       if (!response.ok || !response.result) {
-        setMessage(formatStatusMessage(response.errors[0]?.message, "导出失败"));
+        reportResult(formatStatusMessage(response.errors[0]?.message, "导出失败"));
         return;
       }
       triggerDownload(
@@ -61,7 +67,7 @@ export function useExportPanel(setMessage: (message: string) => void) {
           `/api/exports/${encodeURIComponent(response.result.fileName)}`,
         response.result.fileName
       );
-      setMessage(`PNG 已导出并开始下载：${response.result.fileName}`);
+      reportResult(`PNG 已导出并开始下载：${response.result.fileName}`);
     } finally {
       setIsExportingPng(false);
       controller.current = null;
@@ -72,6 +78,7 @@ export function useExportPanel(setMessage: (message: string) => void) {
   async function handleExportJson(currentMap: MapRuntimeState | null): Promise<void> {
     if (!currentMap || controller.current) return;
     controller.current = new AbortController();
+    setResultMessage("");
     setIsExportingPng(true);
     try {
       const response = await api.exportJson(currentMap.document.meta.id, {
@@ -79,11 +86,11 @@ export function useExportPanel(setMessage: (message: string) => void) {
         onProgress: setProgress
       });
       if (!response.ok || !response.result) {
-        setMessage(response.errors[0]?.message ?? "导出失败");
+        reportResult(response.errors[0]?.message ?? "导出失败");
         return;
       }
       triggerDownload(response.result.downloadUrl, response.result.fileName);
-      setMessage("JSON 已导出并开始下载");
+      reportResult("JSON 已导出并开始下载");
     } finally {
       controller.current = null;
       setIsExportingPng(false);
@@ -93,6 +100,7 @@ export function useExportPanel(setMessage: (message: string) => void) {
 
   return {
     progress,
+    resultMessage,
     cancelExport: () => controller.current?.abort(),
     handleExportJson,
     exportPanelOpen,

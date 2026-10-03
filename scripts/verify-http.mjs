@@ -7,7 +7,7 @@ const created = await (
   await fetch(base + "/api/maps", {
     method: "POST",
     headers,
-    body: JSON.stringify({ name: "Container worker smoke" })
+    body: JSON.stringify({ name: "容器导出验收" })
   })
 ).json();
 if (!created.ok) throw new Error(JSON.stringify(created));
@@ -28,6 +28,9 @@ for (let i = 0; i < 100; i++) {
   if (status.result?.state === "failed") throw new Error(status.result.error);
   if (status.result?.state === "done") {
     const download = await fetch(base + status.result.result.downloadUrl);
+    const disposition = download.headers.get("content-disposition") ?? "";
+    if (!disposition.includes("filename*=UTF-8"))
+      throw new Error("Missing encoded download filename");
     if (!download.ok || (await download.arrayBuffer()).byteLength < 100)
       throw new Error("PNG download failed");
     console.log("Container worker and PNG download passed");

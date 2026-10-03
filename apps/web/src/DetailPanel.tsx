@@ -136,7 +136,7 @@ export function DetailPanel(props: DetailPanelProps) {
             <h2>当前单元格</h2>
             <p>
               {props.selectedCell
-                ? `${props.selectedCell.display_coord} · ${props.selectedCell.status}`
+                ? `${props.selectedCell.display_coord} · ${props.selectedCell.status === "designed" ? "已设计" : "待设计"}`
                 : "未选择单元格"}
             </p>
           </div>
@@ -364,7 +364,7 @@ export function DetailPanel(props: DetailPanelProps) {
               <option value="">新建河流</option>
               {props.rivers.map((river) => (
                 <option key={river.id} value={river.id}>
-                  {river.name} ({river.id})
+                  {river.name || "未命名河流"}
                 </option>
               ))}
             </select>

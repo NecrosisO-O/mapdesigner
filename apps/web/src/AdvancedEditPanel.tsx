@@ -216,7 +216,7 @@ export function AdvancedEditPanel(props: AdvancedEditPanelProps) {
             onChange={(event) => props.onReplaceTerrainMatchChange(event.target.value)}
             disabled={!props.currentMap}
           >
-            <option value="">请选择 terrain</option>
+            <option value="">请选择地形</option>
             {TERRAIN_KEYS.map((key) => (
               <option key={key} value={key}>
                 {TERRAIN_ENTRIES[key].label} ({TERRAIN_ENTRIES[key].short})
@@ -246,7 +246,7 @@ export function AdvancedEditPanel(props: AdvancedEditPanelProps) {
             onChange={(event) => props.onReplacementTerrainChange(event.target.value)}
             disabled={!props.currentMap || !props.replaceTerrainDraft.replacementCategory}
           >
-            <option value="">请选择 terrain</option>
+            <option value="">请选择地形</option>
             {props.replaceTerrainOptions.map((entry) => (
               <option key={entry.key} value={entry.key}>
                 {entry.label} ({entry.short})
@@ -273,7 +273,7 @@ export function AdvancedEditPanel(props: AdvancedEditPanelProps) {
             onChange={(event) => props.onReplaceBiomeMatchChange(event.target.value)}
             disabled={!props.currentMap}
           >
-            <option value="">请选择 biome</option>
+            <option value="">请选择生态</option>
             {[props.noneBiomeValue, ...BIOME_KEYS].map((value) => (
               <option key={value} value={value}>
                 {formatBiomeOption(value, props.noneBiomeValue)}
@@ -288,7 +288,7 @@ export function AdvancedEditPanel(props: AdvancedEditPanelProps) {
             onChange={(event) => props.onReplacementBiomeChange(event.target.value)}
             disabled={!props.currentMap}
           >
-            <option value="">请选择 biome</option>
+            <option value="">请选择生态</option>
             {[props.noneBiomeValue, ...BIOME_KEYS].map((value) => (
               <option key={value} value={value}>
                 {formatBiomeOption(value, props.noneBiomeValue)}

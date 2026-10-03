@@ -51,6 +51,24 @@ export default function App() {
   const riverEditor = useRiverEditor(activeMap, workspace.applyCommands, setMessage);
   const exportPanel = useExportPanel(setMessage);
 
+  function revealInspector(): void {
+    setInspectorOpen(true);
+    setFocusMode(false);
+    if (window.innerWidth <= 1180) setContentOpen(false);
+  }
+
+  useEffect(() => {
+    let previousWidth = window.innerWidth;
+    const resize = () => {
+      const width = window.innerWidth;
+      if (width <= 1180 && previousWidth > 1180) setContentOpen(false);
+      if (width <= 760 && previousWidth > 760) setInspectorOpen(false);
+      previousWidth = width;
+    };
+    window.addEventListener("resize", resize);
+    return () => window.removeEventListener("resize", resize);
+  }, []);
+
   function updateEditorDraftFromMap(nextMap: NonNullable<typeof workspace.currentMap>): void {
     if (!editor.selectedCell) {
       return;
@@ -96,6 +114,11 @@ export default function App() {
     if (riverEditor.riverDrawingStatus === "drawing") riverEditor.cancelRiverDrawing();
     setInteractionMode(mode);
     setInspectorTab(mode === "river-draw" ? "river" : mode === "batch-select" ? "batch" : "cell");
+    if (mode === "brush" || mode === "batch-select") revealInspector();
+    if (mode === "river-draw" && window.innerWidth <= 760) {
+      setContentOpen(false);
+      setInspectorOpen(false);
+    }
     if (mode === "river-draw") riverEditor.startRiverDrawing();
   }
   async function moveHistory(direction: "undo" | "redo"): Promise<void> {
@@ -316,7 +339,8 @@ export default function App() {
         onAccessToken={() => void configureAccess()}
       />
 
-      {(workspace.importProgress || exportPanel.isExportingPng) && (
+      {(workspace.importProgress ||
+        (exportPanel.isExportingPng && !exportPanel.exportPanelOpen)) && (
         <div className="task-progress" role="status">
           {workspace.importProgress || exportPanel.progress || "准备导出"}
           <button
@@ -330,6 +354,7 @@ export default function App() {
         <button
           onClick={() => {
             setContentOpen((value) => !value);
+            if (!contentOpen && window.innerWidth <= 760) setInspectorOpen(false);
             setFocusMode(false);
           }}
           aria-expanded={contentOpen}
@@ -339,6 +364,7 @@ export default function App() {
         <button
           onClick={() => {
             setInspectorOpen((value) => !value);
+            if (!inspectorOpen && window.innerWidth <= 1180) setContentOpen(false);
             setFocusMode(false);
           }}
           aria-expanded={inspectorOpen}
@@ -346,7 +372,7 @@ export default function App() {
           属性
         </button>
       </div>
-      <main className="layout" inert={prompt.open || helpOpen}>
+      <main className="layout" inert={prompt.open || helpOpen || exportPanel.exportPanelOpen}>
         <ToolRail
           mode={interactionMode}
           disabled={!activeMap || workspace.pendingCount > 0}
@@ -358,7 +384,7 @@ export default function App() {
           onSelectRiver={(id) => {
             riverEditor.selectRiver(id);
             setInspectorTab("river");
-            setInspectorOpen(true);
+            revealInspector();
           }}
           onExportJson={() => void exportPanel.handleExportJson(workspace.currentMap)}
           loading={workspace.loading}
@@ -376,6 +402,9 @@ export default function App() {
           onShowUndesignedChange={setShowUndesigned}
           exportPanelOpen={exportPanel.exportPanelOpen}
           isExportingPng={exportPanel.isExportingPng}
+          exportProgress={exportPanel.progress}
+          exportResult={exportPanel.resultMessage}
+          onCancelExport={exportPanel.cancelExport}
           pngOptions={exportPanel.pngOptions}
           pngRangeMode={exportPanel.pngRangeMode}
           lastOpaqueBackground={lastOpaqueExportBackground}
@@ -453,6 +482,7 @@ export default function App() {
         <section className="canvas-panel">
           {activeMap ? (
             <MapCanvas
+              key={activeMap.document.meta.id}
               map={activeMap}
               overview={workspace.overview}
               mapSummary={workspace.mapSummary}
@@ -461,6 +491,7 @@ export default function App() {
               onSelectCell={(cell) => {
                 void editor.handleCanvasCellSelect(cell);
                 setInspectorTab("cell");
+                revealInspector();
               }}
               onBrushStroke={(cells) => void editor.applyFormatBrushStroke(cells)}
               interactionMode={interactionMode}
@@ -480,7 +511,9 @@ export default function App() {
                 riverEditor.cancelRiverDrawing();
                 setInteractionMode("select");
               }}
-              onVisibleRangeChange={(range) => void workspace.requestVisibleRange(range)}
+              onVisibleRangeChange={(range) =>
+                void workspace.requestVisibleRange(range, activeMap.document.meta.id)
+              }
               showCoordinates={showCoordinates}
               showShorthand={showShorthand}
               showGrid={showGrid}

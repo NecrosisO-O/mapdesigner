@@ -7,17 +7,18 @@ export function Dialog(props: {
   wide?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  const previousFocus = useRef(document.activeElement as HTMLElement | null);
   const close = useRef(props.onClose);
   close.current = props.onClose;
   useEffect(() => {
-    const previous = document.activeElement as HTMLElement | null;
+    const previous = previousFocus.current;
     const node = ref.current!;
     const focusable = () => [
       ...node.querySelectorAll<HTMLElement>(
-        'button:not(:disabled), input, select, textarea, [tabindex="0"]'
+        'button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex="0"]'
       )
     ];
-    (node.querySelector<HTMLElement>("[autofocus]") ?? focusable()[0] ?? node).focus();
+    if (!node.contains(document.activeElement)) (focusable()[0] ?? node).focus();
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
