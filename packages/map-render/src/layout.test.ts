@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { applyCommand, createEmptyDocument, createRuntimeState } from "@mapdesigner/map-core";
 import { buildHexLayout } from "./layout.js";
 import { buildExportScene, buildMapScene, renderSvgString } from "./scene.js";
-import type { ActiveCell } from "@mapdesigner/map-core";
+import type { ActiveCell, RiverFeature } from "@mapdesigner/map-core";
 
 function makeCell(row: number, col: number): ActiveCell {
   return {
@@ -64,6 +64,73 @@ describe("buildHexLayout", () => {
 });
 
 describe("river rendering", () => {
+  it.each(["high", "low"] as const)(
+    "keeps disconnected viewport fragments on the original %s-detail path",
+    (riverDetail) => {
+      const document = createEmptyDocument({ id: "clipped-river", name: "Clipped river" });
+      document.features.rivers = [
+        {
+          id: "loop",
+          name: "Loop",
+          points: [
+            { row: -2, col: -2, width: 10 },
+            { row: -2, col: 8, width: 10 },
+            { row: 8, col: 8, width: 10 },
+            { row: 8, col: 0, width: 10 },
+            { row: 0, col: 0, width: 10 }
+          ]
+        }
+      ];
+      const runtime = createRuntimeState(document);
+      const full = buildMapScene(runtime, {
+        riverDetail,
+        riverClipRange: { minRow: -10, maxRow: 12, minCol: -10, maxCol: 12 }
+      });
+      const clipped = buildMapScene(runtime, {
+        riverDetail,
+        riverClipRange: { minRow: -2, maxRow: 2, minCol: -2, maxCol: 2 }
+      });
+      const coordinates = (scene: ReturnType<typeof buildMapScene>) =>
+        scene.riverBodies.flatMap((body) =>
+          Array.from(body.centerPath.matchAll(/[ML] ([-\d.]+) ([-\d.]+)/g), (match) => ({
+            x: Number(match[1]) + scene.minX,
+            y: Number(match[2]) + scene.minY
+          }))
+        );
+      const original = coordinates(full);
+      expect(clipped.riverBodies).toHaveLength(2);
+      expect(new Set(clipped.riverBodies.map((body) => body.id)).size).toBe(2);
+      for (const point of coordinates(clipped)) {
+        expect(
+          original.some(
+            (candidate) => Math.hypot(candidate.x - point.x, candidate.y - point.y) < 0.003
+          )
+        ).toBe(true);
+      }
+    }
+  );
+
+  it("does not apply a remote water endpoint to a clipped fragment", () => {
+    const document = createEmptyDocument({ id: "clipped-mouth", name: "Clipped mouth" });
+    document.cells = [{ row: 0, col: 20, terrain: "sea", biome: null, tags: [], note: "" }];
+    document.features.rivers = [
+      {
+        id: "river",
+        name: "River",
+        points: [
+          { row: 0, col: -20, width: 4 },
+          { row: 0, col: 20, width: 4 }
+        ]
+      } satisfies RiverFeature
+    ];
+    const scene = buildMapScene(createRuntimeState(document), {
+      riverClipRange: { minRow: -2, maxRow: 2, minCol: -2, maxCol: 2 }
+    });
+    expect(scene.riverBodies).toHaveLength(1);
+    expect(scene.riverBodies[0]?.connectedEnd).toBe(false);
+    expect(scene.riverBodies[0]?.widthRange.max).toBeCloseTo(4);
+  });
+
   it("renders river overlay bodies and includes river coordinates in scene bounds", () => {
     const runtime = createRuntimeState(
       createEmptyDocument({ id: "river-render", name: "River Render" })
