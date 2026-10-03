@@ -23,6 +23,8 @@ interface AdvancedEditPanelProps {
   batchModeActive: boolean;
   selectedCount: number;
   batchDraft: BatchEditDraft;
+  batchTagMode: "replace" | "add" | "remove";
+  onBatchTagModeChange: (mode: "replace" | "add" | "remove") => void;
   batchModes: Record<BatchField, FieldMode>;
   onBatchFieldModeChange: (field: BatchField, mode: FieldMode) => void;
   replaceTerrainDraft: ReplaceTerrainDraft;
@@ -148,6 +150,7 @@ export function AdvancedEditPanel(props: AdvancedEditPanelProps) {
             ))}
           </select>
         </label>
+        <label>标签处理<select value={props.batchTagMode} onChange={event => props.onBatchTagModeChange(event.target.value as "replace" | "add" | "remove")}><option value="replace">替换标签</option><option value="add">追加标签</option><option value="remove">移除指定标签</option></select></label>
         <div className="tag-grid compact-tag-grid">
           {Object.entries(TAG_ENTRIES).map(([key, entry]) => (
             <label key={key}>

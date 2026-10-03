@@ -22,7 +22,7 @@ describe("draft ownership", () => {
   it("keeps a selected draft outside the viewport", async () => {
     const map = makeMap();
     const { result, rerender } = renderHook(({ map }) => useCellEditor(map, async () => null, vi.fn()), { initialProps: { map } });
-    act(() => result.current.handleCanvasCellSelect(cell(map)));
+    await act(() => result.current.handleCanvasCellSelect(cell(map)));
     act(() => result.current.setDraft(d => ({ ...d, note: "draft" })));
     rerender({ map: { ...map, activeCells: [] } });
     expect(result.current.selectedCellId).toBe(cell(map).id);
@@ -50,7 +50,7 @@ describe("draft ownership", () => {
     const map = makeMap(), wait = deferred<MapRuntimeState | null>();
     const apply = vi.fn(() => wait.promise);
     const { result } = renderHook(() => useCellEditor(map, apply, vi.fn()));
-    act(() => result.current.handleCanvasCellSelect(cell(map)));
+    await act(() => result.current.handleCanvasCellSelect(cell(map)));
     let first!: Promise<void>, second!: Promise<void>;
     act(() => { first = result.current.applyDraft(); second = result.current.applyDraft(); });
     act(() => result.current.setDraft(d => ({ ...d, note: "newer" })));

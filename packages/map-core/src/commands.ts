@@ -229,7 +229,10 @@ export function applyCommand(state: MapRuntimeState, command: MapCommand): Comma
         errors.push(...issues.filter(issue => issue.severity === "invalid"));
         warnings.push(...issues.filter(issue => issue.severity === "warning"));
         cells.set(createCellId(target.row, target.col), { ...target, terrain, biome,
-          tags: command.changes.tags === undefined ? previous?.tags ?? [] : [...new Set(command.changes.tags)],
+          tags: command.changes.tags === undefined ? previous?.tags ?? []
+            : command.tagMode === "add" ? [...new Set([...(previous?.tags ?? []), ...command.changes.tags])]
+            : command.tagMode === "remove" ? (previous?.tags ?? []).filter(tag => !command.changes.tags!.includes(tag))
+            : [...new Set(command.changes.tags)],
           note: command.changes.note === undefined ? previous?.note ?? "" : command.changes.note });
         changed.push(target);
       }

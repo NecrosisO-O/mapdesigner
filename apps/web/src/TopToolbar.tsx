@@ -2,7 +2,7 @@ import type { MapRuntimeState } from "@mapdesigner/map-core";
 import type { ChangeEvent, RefObject } from "react";
 import type { MapHistory, MapListItem } from "./api.js";
 
-export type InteractionMode = "select" | "river-draw" | "batch-select";
+export type InteractionMode = "select" | "pan" | "brush" | "river-draw" | "batch-select";
 
 interface TopToolbarProps {
   currentMap: MapRuntimeState | null;
@@ -10,6 +10,13 @@ interface TopToolbarProps {
   currentMapId: string;
   displayMaps: MapListItem[];
   mapDirty: boolean;
+  pending?: boolean;
+  onExport?: () => void;
+  onToggleTheme?: () => void;
+  onToggleFocus?: () => void;
+  onToggleContent?: () => void;
+  onToggleInspector?: () => void;
+  onAccessToken?: () => void;
   isRenaming: boolean;
   renameDraft: string;
   fileInputRef: RefObject<HTMLInputElement | null>;
@@ -45,123 +52,36 @@ export function TopToolbar(props: TopToolbarProps) {
 
   return (
     <header className="topbar">
-      <div className="brand">
-        <strong>MapDesigner</strong>
-        <span className={props.mapDirty ? "save-state save-state-dirty" : "save-state"}>
-          {props.mapDirty ? "未保存修改" : "已保存"}
-        </span>
+      <div className="brand"><span className="brand-mark" aria-hidden="true">⬡</span><strong>MapDesigner</strong></div>
+      <details className="document-menu">
+        <summary>地图 <span aria-hidden="true">⌄</span></summary>
+        <div className="document-menu-content">
+          <label>选择地图<select aria-label="选择地图" value={props.currentMapId} onChange={event => props.onSelectMap(event.target.value)}>
+            <option value="">选择地图</option>{props.displayMaps.map(map => <option key={map.id} value={map.id}>{map.name}</option>)}
+          </select></label>
+          <button onClick={props.onCreateMap}>新建地图</button><button onClick={() => props.fileInputRef.current?.click()}>导入 JSON</button>
+          <button onClick={props.onStartRenaming} disabled={!props.currentMap}>重命名</button><button onClick={props.onSaveAs} disabled={!props.currentMap}>另存为</button>
+          <button onClick={props.onDuplicateMap} disabled={!props.currentMap}>复制地图</button><button className="danger-button" onClick={props.onDeleteMap} disabled={!props.currentMap}>删除地图</button>
+          <button onClick={props.onAccessToken}>连接设置</button>
+        </div>
+      </details>
+      <div className="document-title">
+        {props.isRenaming ? <form className="rename-editor" onSubmit={event => { event.preventDefault(); props.onConfirmRename(); }}>
+          <input aria-label="地图名称" autoFocus value={props.renameDraft} onChange={event => props.onRenameDraftChange(event.target.value)} onKeyDown={event => { if (event.key === "Escape") props.onCancelRename(); }} />
+          <button type="submit" disabled={!props.renameDraft.trim()}>确认重命名</button><button type="button" onClick={props.onCancelRename}>取消重命名</button>
+        </form> : <button className="name-button" onClick={props.onStartRenaming} title="重命名地图">{props.currentMap?.document.meta.name ?? "未打开地图"}</button>}
+        <span className={props.mapDirty ? "save-state save-state-dirty" : "save-state"}>{props.pending ? "正在提交…" : props.mapDirty ? "未保存修改" : "已保存"}</span>
       </div>
-      <div className="toolbar">
-        <div className="toolbar-group toolbar-map-picker">
-          <select
-            aria-label="选择地图"
-            value={props.currentMapId}
-            onChange={(event) => props.onSelectMap(event.target.value)}
-          >
-            <option value="">选择地图</option>
-            {props.displayMaps.map((map) => (
-              <option key={map.id} value={map.id}>
-                {map.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="toolbar-group toolbar-primary-actions">
-          <button onClick={props.onCreateMap}>新建地图</button>
-          <button className="primary-button" onClick={props.onSaveMap} disabled={!props.mapDirty}>
-            保存
-          </button>
-          <button onClick={props.onUndo} disabled={!canUndo}>
-            撤销
-          </button>
-          <button onClick={props.onRedo} disabled={!canRedo}>
-            重做
-          </button>
-        </div>
-
-        <div className="toolbar-group toolbar-mode-actions" role="group" aria-label="编辑模式">
-          <button
-            type="button"
-            className={props.interactionMode === "select" ? "toggle-button-active" : undefined}
-            aria-pressed={props.interactionMode === "select"}
-            onClick={() => props.onInteractionModeChange("select")}
-            disabled={!props.currentMap}
-          >
-            选择
-          </button>
-          <button
-            type="button"
-            className={props.interactionMode === "river-draw" ? "toggle-button-active" : undefined}
-            aria-pressed={props.interactionMode === "river-draw"}
-            onClick={() => props.onInteractionModeChange("river-draw")}
-            disabled={!props.currentMap}
-          >
-            河流
-          </button>
-          <button
-            type="button"
-            className={props.interactionMode === "batch-select" ? "toggle-button-active" : undefined}
-            aria-pressed={props.interactionMode === "batch-select"}
-            onClick={() => props.onInteractionModeChange("batch-select")}
-            disabled={!props.currentMap}
-          >
-            批量
-          </button>
-        </div>
-
-        <div className="toolbar-group toolbar-secondary-actions">
-          <button onClick={props.onSaveAs} disabled={!props.currentMap}>
-            另存为
-          </button>
-          {props.isRenaming ? (
-            <div className="rename-editor">
-              <input
-                aria-label="地图名称"
-                value={props.renameDraft}
-                onChange={(event) => props.onRenameDraftChange(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    props.onConfirmRename();
-                  }
-                  if (event.key === "Escape") {
-                    props.onCancelRename();
-                  }
-                }}
-                placeholder="输入地图名称"
-              />
-              <button
-                onClick={props.onConfirmRename}
-                disabled={!props.currentMap || !props.renameDraft.trim()}
-                type="button"
-              >
-                确认重命名
-              </button>
-              <button onClick={props.onCancelRename} type="button">
-                取消重命名
-              </button>
-            </div>
-          ) : (
-            <button onClick={props.onStartRenaming} disabled={!props.currentMap}>
-              重命名
-            </button>
-          )}
-          <button onClick={() => props.fileInputRef.current?.click()}>导入 JSON</button>
-          <button onClick={props.onDuplicateMap} disabled={!props.currentMap}>
-            复制地图
-          </button>
-          <button className="danger-button" onClick={props.onDeleteMap} disabled={!props.currentMap}>
-            删除地图
-          </button>
-        </div>
+      <div className="document-actions">
+        {props.mapDirty && <button onClick={props.onSaveMap} disabled={props.pending}>保存</button>}
+        <button onClick={props.onUndo} disabled={!canUndo || props.pending} title="撤销 · ⌘/Ctrl Z">撤销</button>
+        <button onClick={props.onRedo} disabled={!canRedo || props.pending} title="重做 · ⌘/Ctrl Shift Z">重做</button>
+        <span className="toolbar-divider" />
+        <button onClick={props.onToggleTheme} aria-label="切换深浅主题" title="切换深浅主题">◐</button>
+        <button onClick={props.onToggleFocus} aria-label="专注画布" title="专注画布">⛶</button>
+        <button className="primary-button" onClick={props.onExport} disabled={!props.currentMap}>导出</button>
       </div>
-      <input
-        ref={props.fileInputRef}
-        type="file"
-        accept="application/json"
-        hidden
-        onChange={handleFileChange}
-      />
+      <input ref={props.fileInputRef} type="file" accept="application/json,.json" hidden onChange={handleFileChange} />
     </header>
   );
 }
