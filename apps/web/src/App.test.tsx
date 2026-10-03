@@ -483,6 +483,13 @@ async function prepareCanvasViewport() {
   return mapCanvas;
 }
 
+async function renderApp(): Promise<void> {
+  // Flush map initialization effects before interacting with the editor.
+  await act(async () => {
+    render(<App />);
+  });
+}
+
 function getCellButton(displayCoord: string, status: "designed" | "undesigned") {
   return screen.getByRole("button", {
     name: `${displayCoord} ${status === "designed" ? "已设计" : "待设计"}`
@@ -612,7 +619,7 @@ describe("App", () => {
   });
 
   it("loads and opens the first map", async () => {
-    render(<App />);
+    await renderApp();
     await waitFor(() => expect(apiMock.listMaps).toHaveBeenCalled());
     await waitFor(() => expect(apiMock.getMapSummary).toHaveBeenCalledWith("sample-map"));
     await waitFor(() => expect(apiMock.getMapFeaturesInRange).toHaveBeenCalled());
@@ -629,7 +636,7 @@ describe("App", () => {
   });
 
   it("reopens imported maps through the summary-first large-map workflow", async () => {
-    render(<App />);
+    await renderApp();
     await screen.findByText("已打开 Sample Map");
 
     const file = {
@@ -728,7 +735,7 @@ describe("App", () => {
   });
 
   it("refreshes the current loaded range after edits without expanding it repeatedly", async () => {
-    render(<App />);
+    await renderApp();
     await screen.findByText("已打开 Sample Map");
     await waitFor(() => expect(apiMock.getCellsInRange).toHaveBeenCalled());
     const initialRange = (apiMock.getCellsInRange.mock.calls.at(-1)?.[1] ??
@@ -752,7 +759,7 @@ describe("App", () => {
   });
 
   it("ignores empty map selection in the top dropdown", async () => {
-    render(<App />);
+    await renderApp();
     await screen.findByText("已打开 Sample Map");
     const mapSelector = screen.getAllByRole("combobox")[0] as HTMLSelectElement;
 
@@ -777,7 +784,7 @@ describe("App", () => {
       ]
     });
 
-    render(<App />);
+    await renderApp();
 
     await waitFor(() => expect(apiMock.getMapSummary).toHaveBeenCalledWith("sample-map"));
     expect(await screen.findByText("地图文件不存在或暂时无法读取")).toBeTruthy();
@@ -785,7 +792,7 @@ describe("App", () => {
   });
 
   it("selects a cell and shows its metadata", async () => {
-    render(<App />);
+    await renderApp();
     await screen.findByText("已打开 Sample Map");
     await act(async () => {
       fireEvent.click(getCellButton("R0C0", "designed"));
@@ -804,7 +811,7 @@ describe("App", () => {
   });
 
   it("creates a river overlay from the detail panel", async () => {
-    render(<App />);
+    await renderApp();
     await screen.findByText("已打开 Sample Map");
 
     await act(async () => {
@@ -834,10 +841,7 @@ describe("App", () => {
   });
 
   it("draws a river from canvas clicks and returns to cell selection", async () => {
-    // Finish the asynchronous map open and its reset effects before choosing a tool.
-    await act(async () => {
-      render(<App />);
-    });
+    await renderApp();
     await screen.findByText("已打开 Sample Map");
 
     await act(async () => {
@@ -890,7 +894,7 @@ describe("App", () => {
   });
 
   it("enables format brush from a designed cell and disables it on an undesigned cell", async () => {
-    render(<App />);
+    await renderApp();
     await screen.findByText("已打开 Sample Map");
 
     await act(async () => {
@@ -916,7 +920,7 @@ describe("App", () => {
   });
 
   it("brushes terrain only onto an undesigned cell", async () => {
-    render(<App />);
+    await renderApp();
     await screen.findByText("已打开 Sample Map");
 
     await act(async () => {
@@ -962,7 +966,7 @@ describe("App", () => {
   });
 
   it("brushes biome only onto an already designed cell", async () => {
-    render(<App />);
+    await renderApp();
     await screen.findByText("已打开 Sample Map");
 
     await act(async () => {
@@ -980,10 +984,12 @@ describe("App", () => {
     await act(async () => {
       fireEvent.click(getCellButton("R0C0", "designed"));
     });
-    fireEvent.click(screen.getByLabelText("刷地形"));
+    const brushButton = getFormatBrushButton();
     await act(async () => {
-      fireEvent.click(getFormatBrushButton());
+      fireEvent.click(brushButton);
     });
+    await waitFor(() => expect(brushButton.getAttribute("aria-pressed")).toBe("true"));
+    fireEvent.click(screen.getByRole("checkbox", { name: "刷地形" }));
     await act(async () => {
       fireEvent.click(getCellButton("R0C1", "designed"));
     });
@@ -1003,7 +1009,7 @@ describe("App", () => {
   });
 
   it("brushes tags and notes when those format brush scopes are enabled", async () => {
-    render(<App />);
+    await renderApp();
     await screen.findByText("已打开 Sample Map");
 
     await act(async () => {
@@ -1013,17 +1019,47 @@ describe("App", () => {
     const cellPanel = terrainField.closest("section");
     expect(cellPanel).toBeTruthy();
 
-    fireEvent.click(within(cellPanel as HTMLElement).getByLabelText("山峰"));
-    fireEvent.change(within(cellPanel as HTMLElement).getByLabelText("备注"), {
-      target: { value: "source note" }
+    fireEvent.click(within(cellPanel as HTMLElement).getByText("地点标记 · 0"));
+    fireEvent.click(within(cellPanel as HTMLElement).getByText("备注", { selector: "summary" }));
+    await act(async () => {
+      fireEvent.click(within(cellPanel as HTMLElement).getByRole("checkbox", { name: "山峰" }));
+      fireEvent.change(within(cellPanel as HTMLElement).getByRole("textbox", { name: "备注" }), {
+        target: { value: "source note" }
+      });
     });
-    fireEvent.click(within(cellPanel as HTMLElement).getByRole("button", { name: "应用修改" }));
+    const applyButton = within(cellPanel as HTMLElement).getByRole("button", {
+      name: "应用修改"
+    }) as HTMLButtonElement;
+    await waitFor(() => {
+      expect(
+        (
+          within(cellPanel as HTMLElement).getByRole("checkbox", {
+            name: "山峰"
+          }) as HTMLInputElement
+        ).checked
+      ).toBe(true);
+      expect(
+        (
+          within(cellPanel as HTMLElement).getByRole("textbox", {
+            name: "备注"
+          }) as HTMLTextAreaElement
+        ).value
+      ).toBe("source note");
+      expect(applyButton.disabled).toBe(false);
+    });
+    await act(async () => {
+      fireEvent.click(applyButton);
+    });
     await screen.findByText("单元格修改已保存到服务器");
 
-    fireEvent.click(within(cellPanel as HTMLElement).getByLabelText("刷标签"));
-    fireEvent.click(within(cellPanel as HTMLElement).getByLabelText("刷备注"));
+    const brushButton = getFormatBrushButton();
     await act(async () => {
-      fireEvent.click(getFormatBrushButton());
+      fireEvent.click(brushButton);
+    });
+    await waitFor(() => expect(brushButton.getAttribute("aria-pressed")).toBe("true"));
+    await act(async () => {
+      fireEvent.click(within(cellPanel as HTMLElement).getByRole("checkbox", { name: "刷标签" }));
+      fireEvent.click(within(cellPanel as HTMLElement).getByRole("checkbox", { name: "刷备注" }));
     });
     await act(async () => {
       fireEvent.click(getCellButton("R0C1", "undesigned"));
@@ -1047,7 +1083,7 @@ describe("App", () => {
   });
 
   it("batch-selects cells and applies set_cells through the advanced editor", async () => {
-    render(<App />);
+    await renderApp();
     await screen.findByText("已打开 Sample Map");
 
     await act(async () => {
@@ -1109,7 +1145,7 @@ describe("App", () => {
   });
 
   it("replaces terrain and biome from the advanced editor", async () => {
-    render(<App />);
+    await renderApp();
     await screen.findByText("已打开 Sample Map");
 
     await act(async () => {
@@ -1157,7 +1193,7 @@ describe("App", () => {
   });
 
   it("returns to normal selection after leaving format brush mode", async () => {
-    render(<App />);
+    await renderApp();
     await screen.findByText("已打开 Sample Map");
 
     await act(async () => {
@@ -1178,7 +1214,7 @@ describe("App", () => {
   });
 
   it("converts a vegetated land cell directly to water and explains the ecology adjustment", async () => {
-    render(<App />);
+    await renderApp();
     await screen.findByText("已打开 Sample Map");
     await act(async () => {
       fireEvent.click(getCellButton("R0C0", "designed"));
@@ -1190,7 +1226,7 @@ describe("App", () => {
   });
 
   it("filters biome options after selecting a terrain", async () => {
-    render(<App />);
+    await renderApp();
     await screen.findByText("已打开 Sample Map");
     await act(async () => {
       fireEvent.click(getCellButton("R0C0", "designed"));
@@ -1212,7 +1248,7 @@ describe("App", () => {
   });
 
   it("keeps all terrains discoverable when ecology is already selected", async () => {
-    render(<App />);
+    await renderApp();
     await screen.findByText("已打开 Sample Map");
     await act(async () => {
       fireEvent.click(getCellButton("R0C0", "designed"));
@@ -1224,7 +1260,7 @@ describe("App", () => {
   });
 
   it("keeps zoom-out bounded so the map never collapses to zero scale", async () => {
-    render(<App />);
+    await renderApp();
     await screen.findByText("已打开 Sample Map");
 
     const mapCanvas = await prepareCanvasViewport();
@@ -1242,7 +1278,7 @@ describe("App", () => {
   });
 
   it("allows very deep zooming for fine map design", async () => {
-    render(<App />);
+    await renderApp();
     await screen.findByText("已打开 Sample Map");
 
     const mapCanvas = await prepareCanvasViewport();
@@ -1261,7 +1297,7 @@ describe("App", () => {
   });
 
   it("zooms around the mouse position instead of staying centered", async () => {
-    render(<App />);
+    await renderApp();
     await screen.findByText("已打开 Sample Map");
 
     const mapCanvas = await prepareCanvasViewport();
@@ -1281,7 +1317,7 @@ describe("App", () => {
   });
 
   it("uses the latest pan offset when zooming immediately after a drag", async () => {
-    render(<App />);
+    await renderApp();
     await screen.findByText("已打开 Sample Map");
 
     const mapCanvas = await prepareCanvasViewport();
@@ -1308,7 +1344,7 @@ describe("App", () => {
   });
 
   it("can create a map from the toolbar", async () => {
-    render(<App />);
+    await renderApp();
     await screen.findByText("已打开 Sample Map");
     fireEvent.click(screen.getByText("新建地图"));
     const dialog = await screen.findByRole("dialog", { name: "新建地图" });
@@ -1319,7 +1355,7 @@ describe("App", () => {
 
   it("can save the current map as a new copy", async () => {
     vi.spyOn(window, "prompt").mockReturnValueOnce("Copied Map");
-    render(<App />);
+    await renderApp();
     await screen.findByText("已打开 Sample Map");
     fireEvent.click(screen.getByText("另存为"));
     const dialog = await screen.findByRole("dialog", { name: "另存为" });
@@ -1335,7 +1371,7 @@ describe("App", () => {
   });
 
   it("can rename the current map locally before saving", async () => {
-    render(<App />);
+    await renderApp();
     await screen.findByText("已打开 Sample Map");
     fireEvent.click(screen.getByText("重命名"));
     fireEvent.change(screen.getByLabelText("地图名称"), {
@@ -1386,7 +1422,7 @@ describe("App", () => {
         warnings: [],
         errors: []
       });
-    render(<App />);
+    await renderApp();
     await screen.findByText("已打开 Sample Map");
 
     fireEvent.click(screen.getByRole("button", { name: "删除地图" }));
@@ -1400,7 +1436,7 @@ describe("App", () => {
 
   it("exports png with configured options", async () => {
     const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
-    render(<App />);
+    await renderApp();
     await screen.findByText("已打开 Sample Map");
     expect(screen.queryByLabelText("预设")).toBeNull();
     expect(screen.queryByText("导出图片")).toBeNull();
@@ -1458,7 +1494,7 @@ describe("App", () => {
         resolveExport = resolve;
       })
     );
-    render(<App />);
+    await renderApp();
     await screen.findByText("已打开 Sample Map");
 
     fireEvent.click(screen.getByRole("button", { name: "导出" }));
@@ -1496,7 +1532,7 @@ describe("App", () => {
 
   it("exports png with a transparent background option", async () => {
     vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
-    render(<App />);
+    await renderApp();
     await screen.findByText("已打开 Sample Map");
 
     fireEvent.click(screen.getByRole("button", { name: "导出" }));
@@ -1540,7 +1576,7 @@ describe("App", () => {
           );
         })
     );
-    render(<App />);
+    await renderApp();
     await screen.findByText("已打开 Sample Map");
     fireEvent.click(screen.getByRole("button", { name: "导出" }));
     const dialog = screen.getByRole("dialog", { name: "导出地图" });
@@ -1558,7 +1594,7 @@ describe("App", () => {
 
   it("can switch png export to whole map mode", async () => {
     vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
-    render(<App />);
+    await renderApp();
     await screen.findByText("已打开 Sample Map");
 
     fireEvent.click(screen.getByRole("button", { name: "导出" }));
@@ -1588,7 +1624,7 @@ describe("App", () => {
 
   it("dims cells that do not match the selected tag filter", async () => {
     configureEditableMapMock(taggedMap);
-    render(<App />);
+    await renderApp();
     await screen.findByText("已打开 Sample Map");
 
     fireEvent.click(screen.getByRole("tab", { name: "显示" }));
@@ -1611,7 +1647,7 @@ describe("App", () => {
   });
 
   it("can collapse the export panel after opening it", async () => {
-    render(<App />);
+    await renderApp();
     await screen.findByText("已打开 Sample Map");
 
     fireEvent.click(screen.getByRole("button", { name: "导出" }));
@@ -1624,7 +1660,7 @@ describe("App", () => {
   });
 
   it("does not render a hover details panel for map cells", async () => {
-    render(<App />);
+    await renderApp();
     await screen.findByText("已打开 Sample Map");
 
     fireEvent.mouseEnter(getCellButton("R0C0", "designed"));
@@ -1634,7 +1670,7 @@ describe("App", () => {
   });
 
   it("shows recent history after editing a cell", async () => {
-    render(<App />);
+    await renderApp();
     await screen.findByText("已打开 Sample Map");
 
     await act(async () => {
@@ -1653,7 +1689,7 @@ describe("App", () => {
     expect(screen.getByText("1. 修改格子")).toBeTruthy();
   });
   it("paints a library material without a source cell and undoes the stroke", async () => {
-    render(<App />);
+    await renderApp();
     await screen.findByText("已打开 Sample Map");
     fireEvent.click(screen.getByRole("button", { name: "湖泊" }));
     await act(async () => {
@@ -1669,7 +1705,7 @@ describe("App", () => {
   });
 
   it("keeps an unapplied cell draft when switching tools and panels", async () => {
-    render(<App />);
+    await renderApp();
     await screen.findByText("已打开 Sample Map");
     await act(async () => {
       fireEvent.click(getCellButton("R0C0", "designed"));
