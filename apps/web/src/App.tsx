@@ -160,6 +160,10 @@ export default function App() {
         }}
       />
 
+      {(workspace.importProgress || exportPanel.isExportingPng) && <div className="task-progress" role="status">
+        {workspace.importProgress || exportPanel.progress || "准备导出"}
+        <button onClick={workspace.importProgress ? workspace.cancelImport : exportPanel.cancelExport}>取消任务</button>
+      </div>}
       <main className="layout">
         <SidebarPanel
           loading={workspace.loading}

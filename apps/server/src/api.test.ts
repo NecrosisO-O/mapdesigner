@@ -166,8 +166,8 @@ describe("server api", () => {
       expect(exported.statusCode).toBe(200);
       const exportedBody = exported.json();
       expect(exportedBody.ok).toBe(true);
-      expect(exportedBody.result.fileName).toMatch(/download-test-reference-r-1_1-c-1_1\.png$/);
-      expect(exportedBody.result.downloadUrl).toBe(`/api/exports/${encodeURIComponent(exportedBody.result.fileName)}`);
+      expect(exportedBody.result.fileName).toMatch(/download-test-reference-r-1_1-c-1_1-[a-f0-9-]+\.png$/);
+      expect(exportedBody.result.downloadUrl).toContain(`/api/exports/${encodeURIComponent(exportedBody.result.fileName)}`);
 
       const downloaded = await app.inject({
         method: "GET",
@@ -185,8 +185,8 @@ describe("server api", () => {
       expect(exportedJson.statusCode).toBe(200);
       const exportedJsonBody = exportedJson.json();
       expect(exportedJsonBody.ok).toBe(true);
-      expect(exportedJsonBody.result.fileName).toMatch(/download-test\.json$/);
-      expect(exportedJsonBody.result.downloadUrl).toBe(
+      expect(exportedJsonBody.result.fileName).toMatch(/download-test-[a-f0-9-]+\.json$/);
+      expect(exportedJsonBody.result.downloadUrl).toContain(
         `/api/exports/${encodeURIComponent(exportedJsonBody.result.fileName)}`
       );
 

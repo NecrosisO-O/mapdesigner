@@ -152,30 +152,19 @@ function synthesizeUndesignedCell(target: GridCoordinate): ActiveCell {
   };
 }
 
-function snapshotCell(state: MapRuntimeState, target: GridCoordinate): ActiveCell | null {
-  const found = state.activeCells.find((cell) => sameCoord(cell, target));
-  if (found) {
-    return cloneActiveCell(found);
-  }
-  const existsInDocument = state.document.cells.some((cell) => sameCoord(cell, target));
-  if (existsInDocument) {
-    return null;
-  }
-  return synthesizeUndesignedCell(target);
-}
-
-function buildChangeDetails(
-  previous: MapRuntimeState,
-  next: MapRuntimeState,
-  changed: GridCoordinate[]
-): CellChangeDetail[] {
-  return changed.map((target) => ({
-    coord: { row: target.row, col: target.col },
-    cell_id: createCellId(target.row, target.col),
-    display_coord: createDisplayCoord(target.row, target.col),
-    before: snapshotCell(previous, target),
-    after: snapshotCell(next, target)
-  }));
+function buildChangeDetails(previous: MapRuntimeState, next: MapRuntimeState, changed: GridCoordinate[]): CellChangeDetail[] {
+  const index = (state: MapRuntimeState) => {
+    const active = new Map(state.activeCells.map(cell => [cell.id, cell]));
+    const designed = new Set(state.document.cells.map(cell => createCellId(cell.row, cell.col)));
+    return (target: GridCoordinate): ActiveCell | null => {
+      const id = createCellId(target.row, target.col), cell = active.get(id);
+      return cell ? cloneActiveCell(cell) : designed.has(id) ? null : synthesizeUndesignedCell(target);
+    };
+  };
+  const before = index(previous), after = index(next);
+  return changed.map(target => ({ coord: { row: target.row, col: target.col },
+    cell_id: createCellId(target.row, target.col), display_coord: createDisplayCoord(target.row, target.col),
+    before: before(target), after: after(target) }));
 }
 
 function finalize(
@@ -222,6 +211,7 @@ export function applyCommand(state: MapRuntimeState, command: MapCommand): Comma
 
   switch (command.action) {
     case "patch_cells": {
+      const cells = new Map(working.cells.map(cell => [createCellId(cell.row, cell.col), cell]));
       if (command.changes.tags !== undefined) errors.push(...validateTags(command.changes.tags, "changes.tags"));
       if (command.changes.biome !== undefined && command.changes.biome !== null && !isBiomeKey(command.changes.biome)) {
         errors.push({ code: "invalid_biome", message: "biome must be null or a known biome key", severity: "invalid", target: "changes.biome" });
@@ -238,11 +228,12 @@ export function applyCommand(state: MapRuntimeState, command: MapCommand): Comma
         const issues = validateTerrainBiomePair(terrain, biome, createCellId(target.row, target.col));
         errors.push(...issues.filter(issue => issue.severity === "invalid"));
         warnings.push(...issues.filter(issue => issue.severity === "warning"));
-        upsertCell(working.cells, { ...target, terrain, biome,
+        cells.set(createCellId(target.row, target.col), { ...target, terrain, biome,
           tags: command.changes.tags === undefined ? previous?.tags ?? [] : [...new Set(command.changes.tags)],
           note: command.changes.note === undefined ? previous?.note ?? "" : command.changes.note });
         changed.push(target);
       }
+      working.cells = [...cells.values()];
       if (changed.length) { working.meta.updated_at = new Date().toISOString(); working.meta.revision++; }
       return finalize(state, working, changed, warnings, errors, "patch_cells", source);
     }
@@ -334,8 +325,9 @@ export function applyCommand(state: MapRuntimeState, command: MapCommand): Comma
         return finalize(state, working, [], warnings.filter((entry) => entry.severity === "warning"), invalidWarnings, "set_cells", source);
       }
 
-      for (const target of command.targets) {
-        upsertCell(working.cells, {
+      const cells = new Map(working.cells.map(cell => [createCellId(cell.row, cell.col), cell]));
+      for (const target of new Map(command.targets.map(target => [createCellId(target.row, target.col), target])).values()) {
+        cells.set(createCellId(target.row, target.col), {
           row: target.row,
           col: target.col,
           terrain: command.changes.terrain,
@@ -345,6 +337,7 @@ export function applyCommand(state: MapRuntimeState, command: MapCommand): Comma
         });
         changed.push(target);
       }
+      working.cells = [...cells.values()];
       working.meta.updated_at = new Date().toISOString();
       working.meta.revision += 1;
       return finalize(state, working, changed, warnings.filter((entry) => entry.severity === "warning"), [], "set_cells", source);

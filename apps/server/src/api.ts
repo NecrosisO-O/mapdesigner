@@ -1,4 +1,7 @@
+import { registerJobs } from "./jobs.js";
+import { downloadUrl } from "./downloads.js";
 import fs from "node:fs/promises";
+import { createReadStream } from "node:fs";
 import path from "node:path";
 import cors from "@fastify/cors";
 import fastifyStatic from "@fastify/static";
@@ -206,6 +209,7 @@ export async function createServer(): Promise<FastifyInstance> {
       code: "code" in failure ? String(failure.code) : "request_failed", message: status < 500 ? failure.message : "request failed", severity: "invalid"
     }] }));
   });
+  await registerJobs(app);
   const webIndexPath = path.join(WEB_DIST_DIR, "index.html");
   const webAssetsDir = path.join(WEB_DIST_DIR, "assets");
   const hasWebBuild = await fileExists(webIndexPath);
@@ -431,7 +435,7 @@ export async function createServer(): Promise<FastifyInstance> {
       return createEnvelope({
         result: {
           ...result,
-          downloadUrl: `/api/exports/${encodeURIComponent(result.fileName)}`
+          downloadUrl: downloadUrl(result.fileName)
         }
       });
     } catch (error) {
@@ -442,7 +446,9 @@ export async function createServer(): Promise<FastifyInstance> {
   app.get<{ Params: { fileName: string } }>("/api/exports/:fileName", async (request, reply) => {
     try {
       const fileName = assertExportDownloadFileName(request.params.fileName);
-      const content = await fs.readFile(exportFilePath(EXPORT_STORAGE_DIR, fileName));
+      const filePath = exportFilePath(EXPORT_STORAGE_DIR, fileName);
+      await fs.access(filePath);
+      const content = createReadStream(filePath);
       reply.header("Content-Disposition", `attachment; filename="${fileName}"`);
       reply.type(fileName.endsWith(".png") ? "image/png" : "application/json; charset=utf-8");
       return reply.send(content);
@@ -458,7 +464,7 @@ export async function createServer(): Promise<FastifyInstance> {
       return createEnvelope({
         result: {
           ...result,
-          downloadUrl: `/api/exports/${encodeURIComponent(result.fileName)}`
+          downloadUrl: downloadUrl(result.fileName)
         }
       });
     } catch (error) {

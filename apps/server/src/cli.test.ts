@@ -135,7 +135,7 @@ describe("server cli", () => {
     );
     expect(exported.code).toBe(0);
     const exportedBody = JSON.parse(exported.stdout);
-    expect(exportedBody.result.fileName).toMatch(/cli-test-reference-r-1_1-c-1_1\.png$/);
+    expect(exportedBody.result.fileName).toMatch(/cli-test-reference-r-1_1-c-1_1-[a-f0-9-]+\.png$/);
     await expect(fs.stat(exportedBody.result.path)).resolves.toBeTruthy();
   });
 

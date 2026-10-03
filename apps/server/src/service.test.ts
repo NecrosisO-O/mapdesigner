@@ -455,7 +455,7 @@ describe("server service", () => {
       }
     });
 
-    expect(pngExport.fileName).toMatch(/range-export-test-reference-r-1_1-c-1_2\.png$/);
+    expect(pngExport.fileName).toMatch(/range-export-test-reference-r-1_1-c-1_2-[a-f0-9-]+\.png$/);
     await expect(fs.stat(pngExport.path)).resolves.toBeTruthy();
   });
 
@@ -491,7 +491,7 @@ describe("server service", () => {
         }
       })
     ).resolves.toMatchObject({
-      fileName: expect.stringContaining("-r0_4-c0_4.png")
+      fileName: expect.stringContaining("-r0_4-c0_4-")
     });
   });
 

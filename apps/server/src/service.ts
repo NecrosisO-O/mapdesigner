@@ -23,6 +23,8 @@ type ValidationIssue
 import { buildExportScene,buildMapScene,renderSvgString } from "@mapdesigner/map-render";
 import fs from "node:fs/promises";
 import sharp from "sharp";
+import { randomUUID } from "node:crypto";
+import { MAX_IMPORT_BYTES, assertImportBudget, assertPixelBudget } from "./resource-limits.js";
 import { executeCommands,moveHistory } from "./command-executor.js";
 import type { ApplyCommandsOptions,ApplyCommandsResult,HistoryMoveResult,LightweightApplyCommandsResult,LightweightHistoryMoveResult } from "./command-types.js";
 import { EXPORT_STORAGE_DIR,MAP_STORAGE_DIR } from "./config.js";
@@ -121,11 +123,17 @@ function exportRangeFileSuffix(range: CellRange | null | undefined): string {
 }
 
 async function buildRangeRuntime(id: string, range: CellRange): Promise<MapRuntimeState> {
-  const [summary, features, rangeResult] = await Promise.all([
+  const [summary, firstPage, rangeResult] = await Promise.all([
     getMapSummary(id),
     getMapFeaturesInRange(id, range),
     getCellsInRange(id, range, { includeUndesigned: true })
   ]);
+  const features = { rivers: [...firstPage.rivers] };
+  let page = firstPage;
+  while (page.page.has_more) {
+    page = await getMapFeaturesInRange(id, range, { offset: page.page.offset + page.page.returned, limit: 1000 });
+    features.rivers.push(...page.rivers);
+  }
   const document: MapDocument = {
     schema_version: 1,
     meta: summary.meta,
@@ -337,13 +345,18 @@ export async function importMap(input: {
   content: string;
   generateNewId?: boolean;
   includeMap?: boolean;
+  progress?: (stage: string) => void;
+  beforeCommit?: () => void;
 }): Promise<{ map?: MapRuntimeState; summary: MapSummary; warnings: ValidationIssue[] }> {
   await ensureDirectories();
+  if (Buffer.byteLength(input.content) > MAX_IMPORT_BYTES) throw badRequest("导入文件超过 64 MiB 限制");
+  input.progress?.("正在校验地图");
   const parsed = parseDocument(input.content);
   if (!parsed.document) {
     throw badRequest(parsed.errors.map((entry) => entry.message).join("; "));
   }
   let document = parsed.document;
+  assertImportBudget(document);
   const hasConflict = await mapExists(document.meta.id);
   if (hasConflict && !input.generateNewId) {
     throw badRequest(`meta.id conflict for ${document.meta.id}`);
@@ -362,7 +375,8 @@ export async function importMap(input: {
     };
   }
   validateDocumentForWrite(document);
-  document = await importMapDocument(document);
+  input.progress?.("正在写入地图");
+  document = await importMapDocument(document, input.beforeCommit);
   const summary = await getMapSummary(document.meta.id);
   return {
     ...(input.includeMap === false ? {} : { map: runtimeFromDocument(document) }),
@@ -374,7 +388,7 @@ export async function importMap(input: {
 export async function exportJson(id: string): Promise<{ fileName: string; path: string }> {
   const normalizedId = assertSafeMapId(id);
   const summary = await getMapSummary(normalizedId);
-  const fileName = `${slugify(summary.meta.name) || normalizedId}.json`;
+  const fileName = `${slugify(summary.meta.name) || normalizedId}-${randomUUID()}.json`;
   const filePath = exportPath(fileName);
   await writeMapDocumentJsonExport(normalizedId, filePath);
   return { fileName, path: filePath };
@@ -412,14 +426,18 @@ export async function exportPng(
     map: runtime,
     options: resolved
   });
+  assertPixelBudget(scene.width, scene.height);
   const svg = renderSvgString(scene);
-  const fileName = `${slugify(summary.meta.name) || normalizedId}-${resolved.preset}${exportRangeFileSuffix(resolved.range)}.png`;
+  const fileName = `${slugify(summary.meta.name) || normalizedId}-${resolved.preset}${exportRangeFileSuffix(resolved.range)}-${randomUUID()}.png`;
   const filePath = exportPath(fileName);
-  const png = await sharp(Buffer.from(svg))
+  const temporary = filePath + ".tmp";
+  try {
+    await sharp(Buffer.from(svg), { limitInputPixels: 40_000_000 })
     .timeout({ seconds: PNG_EXPORT_TIMEOUT_SECONDS })
     .png()
-    .toBuffer();
-  await writeFileAtomic(filePath, png);
+    .toFile(temporary);
+    await fs.rename(temporary, filePath);
+  } finally { await fs.rm(temporary, { force: true }); }
   return { fileName, path: filePath };
 }
 

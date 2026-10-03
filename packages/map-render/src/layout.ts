@@ -39,10 +39,12 @@ export function buildHexLayout(
     ...(options.boundsCoords ?? []).map((coord) => centerForCoord(coord, size))
   ];
 
-  const minCenterX = Math.min(...boundsCenters.map((entry) => entry.x), 0);
-  const maxCenterX = Math.max(...boundsCenters.map((entry) => entry.x), 0);
-  const minCenterY = Math.min(...boundsCenters.map((entry) => entry.y), 0);
-  const maxCenterY = Math.max(...boundsCenters.map((entry) => entry.y), 0);
+  let minCenterX = Infinity, maxCenterX = -Infinity, minCenterY = Infinity, maxCenterY = -Infinity;
+  for (const center of boundsCenters) {
+    minCenterX = Math.min(minCenterX, center.x); maxCenterX = Math.max(maxCenterX, center.x);
+    minCenterY = Math.min(minCenterY, center.y); maxCenterY = Math.max(maxCenterY, center.y);
+  }
+  if (!boundsCenters.length) minCenterX = maxCenterX = minCenterY = maxCenterY = 0;
 
   const minX = minCenterX - size - padding;
   const maxX = maxCenterX + size + padding;
