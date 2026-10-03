@@ -4,3 +4,4 @@ export * from "./styles.js";
 export * from "./types.js";
 export * from "./presentation.js";
 export * from "./symbols.js";
+export * from "./river-geometry.js";
