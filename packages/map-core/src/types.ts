@@ -40,6 +40,7 @@ export interface RiverFeature {
   points: RiverPoint[];
   color?: string | null;
   opacity?: number | null;
+  width_mode?: "legacy" | "distance";
 }
 
 export interface MapFeatures {
@@ -266,6 +267,7 @@ export interface CreateRiverCommand extends MapCommandBase {
     points: RiverPoint[];
     color?: string | null;
     opacity?: number | null;
+    width_mode?: RiverFeature["width_mode"];
   };
 }
 
@@ -277,6 +279,7 @@ export interface UpdateRiverCommand extends MapCommandBase {
     points?: RiverPoint[];
     color?: string | null;
     opacity?: number | null;
+    width_mode?: RiverFeature["width_mode"];
   };
 }
 

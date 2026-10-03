@@ -80,6 +80,15 @@ export function validateRiverPoint(point: RiverPoint, target: string): Validatio
 export function validateRiverFeature(river: RiverFeature, index = 0): ValidationIssue[] {
   const target = `features.rivers[${index}]`;
   const issues: ValidationIssue[] = [];
+  if (
+    river.width_mode !== undefined &&
+    river.width_mode !== "legacy" &&
+    river.width_mode !== "distance"
+  ) {
+    issues.push(
+      issue("invalid_width_mode", "unknown river width interpolation", "invalid", target)
+    );
+  }
   if (!isRiverId(river.id)) {
     issues.push(
       issue(

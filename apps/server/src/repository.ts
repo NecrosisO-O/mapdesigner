@@ -5,6 +5,7 @@ import {
   expandRiverPath,
   getNeighborCoords,
   normalizeDocument,
+  normalizeStoredRiver,
   parseDocument,
   type ActiveCell,
   type CellRange,
@@ -250,17 +251,7 @@ function normalizeCellForExport(row: CellRow): DesignedCellRecord {
 }
 
 function normalizeRiverForExport(river: RiverFeature): RiverFeature {
-  return {
-    id: river.id,
-    name: river.name,
-    points: river.points.map((point) => ({
-      row: point.row,
-      col: point.col,
-      ...(typeof point.width === "number" ? { width: point.width } : {})
-    })),
-    ...(river.color ? { color: river.color } : {}),
-    ...(typeof river.opacity === "number" ? { opacity: river.opacity } : {})
-  };
+  return normalizeStoredRiver(river);
 }
 
 function designedCellToActiveCell(cell: DesignedCellRecord): ActiveCell {
@@ -450,7 +441,7 @@ function readFeaturePage(
     .prepare("SELECT json FROM features WHERE " + where + " ORDER BY feature_id LIMIT ? OFFSET ?")
     .all(...params, options.limit, options.offset) as Array<{ json: string }>;
   return {
-    rivers: rows.map((row) => JSON.parse(row.json) as RiverFeature),
+    rivers: rows.map((row) => normalizeStoredRiver(JSON.parse(row.json) as RiverFeature)),
     page: {
       total,
       limit: options.limit,
@@ -465,7 +456,7 @@ function featureRowsToFeatures(rows: FeatureRow[]): MapFeatures {
   return {
     rivers: rows
       .filter((row) => row.kind === "river")
-      .map((row) => JSON.parse(row.json) as RiverFeature)
+      .map((row) => normalizeStoredRiver(JSON.parse(row.json) as RiverFeature))
       .sort((left, right) => left.id.localeCompare(right.id))
   };
 }

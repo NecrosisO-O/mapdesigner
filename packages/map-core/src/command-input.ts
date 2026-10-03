@@ -63,6 +63,12 @@ export function validateCommandInput(input: unknown): ValidationIssue[] {
     if (!record(input.changes)) invalid("changes", "changes must be an object");
     else {
       const changes = input.changes;
+      if (
+        changes.width_mode !== undefined &&
+        changes.width_mode !== "legacy" &&
+        changes.width_mode !== "distance"
+      )
+        invalid("changes.width_mode", "unknown river width interpolation");
       if (changes.note !== undefined && typeof changes.note !== "string")
         invalid("changes.note", "note must be a string");
       if (changes.name !== undefined && (typeof changes.name !== "string" || !changes.name.trim()))

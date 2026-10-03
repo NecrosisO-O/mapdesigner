@@ -81,6 +81,7 @@ function riverDiff(before: RiverFeature[], after: RiverFeature[]) {
         changes: {
           name: a.name,
           points: a.points,
+          width_mode: a.width_mode ?? "legacy",
           color: a.color ?? null,
           opacity: a.opacity ?? null
         }
@@ -136,7 +137,8 @@ function executeSync(
   commands: MapCommand[],
   options: ApplyCommandsOptions,
   includeMap: boolean,
-  recordHistory: boolean
+  recordHistory: boolean,
+  legacyRiverWidths = false
 ): ExecutionResult {
   const initial = getMapSummarySync(id);
   const touchesRivers = commands.some((c) => c.action.includes("river"));
@@ -173,7 +175,7 @@ function executeSync(
       throw badRequest("note must be a string");
     }
     const beforeRivers = state.document.features.rivers;
-    const result = applyCommand(state, command);
+    const result = applyCommand(state, command, { legacyRiverWidths });
     if (!result.ok) throw badRequest(result.errors.map((e) => e.message).join("; "), result.errors);
     const features = riverDiff(beforeRivers, result.map.document.features.rivers);
     for (const write of features.writes) featureWrites.set(write.featureId, write);
@@ -231,7 +233,7 @@ function executeSync(
         action: commands.length === 1 ? commands[0]!.action : "commands",
         commands: resolved,
         inverseCommands: inverse,
-        summary: stats
+        summary: { ...stats, rules_version: 2 }
       });
     summary = getMapSummarySync(id);
   }
@@ -294,7 +296,12 @@ export async function moveHistory(
         : getRedoOperationSync(normalizedId);
     if (!operation) return null;
     const commands = direction === "undo" ? operation.inverseCommands : operation.commands;
-    const result = executeSync(normalizedId, commands, {}, includeMap, false);
+    const legacyRiverWidths =
+      !operation.summary ||
+      typeof operation.summary !== "object" ||
+      !("rules_version" in operation.summary) ||
+      operation.summary.rules_version !== 2;
+    const result = executeSync(normalizedId, commands, {}, includeMap, false, legacyRiverWidths);
     moveHistoryCursorSync(normalizedId, direction === "undo" ? operation.seq - 1 : operation.seq);
     return {
       ...result,

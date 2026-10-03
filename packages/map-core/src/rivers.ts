@@ -108,8 +108,16 @@ function normalizeRiverWidth(value: number | null | undefined): number | null {
   return Math.min(MAX_RIVER_WIDTH, Math.max(MIN_RIVER_WIDTH, value));
 }
 
-function pointWidths(points: RiverPoint[]): number[] {
+export function getRiverPointWidths(
+  points: RiverPoint[],
+  mode: "legacy" | "distance" = "distance"
+): number[] {
   const widths = points.map((point) => normalizeRiverWidth(point.width));
+  const positions = [0];
+  for (let i = 1; i < points.length; i++)
+    positions.push(
+      positions[i - 1]! + (mode === "legacy" ? 1 : getHexDistance(points[i - 1]!, points[i]!))
+    );
   const next = new Array<number>(points.length).fill(-1);
   let following = -1;
   for (let i = points.length - 1; i >= 0; i--) {
@@ -124,16 +132,59 @@ function pointWidths(points: RiverPoint[]): number[] {
     }
     const after = next[i]!;
     if (previous >= 0 && after >= 0)
-      return lerp(widths[previous]!, widths[after]!, (i - previous) / (after - previous));
+      return lerp(
+        widths[previous]!,
+        widths[after]!,
+        (positions[i]! - positions[previous]!) / (positions[after]! - positions[previous]! || 1)
+      );
     return previous >= 0 ? widths[previous]! : after >= 0 ? widths[after]! : DEFAULT_RIVER_WIDTH;
   });
+}
+
+/** Preserve old effective widths when a legacy river enters the new editor. */
+export function upgradeRiverWidths(river: RiverFeature): RiverFeature {
+  if (river.width_mode !== "legacy") return { ...river, width_mode: "distance" };
+  const widths = getRiverPointWidths(river.points, "legacy");
+  return {
+    ...river,
+    width_mode: "distance",
+    points: river.points.map((point, i) => ({ ...point, width: widths[i]! }))
+  };
+}
+
+export function prepareRiverEdit(
+  river: RiverFeature,
+  points?: RiverPoint[],
+  mode: "legacy" | "distance" = "distance"
+): RiverFeature {
+  if (mode === "legacy") return { ...river, width_mode: mode, points: points ?? river.points };
+  const upgraded = upgradeRiverWidths(river);
+  if (!points) return upgraded;
+  const inherited = new Map(
+    river.points.map((point, i) => [
+      point.row + "," + point.col,
+      { point, width: upgraded.points[i]!.width }
+    ])
+  );
+  return {
+    ...upgraded,
+    points: points.map((point) => {
+      const before = inherited.get(point.row + "," + point.col);
+      return river.width_mode === "legacy" &&
+        point.width === undefined &&
+        before &&
+        before.point.width === undefined
+        ? { ...point, width: before.width }
+        : { ...point };
+    })
+  };
 }
 
 export function expandRiverPath(river: RiverFeature): RiverPathSample[] {
   if (river.points.length === 0) {
     return [];
   }
-  const widths = pointWidths(river.points);
+  const widths = getRiverPointWidths(river.points, river.width_mode ?? "distance");
   if (river.points.length === 1) {
     const point = river.points[0]!;
     return [
