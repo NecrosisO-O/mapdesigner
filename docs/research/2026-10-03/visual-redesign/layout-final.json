@@ -1,0 +1,98 @@
+{
+  "method": "Real editor in an iframe CSS viewport; browser viewport override did not affect existing tabs. Not real device or page zoom.",
+  "export": [
+    {
+      "content": {
+        "bottom": 249,
+        "height": 137.40625,
+        "top": 111.59375,
+        "width": 714
+      },
+      "footer": {
+        "bottom": 326,
+        "height": 61,
+        "top": 265,
+        "width": 714
+      },
+      "height": 375,
+      "pageWidth": 812,
+      "preview": {
+        "bottom": 249,
+        "height": 137.40625,
+        "top": 111.59375,
+        "width": 420
+      },
+      "width": 812
+    },
+    {
+      "content": {
+        "bottom": 710,
+        "height": 620.40625,
+        "top": 89.59375,
+        "width": 317
+      },
+      "footer": {
+        "bottom": 785,
+        "height": 65,
+        "top": 720,
+        "width": 317
+      },
+      "height": 812,
+      "pageWidth": 375,
+      "preview": {
+        "bottom": 397.234375,
+        "height": 307.640625,
+        "top": 89.59375,
+        "width": 317
+      },
+      "width": 375
+    },
+    {
+      "content": {
+        "bottom": 642,
+        "height": 530.40625,
+        "top": 111.59375,
+        "width": 926
+      },
+      "footer": {
+        "bottom": 719,
+        "height": 61,
+        "top": 658,
+        "width": 926
+      },
+      "height": 768,
+      "pageWidth": 1024,
+      "preview": {
+        "bottom": 642,
+        "height": 530.40625,
+        "top": 111.59375,
+        "width": 632
+      },
+      "width": 1024
+    },
+    {
+      "content": {
+        "bottom": 708,
+        "height": 530.40625,
+        "top": 177.59375,
+        "width": 1030
+      },
+      "footer": {
+        "bottom": 785,
+        "height": 61,
+        "top": 724,
+        "width": 1030
+      },
+      "height": 900,
+      "pageWidth": 1440,
+      "preview": {
+        "bottom": 708,
+        "height": 530.40625,
+        "top": 177.59375,
+        "width": 736
+      },
+      "width": 1440
+    }
+  ],
+  "escapeRestoresFocus": true
+}

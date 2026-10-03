@@ -1,0 +1,32 @@
+{
+  "method": "Actual MapCanvas at 1200 loaded cells, synthetic wheel events, rAF frame gaps and event-to-next-paint proxy; source count is summary metadata, HTTP/data loading is measured separately.",
+  "results": [
+    {
+      "sourceCells": 10000,
+      "renderedCells": 1200,
+      "samples": 40,
+      "frameP95Ms": 16.80000000000109,
+      "interactionP95Ms": 39.39999997615814,
+      "heapMB": 86.94217205047607,
+      "domElements": 4899
+    },
+    {
+      "sourceCells": 100000,
+      "renderedCells": 1200,
+      "samples": 40,
+      "frameP95Ms": 16.700000000000728,
+      "interactionP95Ms": 33.699999928474426,
+      "heapMB": 88.3121452331543,
+      "domElements": 4899
+    },
+    {
+      "sourceCells": 500000,
+      "renderedCells": 1200,
+      "samples": 40,
+      "frameP95Ms": 16.80000000000109,
+      "interactionP95Ms": 36.60000002384186,
+      "heapMB": 89.76574325561523,
+      "domElements": 4899
+    }
+  ]
+}
