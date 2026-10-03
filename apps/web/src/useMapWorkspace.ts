@@ -41,6 +41,8 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
   const inFlight = useRef(new Map<string, Promise<MapRuntimeState | null>>());
   const suppressAutoOpen = useRef(false);
   const [isRenaming, setIsRenaming] = useState(false), [renameDraft, setRenameDraft] = useState("");
+  const importAbort = useRef<AbortController | null>(null);
+  const [importProgress, setImportProgress] = useState("");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const currentMap = useMemo(() => session ? sessionRuntime(session) : null, [session]);
   const currentMapId = session?.summary.meta.id ?? "";
@@ -259,16 +261,20 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
     finally { finishSwitch(epoch); }
   }
   async function importFile(file: File): Promise<MapRuntimeState | null> {
+    if (importAbort.current) return null;
+    if (file.size > 64 * 1024 * 1024) { setMessage("导入文件超过 64 MiB 限制"); return null; }
     const epoch = beginSwitch();
+    const controller = new AbortController(); importAbort.current = controller;
+    const control = { signal: controller.signal, onProgress: setImportProgress };
     try {
-      const content = await file.text();
+      const content = file;
       if (!valid(epoch)) return null;
-      let response = await api.importMap(content);
+      let response = await api.importMap(content, false, control);
       if (!valid(epoch)) return null;
       if (!response.ok || !response.result) {
         const message = errorMessage(response, "导入失败");
         if (!message.includes("conflict") || !window.confirm(message + "。是否生成新 ID 后重试？")) throw new Error(message);
-        response = await api.importMap(content, true);
+        response = await api.importMap(content, true, control);
       }
       if (!valid(epoch)) return null;
       if (!response.ok || !response.result) throw new Error(errorMessage(response, "导入失败"));
@@ -276,7 +282,7 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
       if (result) { const openedEpoch = generation.current; await refreshMaps(); if (valid(openedEpoch, result.document.meta.id)) setMessage("导入成功"); }
       return result;
     } catch (error) { if (valid(epoch)) setMessage((error as Error).message); return null; }
-    finally { finishSwitch(epoch); }
+    finally { finishSwitch(epoch); importAbort.current = null; setImportProgress(""); }
   }
   async function deleteCurrentMap(confirmed = false): Promise<boolean> {
     const current = sessionRef.current;
@@ -294,6 +300,7 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
   useEffect(() => { if (maps.length && !sessionRef.current && !opening.current && !suppressAutoOpen.current) void openMap(maps[0]!.id); }, [maps]);
   useEffect(() => { if (!isRenaming) setRenameDraft(currentMap?.document.meta.name ?? ""); }, [currentMap?.document.meta.name, isRenaming]);
   return {
+    importProgress, cancelImport: () => importAbort.current?.abort(),
     maps, currentMap, visibleMap: currentMap, currentMapId, mapSummary: session?.summary ?? null,
     mapHistory: session?.history ?? null, displayMaps, isRenaming, renameDraft, loading, pendingCount, mapDirty,
     visibleRange: session?.range ?? null, fileInputRef, setRenameDraft,

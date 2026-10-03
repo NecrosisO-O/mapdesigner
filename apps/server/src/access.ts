@@ -1,3 +1,4 @@
+import { validDownloadTicket } from "./downloads.js";
 import { timingSafeEqual } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { SERVER_HOST, SERVER_PORT, API_TOKEN, ALLOWED_ORIGINS, LOOPBACK_HOSTS } from "./config.js";
@@ -31,7 +32,7 @@ export function registerAccessGuard(app: FastifyInstance): void {
       return deny(403, "origin_not_allowed", "request origin is not allowed");
     }
     if (request.method === "OPTIONS") return;
-    if (API_TOKEN) {
+    if (API_TOKEN && !(request.method === "GET" && validDownloadTicket(request.url))) {
       const received = Buffer.from(request.headers.authorization?.replace(/^Bearer /, "") ?? "");
       const expected = Buffer.from(API_TOKEN);
       if (received.length !== expected.length || !timingSafeEqual(received, expected)) {

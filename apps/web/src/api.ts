@@ -122,6 +122,27 @@ export async function request<T>(input: RequestInfo, init?: RequestInit): Promis
   }
 }
 
+export interface TaskControl { signal?: AbortSignal; onProgress?: (stage: string) => void }
+interface JobResult<T> { id: string; state: string; stage: string; result?: T; error?: string }
+async function runJob<T>(start: Promise<ApiEnvelope<JobResult<T>>>, control: TaskControl = {}): Promise<ApiEnvelope<T>> {
+  const response = await start;
+  if (!response.ok || !response.result) return { ...response, result: undefined };
+  const id = response.result.id;
+  let cancellationSent = false;
+  for (;;) {
+    if (control.signal?.aborted && !cancellationSent) {
+      cancellationSent = true;
+      await request("/api/jobs/" + id, { method: "DELETE" });
+    }
+    const state = await request<JobResult<T>>("/api/jobs/" + id);
+    if (!state.ok || !state.result) return { ...state, result: undefined };
+    control.onProgress?.(state.result.stage);
+    if (state.result.state === "done") return { ok: true, result: state.result.result, warnings: [], errors: [] };
+    if (["failed", "cancelled"].includes(state.result.state)) return failure(state.result.error ?? "任务已取消");
+    await new Promise(resolve => setTimeout(resolve, 250));
+  }
+}
+
 export const api = {
   listMaps: () => request<MapListItem[]>("/api/maps"),
   getMap: (id: string) => request<MapRuntimeState>(`/api/maps/${id}`),
@@ -189,18 +210,19 @@ export const api = {
     request<HistoryMoveResult | null>(`/api/maps/${id}/redo?includeMap=${includeMap}`, {
       method: "POST"
     }),
-  importMap: (content: string, generateNewId = false) =>
-    request<{ map?: MapRuntimeState; summary: MapSummary }>(`/api/maps/import?includeMap=false`, {
-      method: "POST",
-      body: JSON.stringify({ content, generateNewId })
-    }),
-  exportJson: (id: string) =>
-    request<{ fileName: string; path: string; downloadUrl: string }>(`/api/maps/${id}/export-json`, {
-      method: "POST"
-    }),
-  exportPng: (id: string, options: Partial<ExportRenderOptions>) =>
-    request<{ fileName: string; path: string; downloadUrl: string }>(`/api/maps/${id}/export-png`, {
-      method: "POST",
-      body: JSON.stringify(options)
-    })
+  importMap: (content: string | Blob, generateNewId = false, control: TaskControl = {}) => {
+    if (typeof content === "string") return request<{ map?: MapRuntimeState; summary: MapSummary }>("/api/maps/import?includeMap=false", {
+      method: "POST", body: JSON.stringify({ content, generateNewId })
+    });
+    control.onProgress?.("正在上传文件");
+    return runJob<{ map?: MapRuntimeState; summary: MapSummary }>(request("/api/jobs/import?generateNewId=" + generateNewId, {
+      method: "POST", body: content, headers: { "Content-Type": "application/octet-stream" }, signal: control.signal
+    }), control);
+  },
+  exportJson: (id: string, control: TaskControl = {}) => runJob<{ fileName: string; downloadUrl: string }>(request("/api/jobs/export", {
+    method: "POST", body: JSON.stringify({ kind: "json", mapId: id })
+  }), control),
+  exportPng: (id: string, options: Partial<ExportRenderOptions>, control: TaskControl = {}) => runJob<{ fileName: string; downloadUrl: string }>(request("/api/jobs/export", {
+    method: "POST", body: JSON.stringify({ kind: "png", mapId: id, options })
+  }), control)
 };

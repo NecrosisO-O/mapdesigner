@@ -1198,7 +1198,7 @@ describe("App", () => {
             minCol: expect.any(Number),
             maxCol: expect.any(Number)
           })
-        })
+        }), expect.objectContaining({ signal: expect.any(AbortSignal), onProgress: expect.any(Function) })
       )
     );
     expect(clickSpy).toHaveBeenCalledTimes(1);
@@ -1254,7 +1254,7 @@ describe("App", () => {
         "sample-map",
         expect.objectContaining({
           background: "transparent"
-        })
+        }), expect.objectContaining({ signal: expect.any(AbortSignal), onProgress: expect.any(Function) })
       )
     );
   });
@@ -1275,7 +1275,7 @@ describe("App", () => {
         "sample-map",
         expect.objectContaining({
           range: null
-        })
+        }), expect.objectContaining({ signal: expect.any(AbortSignal), onProgress: expect.any(Function) })
       )
     );
   });
