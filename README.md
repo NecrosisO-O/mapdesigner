@@ -24,7 +24,9 @@ It combines a visual WebUI with a structured CLI, so the same map can evolve alo
 
 ## Screenshot
 
-![MapDesigner main interface](./docs/images/readme-main.png)
+![MapDesigner main interface](./docs/research/2026-10-03/ui/desktop-light.jpg)
+
+See the [browser acceptance record](./docs/research/2026-10-03/browser-acceptance.md) for responsive layouts and verified editing workflows.
 
 ## Quick Start
 

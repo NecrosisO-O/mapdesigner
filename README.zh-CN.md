@@ -17,6 +17,10 @@ MapDesigner 是一个本地优先的六角格地图设计工具，适合异世�
 
 ## 快速开始
 
+![正式编辑器界面](./docs/research/2026-10-03/ui/desktop-light.jpg)
+
+桌面、窄屏截图与操作验证见[浏览器验收记录](./docs/research/2026-10-03/browser-acceptance.md)。
+
 ### 源码运行
 
 ```bash
