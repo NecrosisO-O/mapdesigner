@@ -4,7 +4,6 @@ import {
   TAG_ENTRIES,
   TERRAIN_ENTRIES,
   TERRAIN_CATEGORY_ORDER,
-  createCellId,
   getAllowedBiomesForTerrain,
   getAllowedTerrainCategoriesForBiome,
   getAllowedTerrainsForBiome,
@@ -14,7 +13,9 @@ import {
   type MapCommand,
   type MapRuntimeState
 } from "@mapdesigner/map-core";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+
+import { useEditorTask } from "./useEditorTask.js";
 
 export interface CellDraft {
   terrain: string;
@@ -62,8 +63,10 @@ export function useCellEditor(
     note: false
   });
 
-  const selectedCell =
-    currentMap?.activeCells.find((cell) => cell.id === selectedCellId) ?? null;
+  const [selectedCell, setSelectedCell] = useState<ActiveCell | null>(null);
+  const latest = useRef({ selectedCellId, draft });
+  latest.current = { selectedCellId, draft };
+  const task = useEditorTask(currentMap?.document.meta.id);
 
   const cellDirty =
     selectedCell !== null &&
@@ -84,6 +87,7 @@ export function useCellEditor(
   const canUseFormatBrush = selectedCell?.status === "designed";
 
   function syncDraftFromCell(cell: ActiveCell | null): void {
+    setSelectedCell(cell);
     setDraft(toDraft(cell));
     setTerrainCategory(resolveTerrainCategory(cell?.terrain));
   }
@@ -99,6 +103,7 @@ export function useCellEditor(
   }
 
   function ensureCanLeaveSelection(): boolean {
+    if (task.pending) return false;
     if (!cellDirty) {
       return true;
     }
@@ -190,7 +195,8 @@ export function useCellEditor(
       setMessage("设置为 designed 时必须选择 terrain");
       return;
     }
-    const result = await applyCommands([{
+    const submitted = draft;
+    const result = await task.run(() => applyCommands([{
       action: "set_cell",
       source: "webui",
       target: { row: selectedCell.row, col: selectedCell.col },
@@ -200,14 +206,14 @@ export function useCellEditor(
         tags: draft.tags as Array<keyof typeof TAG_ENTRIES>,
         note: draft.note
       }
-    }]);
+    }]));
     if (!result) {
       return;
     }
-    setSelectedCellId(createCellId(selectedCell.row, selectedCell.col));
-    syncDraftFromCell(
-      result.activeCells.find((cell) => cell.row === selectedCell.row && cell.col === selectedCell.col) ?? null
-    );
+    if (latest.current.selectedCellId !== selectedCell.id) return;
+    const updated = result.activeCells.find(cell => cell.id === selectedCell.id) ?? selectedCell;
+    setSelectedCell(updated);
+    if (latest.current.draft === submitted) syncDraftFromCell(updated);
     setMessage("单元格修改已保存到服务器");
   }
 
@@ -215,18 +221,21 @@ export function useCellEditor(
     if (!currentMap || !selectedCell) {
       return;
     }
-    const result = await applyCommands([{
+    const submitted = draft;
+    const result = await task.run(() => applyCommands([{
       action: "clear_cell",
       source: "webui",
       target: { row: selectedCell.row, col: selectedCell.col }
-    }]);
+    }]));
     if (!result) {
       return;
     }
+    if (latest.current.selectedCellId !== selectedCell.id) return;
     const updatedCell =
       result.activeCells.find((cell) => cell.row === selectedCell.row && cell.col === selectedCell.col) ?? null;
     setSelectedCellId(updatedCell?.id ?? null);
-    syncDraftFromCell(updatedCell);
+    setSelectedCell(updatedCell);
+    if (latest.current.draft === submitted) syncDraftFromCell(updatedCell);
     if (updatedCell?.status !== "designed") {
       setFormatBrushEnabled(false);
     }
@@ -264,32 +273,17 @@ export function useCellEditor(
       return;
     }
 
-    const nextTerrain = formatBrushScope.terrain ? selectedCell.terrain : targetCell.terrain;
-    const nextBiome = formatBrushScope.biome ? selectedCell.biome : targetCell.biome;
-    if (!nextTerrain) {
-      setMessage("格式刷结果缺少 terrain，无法应用");
-      return;
-    }
-
-    const result = await applyCommands([{
-      action: "set_cell",
-      source: "webui",
-      target: { row: targetCell.row, col: targetCell.col },
+    const result = await task.run(() => applyCommands([{
+      action: "patch_cells", source: "webui",
+      targets: [{ row: targetCell.row, col: targetCell.col }],
       changes: {
-        terrain: nextTerrain as keyof typeof TERRAIN_ENTRIES,
-        biome: nextBiome ? (nextBiome as keyof typeof BIOME_ENTRIES) : null,
-        tags: (formatBrushScope.tags ? selectedCell.tags : targetCell.tags) as Array<keyof typeof TAG_ENTRIES>,
-        note: formatBrushScope.note ? selectedCell.note : targetCell.note
+        ...(formatBrushScope.terrain ? { terrain: selectedCell.terrain! } : {}),
+        ...(formatBrushScope.biome ? { biome: selectedCell.biome } : {}),
+        ...(formatBrushScope.tags ? { tags: selectedCell.tags } : {}),
+        ...(formatBrushScope.note ? { note: selectedCell.note } : {})
       }
-    }]);
-    if (!result) {
-      return;
-    }
-
-    setSelectedCellId(createCellId(selectedCell.row, selectedCell.col));
-    syncDraftFromCell(
-      result.activeCells.find((cell) => cell.row === selectedCell.row && cell.col === selectedCell.col) ?? null
-    );
+    }]));
+    if (!result) return;
     setMessage(
       `已将 ${selectedCell.display_coord} 的${getFormatBrushLabel()}刷到 ${targetCell.display_coord} 并保存到服务器`
     );
@@ -313,17 +307,15 @@ export function useCellEditor(
     }
   }, [canUseFormatBrush, formatBrushEnabled]);
 
+  useEffect(() => { resetEditor(); }, [currentMap?.document.meta.id]);
   useEffect(() => {
-    if (!currentMap && selectedCellId) {
-      resetEditor();
-      return;
-    }
-    if (currentMap && selectedCellId && !selectedCell) {
-      resetEditor();
-    }
-  }, [currentMap, selectedCell, selectedCellId]);
+    if (cellDirty || !selectedCellId || task.pending) return;
+    const visible = currentMap?.activeCells.find(cell => cell.id === selectedCellId);
+    if (visible && visible !== selectedCell) syncDraftFromCell(visible);
+  }, [currentMap, selectedCellId, cellDirty, task.pending]);
 
   return {
+    pending: task.pending,
     selectedCellId,
     selectedCell,
     draft,

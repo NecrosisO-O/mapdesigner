@@ -72,8 +72,8 @@ function loadDocument(id: string, commands: MapCommand[]): MapDocument {
   for (const command of commands) {
     if (!command || typeof command !== "object") throw badRequest("command must be an object");
     let loaded: DesignedCellRecord[] = [];
-    if (command.action === "set_cell" || command.action === "clear_cell" || command.action === "annotate_cell" || command.action === "set_cells") {
-      const targets = command.action === "set_cells" ? command.targets : [command.target];
+    if (command.action === "set_cell" || command.action === "clear_cell" || command.action === "annotate_cell" || (command.action === "set_cells" || command.action === "patch_cells")) {
+      const targets = (command.action === "set_cells" || command.action === "patch_cells") ? command.targets : [command.target];
       if (!Array.isArray(targets)) throw badRequest("targets must be an array");
       const errors = targets.flatMap((target, i) => validateCoordinate(target, "targets[" + i + "]"));
       if (errors.length) throw badRequest(errors.map(e => e.message).join("; "), errors);

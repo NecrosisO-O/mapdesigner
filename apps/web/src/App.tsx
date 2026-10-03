@@ -1,5 +1,5 @@
 import type { TagKey } from "@mapdesigner/map-core";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { DetailPanel } from "./DetailPanel.js";
 import { MapCanvas } from "./MapCanvas.js";
 import { SidebarPanel } from "./SidebarPanel.js";
@@ -36,7 +36,21 @@ export default function App() {
     );
   }
 
+  const hasDrafts = workspace.mapDirty || editor.cellDirty || riverEditor.riverDirty || advancedEditor.batchDirty;
+  function ensureCanLeave(): boolean {
+    if (workspace.pendingCount || editor.pending || riverEditor.pending || advancedEditor.pending) {
+      setMessage("请等待当前修改提交完成"); return false;
+    }
+    return !hasDrafts || window.confirm("有尚未应用的修改，是否放弃并继续？");
+  }
+  useEffect(() => {
+    const warn = (event: BeforeUnloadEvent) => { if (hasDrafts || workspace.pendingCount) { event.preventDefault(); event.returnValue = ""; } };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [hasDrafts, workspace.pendingCount]);
+
   async function handleCreateMap(): Promise<void> {
+    if (!ensureCanLeave()) return;
     const result = await workspace.createMap();
     if (result) {
       editor.resetEditor();
@@ -48,7 +62,7 @@ export default function App() {
     if (!nextId) {
       return;
     }
-    if (!workspace.ensureCanLeaveMap() || !editor.ensureCanLeaveSelection()) {
+    if (!ensureCanLeave()) {
       return;
     }
     const result = await workspace.openMap(nextId);
@@ -58,12 +72,7 @@ export default function App() {
   }
 
   async function handleSaveAs(): Promise<void> {
-    if (
-      editor.cellDirty &&
-      !window.confirm("当前单元格表单还有未应用修改，另存为不会包含这些修改。是否继续？")
-    ) {
-      return;
-    }
+    if (!ensureCanLeave()) return;
     const result = await workspace.saveMapAs();
     if (result) {
       editor.resetEditor();
@@ -71,6 +80,7 @@ export default function App() {
   }
 
   async function handleImportFile(file: File): Promise<void> {
+    if (!ensureCanLeave()) return;
     const result = await workspace.importFile(file);
     if (result) {
       editor.resetEditor();
@@ -78,6 +88,7 @@ export default function App() {
   }
 
   async function handleDuplicateMap(): Promise<void> {
+    if (!ensureCanLeave()) return;
     const result = await workspace.duplicateMap();
     if (result) {
       editor.disableFormatBrush();
@@ -85,6 +96,7 @@ export default function App() {
   }
 
   async function handleDeleteMap(): Promise<void> {
+    if (!ensureCanLeave()) return;
     const deleted = await workspace.deleteCurrentMap();
     if (deleted) {
       editor.resetEditor();
@@ -98,7 +110,7 @@ export default function App() {
         mapHistory={workspace.mapHistory}
         currentMapId={workspace.currentMapId}
         displayMaps={workspace.displayMaps}
-        mapDirty={workspace.mapDirty}
+        mapDirty={hasDrafts}
         isRenaming={workspace.isRenaming}
         renameDraft={workspace.renameDraft}
         fileInputRef={workspace.fileInputRef}
@@ -118,6 +130,7 @@ export default function App() {
           if (mode === interactionMode) {
             return;
           }
+          if (!ensureCanLeave()) return;
           setInteractionMode(mode);
           if (mode === "river-draw") {
             editor.disableFormatBrush();
@@ -130,6 +143,7 @@ export default function App() {
           }
         }}
         onUndo={() => {
+          if (!ensureCanLeave()) return;
           void workspace.undoCurrentMap().then((result) => {
             if (result) {
               updateEditorDraftFromMap(result);
@@ -137,6 +151,7 @@ export default function App() {
           });
         }}
         onRedo={() => {
+          if (!ensureCanLeave()) return;
           void workspace.redoCurrentMap().then((result) => {
             if (result) {
               updateEditorDraftFromMap(result);
@@ -290,6 +305,8 @@ export default function App() {
           batchModeActive={interactionMode === "batch-select"}
           batchSelectedCount={advancedEditor.batchSelectedCells.length}
           batchDraft={advancedEditor.batchDraft}
+          batchModes={advancedEditor.batchModes}
+          onBatchFieldModeChange={advancedEditor.setBatchFieldMode}
           replaceTerrainDraft={advancedEditor.replaceTerrainDraft}
           replaceBiomeDraft={advancedEditor.replaceBiomeDraft}
           batchFilteredTerrainCategories={advancedEditor.batchFilteredTerrainCategories}

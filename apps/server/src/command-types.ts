@@ -55,6 +55,7 @@ export interface LightweightApplyCommandsResult {
 }
 
 export interface HistoryMoveResult {
+  changes?: CellChangeDetail[];
   map: MapRuntimeState;
   warnings: ValidationIssue[];
   operation: {
@@ -67,6 +68,7 @@ export interface HistoryMoveResult {
 }
 
 export interface LightweightHistoryMoveResult {
+  changes?: CellChangeDetail[];
   mapId: string;
   summary: MapSummary;
   features?: MapFeatures;

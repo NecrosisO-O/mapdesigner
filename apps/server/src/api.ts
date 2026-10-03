@@ -171,6 +171,7 @@ async function historyMoveResponse(result: Awaited<ReturnType<typeof undoMap>>, 
       features: result.map.document.features,
       warnings: result.warnings,
       operation: result.operation,
+      changes: result.changes,
       status: result.status
     },
     warnings: result.warnings
@@ -187,6 +188,7 @@ async function lightHistoryMoveResponse(result: Awaited<ReturnType<typeof undoMa
       ...(result.features ? { features: result.features } : {}),
       warnings: result.warnings,
       operation: result.operation,
+      changes: result.changes,
       status: result.status
     },
     warnings: result.warnings

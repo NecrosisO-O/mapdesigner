@@ -206,6 +206,12 @@ export interface ClearCellCommand extends MapCommandBase {
   target: GridCoordinate;
 }
 
+export interface PatchCellsCommand extends MapCommandBase {
+  action: "patch_cells";
+  targets: GridCoordinate[];
+  changes: Partial<SetCellCommand["changes"]>;
+}
+
 export interface ReplaceTerrainCommand extends MapCommandBase {
   action: "replace_terrain";
   match: {
@@ -276,6 +282,7 @@ export interface SetRiverWidthCommand extends MapCommandBase {
 }
 
 export type MapCommand =
+  | PatchCellsCommand
   | SetCellCommand
   | SetCellsCommand
   | ClearCellCommand

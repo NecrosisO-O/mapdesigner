@@ -221,6 +221,31 @@ export function applyCommand(state: MapRuntimeState, command: MapCommand): Comma
   const source = command.source ?? "system";
 
   switch (command.action) {
+    case "patch_cells": {
+      if (command.changes.tags !== undefined) errors.push(...validateTags(command.changes.tags, "changes.tags"));
+      if (command.changes.biome !== undefined && command.changes.biome !== null && !isBiomeKey(command.changes.biome)) {
+        errors.push({ code: "invalid_biome", message: "biome must be null or a known biome key", severity: "invalid", target: "changes.biome" });
+      }
+      if (errors.length) return finalize(state, working, [], warnings, errors, "patch_cells", source);
+      for (const target of new Map(command.targets.map(target => [createCellId(target.row, target.col), target])).values()) {
+        const previous = working.cells.find(cell => sameCoord(cell, target));
+        const terrain = command.changes.terrain ?? previous?.terrain;
+        if (!isTerrainKey(terrain)) {
+          errors.push({ code: "invalid_terrain", message: "new cells require a valid terrain", severity: "invalid", target: createCellId(target.row, target.col) });
+          continue;
+        }
+        const biome = command.changes.biome === undefined ? previous?.biome ?? null : command.changes.biome;
+        const issues = validateTerrainBiomePair(terrain, biome, createCellId(target.row, target.col));
+        errors.push(...issues.filter(issue => issue.severity === "invalid"));
+        warnings.push(...issues.filter(issue => issue.severity === "warning"));
+        upsertCell(working.cells, { ...target, terrain, biome,
+          tags: command.changes.tags === undefined ? previous?.tags ?? [] : [...new Set(command.changes.tags)],
+          note: command.changes.note === undefined ? previous?.note ?? "" : command.changes.note });
+        changed.push(target);
+      }
+      if (changed.length) { working.meta.updated_at = new Date().toISOString(); working.meta.revision++; }
+      return finalize(state, working, changed, warnings, errors, "patch_cells", source);
+    }
     case "set_cell": {
       errors.push(...validateCoordinate(command.target, "target"));
       if (!isTerrainKey(command.changes.terrain)) {

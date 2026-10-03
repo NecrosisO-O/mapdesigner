@@ -9,7 +9,9 @@ import {
   type RiverFeature,
   type RiverPoint
 } from "@mapdesigner/map-core";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+
+import { useEditorTask } from "./useEditorTask.js";
 
 export interface RiverDraft {
   name: string;
@@ -125,31 +127,36 @@ export function useRiverEditor(
 ) {
   const [selectedRiverId, setSelectedRiverId] = useState<string>("");
   const rivers = currentMap?.document.features?.rivers ?? [];
-  const selectedRiver = rivers.find((river) => river.id === selectedRiverId) ?? null;
+  const [selectedRiver, setSelectedRiver] = useState<RiverFeature | null>(null);
   const [draft, setDraft] = useState<RiverDraft>(draftFromRiver(null));
   const [drawingStatus, setDrawingStatus] = useState<RiverDrawingStatus>("idle");
   const [drawingPoints, setDrawingPoints] = useState<RiverPoint[]>([]);
 
-  const riverDirty =
-    selectedRiver !== null &&
-    (draft.name !== selectedRiver.name ||
-      draft.pointsText !== selectedRiver.points.map((point) => createDisplayCoord(point.row, point.col)).join(", ") ||
-      draft.widthsText !== draftFromRiver(selectedRiver).widthsText ||
-      draft.color !== (selectedRiver.color ?? "#2F83B7") ||
-      draft.opacity !== String(selectedRiver.opacity ?? 0.88));
+  const task = useEditorTask(currentMap?.document.meta.id);
+  const pointsRef = useRef(drawingPoints);
+  const latest = useRef({ draft, selectedRiverId });
+  latest.current = { draft, selectedRiverId };
+  const riverDirty = JSON.stringify(draft) !== JSON.stringify(draftFromRiver(selectedRiver));
+  function ensureCanLeaveRiver(): boolean {
+    return !task.pending && (!riverDirty || window.confirm("河流有未应用修改，是否放弃？"));
+  }
 
   function startNewRiver(): void {
     setSelectedRiverId("");
+    setSelectedRiver(null);
     setDraft(draftFromRiver(null));
     setDrawingStatus("idle");
+    pointsRef.current = [];
     setDrawingPoints([]);
   }
 
   function selectRiver(id: string): void {
     const river = rivers.find((entry) => entry.id === id) ?? null;
     setSelectedRiverId(id);
+    setSelectedRiver(river);
     setDraft(draftFromRiver(river));
     setDrawingStatus("idle");
+    pointsRef.current = [];
     setDrawingPoints([]);
   }
 
@@ -170,7 +177,9 @@ export function useRiverEditor(
       return;
     }
     setSelectedRiverId("");
+    setSelectedRiver(null);
     setDrawingStatus("drawing");
+    pointsRef.current = [];
     setDrawingPoints([]);
     setDraft((current) => ({
       ...draftFromRiver(null),
@@ -185,21 +194,16 @@ export function useRiverEditor(
     if (drawingStatus !== "drawing") {
       return;
     }
-    setDrawingPoints((current) => {
-      if (current.some((point) => point.row === cell.row && point.col === cell.col)) {
-        setMessage(`${cell.display_coord} 已在当前河流路径中`);
-        return current;
-      }
-      const nextPoint: RiverPoint = {
-        row: cell.row,
-        col: cell.col,
-        ...(current.length === 0 ? { width: DEFAULT_RIVER_WIDTH } : {})
-      };
-      const next = [...current, nextPoint];
-      syncDrawingDraft(next);
-      setMessage(`已添加河流点 ${cell.display_coord}`);
-      return next;
-    });
+    const current = pointsRef.current;
+    if (current.some(point => point.row === cell.row && point.col === cell.col)) {
+      setMessage(cell.display_coord + " 已在当前河流路径中");
+      return;
+    }
+    const next: RiverPoint[] = [...current, { row: cell.row, col: cell.col, ...(current.length ? {} : { width: DEFAULT_RIVER_WIDTH }) }];
+    pointsRef.current = next;
+    setDrawingPoints(next);
+    syncDrawingDraft(next);
+    setMessage("已添加河流点 " + cell.display_coord);
   }
 
   async function applyRiverDraft(): Promise<boolean> {
@@ -226,7 +230,8 @@ export function useRiverEditor(
     }
 
     const existingIds = new Set(rivers.map((river) => river.id));
-    const result = await applyCommands([
+    const submitted = draft;
+    const result = await task.run(() => applyCommands([
       selectedRiver
         ? {
             action: "update_river",
@@ -249,16 +254,19 @@ export function useRiverEditor(
               opacity
             }
           }
-    ]);
+    ]));
     if (!result) {
       return false;
     }
+    if (latest.current.selectedRiverId !== selectedRiverId) return false;
     const nextRiver = selectedRiver
       ? result.document.features.rivers.find((river) => river.id === selectedRiver.id) ?? null
       : result.document.features.rivers.find((river) => !existingIds.has(river.id)) ?? null;
     setSelectedRiverId(nextRiver?.id ?? "");
-    setDraft(draftFromRiver(nextRiver));
+    setSelectedRiver(nextRiver);
+    if (latest.current.draft === submitted) setDraft(draftFromRiver(nextRiver));
     setDrawingStatus("idle");
+    pointsRef.current = [];
     setDrawingPoints([]);
     setMessage("河流修改已保存到服务器");
     return true;
@@ -274,6 +282,7 @@ export function useRiverEditor(
 
   function cancelRiverDrawing(): void {
     setDrawingStatus("idle");
+    pointsRef.current = [];
     setDrawingPoints([]);
     setDraft(draftFromRiver(selectedRiver));
     setMessage("已取消河流绘制");
@@ -283,11 +292,11 @@ export function useRiverEditor(
     if (!currentMap || !selectedRiver) {
       return;
     }
-    const result = await applyCommands([{
+    const result = await task.run(() => applyCommands([{
       action: "delete_river",
       source: "webui",
       river_id: selectedRiver.id
-    }]);
+    }]));
     if (!result) {
       return;
     }
@@ -307,17 +316,15 @@ export function useRiverEditor(
         }
       : null;
 
+  useEffect(() => { startNewRiver(); }, [currentMap?.document.meta.id]);
   useEffect(() => {
-    if (!currentMap) {
-      startNewRiver();
-      return;
-    }
-    if (selectedRiverId && !selectedRiver) {
-      startNewRiver();
-    }
-  }, [currentMap, selectedRiver, selectedRiverId]);
+    if (!selectedRiverId || riverDirty || task.pending) return;
+    const river = rivers.find(entry => entry.id === selectedRiverId);
+    if (river && river !== selectedRiver) { setSelectedRiver(river); setDraft(draftFromRiver(river)); }
+  }, [rivers, selectedRiverId, riverDirty, task.pending]);
 
   return {
+    pending: task.pending, ensureCanLeaveRiver,
     selectedRiverId,
     selectedRiver,
     riverDraft: draft,

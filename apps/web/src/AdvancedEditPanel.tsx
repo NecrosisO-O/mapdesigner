@@ -1,3 +1,4 @@
+import type { BatchField, FieldMode } from "./useAdvancedEditor.js";
 import {
   BIOME_ENTRIES,
   BIOME_KEYS,
@@ -22,6 +23,8 @@ interface AdvancedEditPanelProps {
   batchModeActive: boolean;
   selectedCount: number;
   batchDraft: BatchEditDraft;
+  batchModes: Record<BatchField, FieldMode>;
+  onBatchFieldModeChange: (field: BatchField, mode: FieldMode) => void;
   replaceTerrainDraft: ReplaceTerrainDraft;
   replaceBiomeDraft: ReplaceBiomeDraft;
   batchFilteredTerrainCategories: TerrainCategoryKey[];
@@ -67,6 +70,16 @@ export function AdvancedEditPanel(props: AdvancedEditPanelProps) {
 
       <div className="editor-section">
         <h3>批量设置</h3>
+        <p>未启用的字段保持原值。清空仅作用于所选字段。</p>
+        <div className="batch-field-modes">
+          {(["terrain", "biome", "tags", "note"] as const).map(field => <label key={field}>
+            {{terrain: "地形", biome: "生态", tags: "标签", note: "备注"}[field]}操作
+            <select value={props.batchModes[field]} onChange={event => props.onBatchFieldModeChange(field, event.target.value as FieldMode)}>
+              <option value="keep">保持原值</option><option value="set">设置</option>
+              {field !== "terrain" && <option value="clear">清空</option>}
+            </select>
+          </label>)}
+        </div>
         <div className="action-row action-row-inline">
           <button
             type="button"
@@ -84,7 +97,7 @@ export function AdvancedEditPanel(props: AdvancedEditPanelProps) {
             type="button"
             className="primary-button"
             onClick={props.onApplyBatchEdit}
-            disabled={!props.currentMap || props.selectedCount === 0 || !props.batchDraft.terrain}
+            disabled={!props.currentMap || props.selectedCount === 0 || Object.values(props.batchModes).every(mode => mode === "keep")}
           >
             应用到选中格
           </button>
