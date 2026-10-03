@@ -26,7 +26,7 @@ MapDesigner 是一个本地优先的六角格地图设计工具，适合异世�
 ### 源码运行
 
 ```bash
-pnpm install
+pnpm install --frozen-lockfile
 pnpm build
 pnpm start
 ```
@@ -36,11 +36,13 @@ pnpm start
 ### Docker 运行
 
 ```bash
-docker build -t mapdesigner:0.2.0 .
-docker run --rm -p 127.0.0.1:3010:3010 -e MAPDESIGNER_TOKEN=replace-with-a-long-random-token -v mapdesigner-data:/data mapdesigner:0.2.0
+docker build -t mapdesigner:0.3.0-rc.1 .
+docker run --rm -p 127.0.0.1:3010:3010 -e MAPDESIGNER_TOKEN=replace-with-a-long-random-token -v mapdesigner-data:/data mapdesigner:0.3.0-rc.1
 ```
 
 然后访问 `http://localhost:3010`。
+
+已有安装请先阅读[升级步骤](./docs/deployment.md#升级到-v030-rc1)，再使用原有数据启动新版本。
 
 ## 文档导航
 
@@ -52,9 +54,9 @@ docker run --rm -p 127.0.0.1:3010:3010 -e MAPDESIGNER_TOKEN=replace-with-a-long-
 - [产品总览](./PRODUCT_OVERVIEW_0.1.0.md)
 - [版本变更记录](./CHANGELOG.md)
 
-## 当前开发分支
+## 当前版本
 
-本轮重构保留 0.2.0 数据契约。这一版重点改进了编辑器布局、深度缩放手感、坐标标签性能、本地存储安全性、面向 AI agent 的结构化 CLI 与导出能力，并完成了材料工作流、河流直接编辑、显式连接和共享制图输出。48 项视觉计划及尚待真实设备/使用者验证的项目见[验收记录](./docs/research/2026-10-03/visual-redesign/README.md)。
+`v0.3.0-rc.1` 完成了工作区重设计、可视化材料绘制、河流节点与宽度直接编辑，以及画布和导出共享的制图表现。地图与操作历史由 SQLite 保存，导入和导出支持后台任务，并保留旧地图与历史规则的兼容处理。自 `v0.2.0` 以来的完整变化见[版本记录](./CHANGELOG.md)，验证依据见[验收记录](./docs/research/2026-10-03/visual-redesign/README.md)。
 
 ## 开发说明
 

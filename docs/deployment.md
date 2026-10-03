@@ -1,6 +1,16 @@
 # 部署与数据维护
 
-本分支采用 SQLite 保存地图和操作历史。Node 版本由根目录 .nvmrc 固定，包管理器版本由 package.json 固定。
+v0.3.0-rc.1 采用 SQLite 保存地图和操作历史。Node 版本由根目录 .nvmrc 固定，包管理器版本由 package.json 固定。
+
+## 升级到 v0.3.0-rc.1
+
+1. 停止旧服务和直接访问地图的 CLI，备份原数据根目录下的整个 storage 目录；Docker 部署则备份原 /data 卷。v0.2.0 使用 JSON 存储，停服复制即可保留原始地图。
+2. 下载 v0.3.0-rc.1 源码，使用 Node.js 24.16.0 和 pnpm 10.23.0，执行 pnpm install --frozen-lockfile 和 pnpm build。
+3. 保持原 MAPDESIGNER_ROOT 配置；使用默认路径时，将备份之外的原 storage 目录放到新源码根目录。旧 storage/maps 下的 JSON 会自动导入 SQLite 并保留原文件，已有 SQLite 地图与历史继续使用原数据库。
+4. Docker 或对外监听时设置 MAPDESIGNER_TOKEN，在“地图 → 连接设置”中输入该令牌。旧 Docker 数据卷需由 UID/GID 1000 写入，步骤见 [Docker 升级说明](./docker.md#升级已有数据卷)。
+5. 启动服务。后续地图和操作历史写入 storage/mapdesigner.db，可使用下方备份命令保存。
+
+需要回退时，停止新服务，使用升级前备份和原版本启动。
 
 ## 源码运行
 
@@ -69,4 +79,4 @@ PNG 单边最多 32768 像素、总计 4000 万像素；全图导出最多 10000
 
 每次推送运行构建、类型检查、单元/服务/CLI 回归，以及 Docker 镜像构建、非 root 运行和 HTTP 访问检查。
 本机生产包冒烟测试覆盖静态界面、SQLite、后台工作线程与 PNG 下载。
-真实触摸设备、软键盘和读屏体验应在发布前补做人工验收。
+RC1 已由维护者完成实际操作验收；发布时确认最终提交的自动检查结果，并将版本标签指向该提交。
