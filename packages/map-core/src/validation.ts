@@ -43,10 +43,11 @@ function isHexColor(value: unknown): value is string {
 
 export function validateCoordinate(coord: GridCoordinate, target: string): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
-  if (!Number.isInteger(coord.row)) {
+  if (!coord || typeof coord !== "object") return [issue("invalid_coordinate", "coordinate must be an object", "invalid", target)];
+  if (!Number.isSafeInteger(coord.row)) {
     issues.push(issue("invalid_row", "row must be an integer", "invalid", `${target}.row`));
   }
-  if (!Number.isInteger(coord.col)) {
+  if (!Number.isSafeInteger(coord.col)) {
     issues.push(issue("invalid_col", "col must be an integer", "invalid", `${target}.col`));
   }
   return issues;
@@ -54,6 +55,7 @@ export function validateCoordinate(coord: GridCoordinate, target: string): Valid
 
 export function validateRiverPoint(point: RiverPoint, target: string): ValidationIssue[] {
   const issues = validateCoordinate(point, target);
+  if (!point || typeof point !== "object") return issues;
   if (
     point.width !== undefined &&
     point.width !== null &&

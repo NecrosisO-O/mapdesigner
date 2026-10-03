@@ -1,33 +1,33 @@
-import fs from "node:fs/promises";
-import path from "node:path";
 import {
-  createCellId,
-  createDisplayCoord,
-  createEmptyDocument,
-  expandRiverPath,
-  getNeighborCoords,
-  normalizeDocument,
-  parseDocument,
-  type ActiveCell,
-  type CellRange,
-  type CellRangeResult,
-  type DesignedCellRecord,
-  type GridConfig,
-  type HistorySource,
-  type MapCommand,
-  type MapBounds,
-  type MapDocument,
-  type MapFeaturePage,
-  type MapFeatures,
-  type MapMeta,
-  type MapSummary,
-  type RiverFeature
+createCellId,
+createDisplayCoord,
+createEmptyDocument,
+expandRiverPath,
+getNeighborCoords,
+normalizeDocument,
+parseDocument,
+type ActiveCell,
+type CellRange,
+type CellRangeResult,
+type DesignedCellRecord,
+type GridConfig,
+type HistorySource,
+type MapBounds,
+type MapCommand,
+type MapDocument,
+type MapFeaturePage,
+type MapFeatures,
+type MapMeta,
+type MapSummary,
+type RiverFeature
 } from "@mapdesigner/map-core";
 import type Database from "better-sqlite3";
+import fs from "node:fs/promises";
+import path from "node:path";
 import { MAP_STORAGE_DIR } from "./config.js";
-import { badRequest, notFound, storageError } from "./errors.js";
-import { assertSafeMapId, mapFilePath, writeFileAtomicStream } from "./storage.js";
 import { getDatabase } from "./db.js";
+import { badRequest,notFound,storageError } from "./errors.js";
+import { assertSafeMapId,mapFilePath,writeFileAtomicStream } from "./storage.js";
 import { createMapId } from "./utils.js";
 
 interface MapRow {
@@ -155,25 +155,16 @@ const DEFAULT_FEATURE_PAGE_LIMIT = 500;
 const MAX_FEATURE_PAGE_LIMIT = 2_000;
 const SQLITE_IMPORT_BATCH_SIZE = 1_000;
 
-async function runWithSavepoint<T>(
-  name: string,
-  callback: () => Promise<T>,
-  options: { rollback?: boolean } = {}
-): Promise<T> {
-  const db = getDatabase();
-  db.prepare(`SAVEPOINT ${name}`).run();
-  try {
-    const result = await callback();
-    if (options.rollback) {
-      db.prepare(`ROLLBACK TO ${name}`).run();
+/** Prepare legacy I/O before opening a transaction. No asynchronous work may escape this callback. */
+export async function withMapTransaction<T>(id: string, callback: () => T): Promise<T> {
+  await ensureMapInDatabase(id);
+  return getDatabase().transaction(() => {
+    const result = callback();
+    if (result && typeof result === "object" && "then" in result) {
+      throw new TypeError("map transaction callback must be synchronous");
     }
-    db.prepare(`RELEASE ${name}`).run();
     return result;
-  } catch (error) {
-    db.prepare(`ROLLBACK TO ${name}`).run();
-    db.prepare(`RELEASE ${name}`).run();
-    throw error;
-  }
+  }).immediate();
 }
 
 function safeJsonArray(value: string): string[] {
@@ -194,20 +185,14 @@ function normalizeStringArray(value: string[]): string[] {
 }
 
 function normalizeBounds(cells: DesignedCellRecord[]): MapBounds {
-  if (cells.length === 0) {
-    return {
-      min_row: null,
-      max_row: null,
-      min_col: null,
-      max_col: null
-    };
+  const bounds: MapBounds = { min_row: null, max_row: null, min_col: null, max_col: null };
+  for (const cell of cells) {
+    bounds.min_row = bounds.min_row === null ? cell.row : Math.min(bounds.min_row, cell.row);
+    bounds.max_row = bounds.max_row === null ? cell.row : Math.max(bounds.max_row, cell.row);
+    bounds.min_col = bounds.min_col === null ? cell.col : Math.min(bounds.min_col, cell.col);
+    bounds.max_col = bounds.max_col === null ? cell.col : Math.max(bounds.max_col, cell.col);
   }
-  return {
-    min_row: Math.min(...cells.map((cell) => cell.row)),
-    max_row: Math.max(...cells.map((cell) => cell.row)),
-    min_col: Math.min(...cells.map((cell) => cell.col)),
-    max_col: Math.max(...cells.map((cell) => cell.col))
-  };
+  return bounds;
 }
 
 function mapRowToMeta(row: MapRow): MapMeta {
@@ -593,6 +578,10 @@ function updateMapRevision(db: Database.Database, id: string, revisionIncrement:
   return getMapRowOrThrow(db, id);
 }
 
+export function advanceMapRevisionSync(id: string, increment: number): void {
+  updateMapRevision(getDatabase(), id, increment);
+}
+
 function writeDocument(db: Database.Database, document: MapDocument): void {
   const normalized = normalizeDocument(document);
   const bounds = normalizeBounds(normalized.cells);
@@ -821,7 +810,7 @@ export async function ensureMapInDatabase(id: string): Promise<void> {
   if (!legacy) {
     throw notFound(`map ${normalizedId} was not found`);
   }
-  writeDocument(db, legacy);
+  if (!db.prepare("SELECT id FROM maps WHERE id = ?").get(normalizedId)) writeDocument(db, legacy);
 }
 
 export async function importLegacyJsonFiles(): Promise<void> {
@@ -897,6 +886,10 @@ export async function createMapDocument(input: {
 
 export async function getMapDocument(id: string): Promise<MapDocument> {
   await ensureMapInDatabase(id);
+  return getMapDocumentSync(id);
+}
+
+export function getMapDocumentSync(id: string): MapDocument {
   const db = getDatabase();
   const row = getMapRowOrThrow(db, id);
   return normalizeDocument({
@@ -966,6 +959,10 @@ export async function writeMapDocumentJsonExport(id: string, filePath: string): 
 
 export async function getMapFeatures(id: string): Promise<MapFeatures> {
   await ensureMapInDatabase(id);
+  return getMapFeaturesSync(id);
+}
+
+export function getMapFeaturesSync(id: string): MapFeatures {
   const db = getDatabase();
   const row = getMapRowOrThrow(db, id);
   backfillMissingFeatureBounds(db, row.id);
@@ -995,8 +992,16 @@ export async function applyFeatureWriteChanges(
   changes: FeatureWriteChange[],
   options: { dryRun?: boolean; revisionIncrement?: number } = {}
 ): Promise<MapSummary> {
+  await ensureMapInDatabase(id);
+  return applyFeatureWriteChangesSync(id, changes, options);
+}
+
+export function applyFeatureWriteChangesSync(
+  id: string,
+  changes: FeatureWriteChange[],
+  options: { dryRun?: boolean; revisionIncrement?: number } = {}
+): MapSummary {
   const normalizedId = assertSafeMapId(id);
-  await ensureMapInDatabase(normalizedId);
   const db = getDatabase();
   const applyChanges = () => {
     const row = getMapRowOrThrow(db, normalizedId);
@@ -1057,20 +1062,20 @@ export async function applyCellAndFeatureWriteChanges(
   featureChanges: FeatureWriteChange[],
   options: { dryRun?: boolean; cellRevisionIncrement?: number; featureRevisionIncrement?: number } = {}
 ): Promise<MapSummary> {
-  const normalizedId = assertSafeMapId(id);
-  return runWithSavepoint(
-    "mixed_write",
-    async () => {
-      await applyCellWriteChanges(normalizedId, cellChanges, {
-        revisionIncrement: options.cellRevisionIncrement ?? 0
-      });
-      const summary = await applyFeatureWriteChanges(normalizedId, featureChanges, {
-        revisionIncrement: options.featureRevisionIncrement ?? 0
-      });
-      return options.dryRun ? summary : getMapSummary(normalizedId);
-    },
-    { rollback: options.dryRun }
-  );
+  return withMapTransaction(id, () => {
+    const db = getDatabase();
+    db.exec("SAVEPOINT mixed_write");
+    try {
+      applyCellWriteChangesSync(id, cellChanges, { revisionIncrement: options.cellRevisionIncrement ?? 0 });
+      const result = applyFeatureWriteChangesSync(id, featureChanges, { revisionIncrement: options.featureRevisionIncrement ?? 0 });
+      if (options.dryRun) db.exec("ROLLBACK TO mixed_write");
+      db.exec("RELEASE mixed_write");
+      return result;
+    } catch (error) {
+      db.exec("ROLLBACK TO mixed_write; RELEASE mixed_write");
+      throw error;
+    }
+  });
 }
 
 export async function getDesignedCellsAt(
@@ -1078,6 +1083,13 @@ export async function getDesignedCellsAt(
   targets: Array<{ row: number; col: number }>
 ): Promise<DesignedCellRecord[]> {
   await ensureMapInDatabase(id);
+  return getDesignedCellsAtSync(id, targets);
+}
+
+export function getDesignedCellsAtSync(
+  id: string,
+  targets: Array<{ row: number; col: number }>
+): DesignedCellRecord[] {
   const db = getDatabase();
   const row = getMapRowOrThrow(db, id);
   const seen = new Set<string>();
@@ -1098,6 +1110,10 @@ export async function getDesignedCellsAt(
 
 export async function getDesignedCellsByTerrain(id: string, terrain: DesignedCellRecord["terrain"]): Promise<DesignedCellRecord[]> {
   await ensureMapInDatabase(id);
+  return getDesignedCellsByTerrainSync(id, terrain);
+}
+
+export function getDesignedCellsByTerrainSync(id: string, terrain: DesignedCellRecord["terrain"]): DesignedCellRecord[] {
   const db = getDatabase();
   const row = getMapRowOrThrow(db, id);
   return (db
@@ -1107,6 +1123,10 @@ export async function getDesignedCellsByTerrain(id: string, terrain: DesignedCel
 
 export async function getDesignedCellsByBiome(id: string, biome: DesignedCellRecord["biome"]): Promise<DesignedCellRecord[]> {
   await ensureMapInDatabase(id);
+  return getDesignedCellsByBiomeSync(id, biome);
+}
+
+export function getDesignedCellsByBiomeSync(id: string, biome: DesignedCellRecord["biome"]): DesignedCellRecord[] {
   const db = getDatabase();
   const row = getMapRowOrThrow(db, id);
   const rows = biome === null
@@ -1119,13 +1139,56 @@ export async function getDesignedCellsByBiome(id: string, biome: DesignedCellRec
   return (rows as CellRow[]).map(cellRowToDesignedCell);
 }
 
+/** Project changed cells without writing preview data into the live database. */
+export function previewCellChangesSync(id: string, changes: CellWriteChange[]): MapSummary {
+  const db = getDatabase();
+  const summary = getMapSummarySync(id);
+  if (!changes.length) return summary;
+  const unique = new Map(changes.map(c => [createCellId(c.row, c.col), c]));
+  let membershipChanged = false;
+  for (const change of unique.values()) {
+    const existed = !!readCellAt(db, id, change.row, change.col);
+    const exists = !!change.cell;
+    if (existed !== exists) {
+      summary.designed_cell_count += exists ? 1 : -1;
+      membershipChanged = true;
+    }
+  }
+  if (!membershipChanged) return summary;
+  const bounds: MapBounds = { min_row: null, max_row: null, min_col: null, max_col: null };
+  for (const [key, column, direction] of [
+    ["min_row", "row", "ASC"], ["max_row", "row", "DESC"],
+    ["min_col", "col", "ASC"], ["max_col", "col", "DESC"]
+  ] as const) {
+    for (const raw of db.prepare("SELECT row, col FROM cells WHERE map_id = ? ORDER BY " + column + " " + direction).iterate(id)) {
+      const cell = raw as { row: number; col: number };
+      if (!unique.has(createCellId(cell.row, cell.col))) { bounds[key] = cell[column]; break; }
+    }
+    for (const { cell } of unique.values()) {
+      if (!cell) continue;
+      bounds[key] = bounds[key] === null ? cell[column]
+        : direction === "ASC" ? Math.min(bounds[key]!, cell[column]) : Math.max(bounds[key]!, cell[column]);
+    }
+  }
+  summary.bounds = bounds;
+  return summary;
+}
+
 export async function applyCellWriteChanges(
   id: string,
   changes: CellWriteChange[],
   options: { dryRun?: boolean; revisionIncrement?: number } = {}
 ): Promise<MapSummary> {
+  await ensureMapInDatabase(id);
+  return applyCellWriteChangesSync(id, changes, options);
+}
+
+export function applyCellWriteChangesSync(
+  id: string,
+  changes: CellWriteChange[],
+  options: { dryRun?: boolean; revisionIncrement?: number } = {}
+): MapSummary {
   const normalizedId = assertSafeMapId(id);
-  await ensureMapInDatabase(normalizedId);
   const db = getDatabase();
   const applyChanges = () => {
     const row = getMapRowOrThrow(db, normalizedId);
@@ -1177,8 +1240,12 @@ export async function applyCellWriteChanges(
 }
 
 export async function updateMapMetadata(id: string, input: MapMetadataUpdate): Promise<MapSummary> {
+  await ensureMapInDatabase(id);
+  return updateMapMetadataSync(id, input);
+}
+
+export function updateMapMetadataSync(id: string, input: MapMetadataUpdate): MapSummary {
   const normalizedId = assertSafeMapId(id);
-  await ensureMapInDatabase(normalizedId);
   const db = getDatabase();
   const row = getMapRowOrThrow(db, normalizedId);
   const now = new Date().toISOString();
@@ -1198,10 +1265,14 @@ export async function updateMapMetadata(id: string, input: MapMetadataUpdate): P
     updated_at: now,
     revision: row.revision + 1
   });
-  return getMapSummary(row.id);
+  return getMapSummarySync(row.id);
 }
 
 export async function saveMapDocument(document: MapDocument): Promise<MapDocument> {
+  return saveMapDocumentSync(document);
+}
+
+export function saveMapDocumentSync(document: MapDocument): MapDocument {
   const normalized = normalizeDocument(document);
   writeDocument(getDatabase(), normalized);
   return normalized;
@@ -1231,14 +1302,22 @@ export async function deleteMapDocument(id: string): Promise<void> {
 
 export async function getMapSummary(id: string): Promise<MapSummary> {
   await ensureMapInDatabase(id);
+  return getMapSummarySync(id);
+}
+
+export function getMapSummarySync(id: string): MapSummary {
   const db = getDatabase();
   const row = getMapRowOrThrow(db, id);
   return mapSummaryFromRow(db, row);
 }
 
 export async function recordOperation(mapId: string, input: OperationInput): Promise<StoredOperation> {
+  await ensureMapInDatabase(mapId);
+  return recordOperationSync(mapId, input);
+}
+
+export function recordOperationSync(mapId: string, input: OperationInput): StoredOperation {
   const normalizedId = assertSafeMapId(mapId);
-  await ensureMapInDatabase(normalizedId);
   const db = getDatabase();
   const timestamp = new Date().toISOString();
   const write = db.transaction(() => {
@@ -1270,8 +1349,12 @@ export async function recordOperation(mapId: string, input: OperationInput): Pro
 }
 
 export async function getHistoryStatus(mapId: string): Promise<HistoryStatus> {
+  await ensureMapInDatabase(mapId);
+  return getHistoryStatusSync(mapId);
+}
+
+export function getHistoryStatusSync(mapId: string): HistoryStatus {
   const normalizedId = assertSafeMapId(mapId);
-  await ensureMapInDatabase(normalizedId);
   const db = getDatabase();
   const cursor = readHistoryCursor(db, normalizedId);
   const latest = readLatestOperationSeq(db, normalizedId);
@@ -1318,8 +1401,12 @@ export async function getMapHistory(mapId: string, limit = 5): Promise<MapHistor
 }
 
 export async function getUndoOperation(mapId: string): Promise<StoredOperation | null> {
+  await ensureMapInDatabase(mapId);
+  return getUndoOperationSync(mapId);
+}
+
+export function getUndoOperationSync(mapId: string): StoredOperation | null {
   const normalizedId = assertSafeMapId(mapId);
-  await ensureMapInDatabase(normalizedId);
   const db = getDatabase();
   const cursor = readHistoryCursor(db, normalizedId);
   if (cursor <= 0) {
@@ -1332,8 +1419,12 @@ export async function getUndoOperation(mapId: string): Promise<StoredOperation |
 }
 
 export async function getRedoOperation(mapId: string): Promise<StoredOperation | null> {
+  await ensureMapInDatabase(mapId);
+  return getRedoOperationSync(mapId);
+}
+
+export function getRedoOperationSync(mapId: string): StoredOperation | null {
   const normalizedId = assertSafeMapId(mapId);
-  await ensureMapInDatabase(normalizedId);
   const db = getDatabase();
   const cursor = readHistoryCursor(db, normalizedId);
   const row = db.prepare("SELECT * FROM operations WHERE map_id = ? AND seq = ?").get(normalizedId, cursor + 1) as
@@ -1343,11 +1434,15 @@ export async function getRedoOperation(mapId: string): Promise<StoredOperation |
 }
 
 export async function moveHistoryCursor(mapId: string, cursor: number): Promise<void> {
+  await ensureMapInDatabase(mapId);
+  return moveHistoryCursorSync(mapId, cursor);
+}
+
+export function moveHistoryCursorSync(mapId: string, cursor: number): void {
   const normalizedId = assertSafeMapId(mapId);
   if (!Number.isInteger(cursor) || cursor < 0) {
     throw badRequest("history cursor must be a non-negative integer");
   }
-  await ensureMapInDatabase(normalizedId);
   getDatabase().prepare("UPDATE maps SET history_cursor = ? WHERE id = ?").run(cursor, normalizedId);
 }
 
