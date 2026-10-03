@@ -1,6 +1,6 @@
 # MapDesigner
 
-[![Version](https://img.shields.io/badge/version-0.2.0-2563eb)](./package.json)
+[![Version](https://img.shields.io/badge/version-0.3.0--rc.1-2563eb)](./package.json)
 [![Node.js](https://img.shields.io/badge/node-24-339933)](https://nodejs.org/)
 [![pnpm](https://img.shields.io/badge/pnpm-10-f69220)](https://pnpm.io/)
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-dc2626.svg)](./LICENSE)
@@ -35,7 +35,7 @@ See the [browser acceptance record](./docs/research/2026-10-03/visual-redesign/R
 ### Run from source
 
 ```bash
-pnpm install
+pnpm install --frozen-lockfile
 pnpm build
 pnpm start
 ```
@@ -45,13 +45,14 @@ Then open `http://localhost:3010`.
 ### Run with Docker
 
 ```bash
-docker build -t mapdesigner:0.2.0 .
-docker run --rm -p 127.0.0.1:3010:3010 -e MAPDESIGNER_TOKEN=replace-with-a-long-random-token -v mapdesigner-data:/data mapdesigner:0.2.0
+docker build -t mapdesigner:0.3.0-rc.1 .
+docker run --rm -p 127.0.0.1:3010:3010 -e MAPDESIGNER_TOKEN=replace-with-a-long-random-token -v mapdesigner-data:/data mapdesigner:0.3.0-rc.1
 ```
 
 Then open `http://localhost:3010`.
 
 For detailed setup steps, see the [Deployment Guide](./docs/deployment.md) and [Docker Guide](./docs/docker.md).
+For an existing installation, follow the [upgrade steps](./docs/deployment.md#升级到-v030-rc1) before starting this version with your data.
 
 ## AI Agent / CLI
 
@@ -74,9 +75,9 @@ More examples and command conventions are documented in [Agent CLI Guide](./docs
 - [Changelog](./CHANGELOG.md)
 - [中文说明](./README.zh-CN.md)
 
-## Current Status
+## Current Release
 
-`v0.2.0` focuses on a more practical editor surface, smoother deep zoom behavior, safer local storage handling, richer structured CLI/export workflows, explicit river networks, direct geometry editing, and shared cartographic output. The visual redesign and remaining device/user studies are tracked in [the acceptance record](./docs/research/2026-10-03/visual-redesign/README.md).
+`v0.3.0-rc.1` brings a redesigned map workspace, visual material painting, direct river editing, shared cartographic output, SQLite storage with persistent history, and background import/export tasks. See the [changelog](./CHANGELOG.md) for the changes since `v0.2.0` and the [acceptance record](./docs/research/2026-10-03/visual-redesign/README.md) for verification evidence.
 
 ## Development Note
 
@@ -91,4 +92,4 @@ AI assistance was used during the development of this project.
 
 This project is licensed under the [GNU General Public License v3.0](./LICENSE).
 
-The active refactor is tracked in [the implementation record](./docs/IMPLEMENTATION_PLAN.md). Container deployments require an access token, entered through the map menu connection settings.
+Implementation history is tracked in [the implementation record](./docs/IMPLEMENTATION_PLAN.md). Container deployments require an access token, entered through the map menu connection settings.
