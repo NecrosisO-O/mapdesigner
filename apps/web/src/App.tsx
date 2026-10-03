@@ -20,6 +20,7 @@ import type { InteractionMode } from "./TopToolbar.js";
 import { useCellEditor } from "./useCellEditor.js";
 import { useExportPanel } from "./useExportPanel.js";
 import { useMapWorkspace } from "./useMapWorkspace.js";
+import { RiverInspector } from "./RiverInspector.js";
 import { useRiverEditor } from "./useRiverEditor.js";
 
 export default function App() {
@@ -177,7 +178,7 @@ export default function App() {
       }
     }
   }
-  async function selectKnownRiver(river: RiverFeature): Promise<void> {
+  async function selectKnownRiver(river: RiverFeature, locate = true): Promise<void> {
     if (
       river.id !== riverEditor.selectedRiverId &&
       riverEditor.riverDirty &&
@@ -193,7 +194,7 @@ export default function App() {
     setInspectorTab("river");
     revealInspector();
     const point = river.points[Math.floor(river.points.length / 2)];
-    if (point) setFocusRequest({ coord: point, token: Date.now() });
+    if (point && locate) setFocusRequest({ coord: point, token: Date.now() });
   }
   function panelHeader(title: string, onClose: () => void, closeLabel: string) {
     return (
@@ -728,6 +729,22 @@ export default function App() {
               batchSelectedCellIds={advancedEditor.batchSelectedCellIds}
               onBatchCellToggle={advancedEditor.toggleBatchCell}
               riverPreview={riverEditor.riverPreview}
+              selectedRiver={
+                inspectorTab === "river" &&
+                interactionMode === "select" &&
+                riverEditor.selectedRiverId
+                  ? riverEditor.draftRiver
+                  : null
+              }
+              selectedRiverNode={riverEditor.selectedNode}
+              riverEditingDisabled={
+                riverEditor.riverDirty ||
+                Boolean(workspace.pendingCount || workspace.loading || riverEditor.pending)
+              }
+              onSelectRiver={(river) => void selectKnownRiver(river, false)}
+              onSelectRiverNode={riverEditor.setSelectedNode}
+              onCommitRiverPoints={(points) => void riverEditor.commitPoints(points)}
+              snapRiverConnections={riverEditor.snapConnections}
               riverDrawingPointCount={riverEditor.riverDrawingPoints.length}
               onRiverPointAdd={riverEditor.appendRiverPoint}
               onFinishRiverDrawing={() => {
@@ -785,12 +802,50 @@ export default function App() {
           biomeOptions={editor.biomeOptions}
           formatBrushEnabled={editor.formatBrushEnabled}
           formatBrushScope={editor.formatBrushScope}
-          rivers={activeMap?.document.features?.rivers ?? []}
-          selectedRiverId={riverEditor.selectedRiverId}
-          riverDraft={riverEditor.riverDraft}
-          riverDirty={riverEditor.riverDirty}
-          riverDrawingStatus={riverEditor.riverDrawingStatus}
-          riverDrawingPointCount={riverEditor.riverDrawingPoints.length}
+          riverPanel={
+            <RiverInspector
+              editor={riverEditor}
+              cells={activeMap?.activeCells ?? []}
+              rivers={activeMap?.document.features.rivers ?? []}
+              disabled={
+                !activeMap ||
+                Boolean(workspace.pendingCount || workspace.loading || riverEditor.pending)
+              }
+              onStart={() => void changeTool("river-draw")}
+              onFinish={() =>
+                void riverEditor.finishRiverDrawing().then((done) => {
+                  if (done) setInteractionMode("select");
+                })
+              }
+              onCancel={() => {
+                riverEditor.cancelRiverDrawing();
+                setInteractionMode("select");
+              }}
+              onApply={() =>
+                void riverEditor.applyRiverDraft().then((done) => {
+                  if (done) setInteractionMode("select");
+                })
+              }
+              onDelete={() =>
+                void prompt
+                  .ask({
+                    title: "删除河流？",
+                    message: "将移除所选河流，可通过撤销恢复。",
+                    confirm: "删除河流"
+                  })
+                  .then((yes) => {
+                    if (yes) void riverEditor.deleteSelectedRiver();
+                  })
+              }
+              onBranch={() => {
+                if (riverEditor.startBranch()) {
+                  setInteractionMode("river-draw");
+                  if (window.innerWidth <= 760) setInspectorOpen(false);
+                }
+              }}
+              onLocate={(coord) => setFocusRequest({ coord, token: Date.now() })}
+            />
+          }
           batchModeActive={interactionMode === "batch-select"}
           batchSelectedCount={advancedEditor.batchSelectedCells.length}
           batchMixedFields={advancedEditor.mixedFields}
@@ -833,44 +888,6 @@ export default function App() {
               note: value
             }))
           }
-          onSelectRiver={(id) => {
-            riverEditor.selectRiver(id);
-            setInteractionMode("select");
-          }}
-          onStartNewRiver={() => {
-            riverEditor.startNewRiver();
-            setInteractionMode("select");
-          }}
-          onRiverDraftChange={(patch) =>
-            riverEditor.setRiverDraft((current) => ({
-              ...current,
-              ...patch
-            }))
-          }
-          onApplyRiverDraft={() => {
-            void riverEditor.applyRiverDraft().then((applied) => {
-              if (applied) {
-                setInteractionMode("select");
-              }
-            });
-          }}
-          onDeleteSelectedRiver={() => {
-            void riverEditor.deleteSelectedRiver().then(() => {
-              setInteractionMode("select");
-            });
-          }}
-          onStartRiverDrawing={() => void changeTool("river-draw")}
-          onFinishRiverDrawing={() => {
-            void riverEditor.finishRiverDrawing().then((finished) => {
-              if (finished) {
-                setInteractionMode("select");
-              }
-            });
-          }}
-          onCancelRiverDrawing={() => {
-            riverEditor.cancelRiverDrawing();
-            setInteractionMode("select");
-          }}
           onToggleBatchMode={() =>
             void changeTool(interactionMode === "batch-select" ? "select" : "batch-select")
           }
