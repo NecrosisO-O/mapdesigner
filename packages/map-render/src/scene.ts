@@ -298,6 +298,40 @@ function buildRiverBandPath(points: RiverRenderPoint[], extraWidth: number): str
   ].join(" ");
 }
 
+// Cull whole, adjacent segments of the canonical curve. Keeping their outside
+// vertices preserves tangents; separate visits to the viewport remain separate.
+function visibleRiverRuns(points: RiverRenderPoint[], range: CellRange | undefined, size: number) {
+  if (!range) return [{ start: 0, end: points.length - 1 }];
+  const width = points.reduce((max, point) => Math.max(max, point.width), 0);
+  const padded = padRange(range, 2 + Math.ceil(width / (size * 1.5)));
+  const axial = points.map((point) => {
+    const col = point.x / (size * 1.5);
+    return { col, row: -point.y / (size * Math.sqrt(3)) - col / 2 };
+  });
+  const runs: Array<{ start: number; end: number }> = [];
+  let start = -1;
+  for (let i = 1; i < points.length; i++) {
+    const a = axial[i - 1]!,
+      b = axial[i]!;
+    const visible = doRangesOverlap(
+      {
+        minRow: Math.min(a.row, b.row),
+        maxRow: Math.max(a.row, b.row),
+        minCol: Math.min(a.col, b.col),
+        maxCol: Math.max(a.col, b.col)
+      },
+      padded
+    );
+    if (visible && start < 0) start = i - 1;
+    if (!visible && start >= 0) {
+      runs.push({ start, end: i - 1 });
+      start = -1;
+    }
+  }
+  if (start >= 0) runs.push({ start, end: points.length - 1 });
+  return runs;
+}
+
 function buildRiverBodies(
   rivers: RiverFeature[],
   cells: ActiveCell[],
@@ -308,11 +342,8 @@ function buildRiverBodies(
   clipRange?: CellRange,
   detail: "high" | "low" = "high"
 ): MapScene["riverBodies"] {
-  const paddedClipRange = clipRange ? padRange(clipRange, 1) : null;
   return rivers.flatMap((river) => {
-    const samples = riverSamples(river).filter(
-      (sample) => !paddedClipRange || isCoordInRange(sample, paddedClipRange)
-    );
+    const samples = riverSamples(river);
     if (samples.length < 2) {
       return [];
     }
@@ -329,49 +360,54 @@ function buildRiverBodies(
         width *= 1.2;
       }
       return {
-        x: center.x - minX,
-        y: center.y - minY,
+        x: center.x,
+        y: center.y,
         width
       };
     });
     const simplified =
       detail === "low" ? simplifyRiverPoints(basePoints, size * 0.5, 0.8) : basePoints;
-    const points = smoothRiverPoints(simplified, size, detail);
-    let minWidth = Infinity,
-      maxWidth = -Infinity;
-    for (const point of points) {
-      minWidth = Math.min(minWidth, point.width);
-      maxWidth = Math.max(maxWidth, point.width);
-    }
-    const bodyPath = buildRiverBandPath(points, 0);
-    if (!bodyPath) {
-      return [];
-    }
-    return [
-      {
-        id: river.id,
-        riverId: river.id,
-        riverName: river.name,
-        bankPath: preview ? null : buildRiverBandPath(points, 3.2),
-        bodyPath,
-        highlightPath: preview ? null : centerPathFromPoints(points),
-        centerPath: centerPathFromPoints(points),
-        color,
-        bankColor: "#9FCBD0",
-        highlightColor: "#D8F2F6",
-        opacity,
-        preview,
-        pointCount: points.length,
-        outlineWidth: Math.max(1.2, minWidth * 0.45),
-        highlightWidth: Math.max(0.6, Math.min(1.8, minWidth * 0.28)),
-        widthRange: {
-          min: minWidth,
-          max: maxWidth
-        },
-        connectedStart: connections.startConnected,
-        connectedEnd: connections.endConnected
+    const canonical = smoothRiverPoints(simplified, size, detail);
+    return visibleRiverRuns(canonical, clipRange, size).flatMap((run) => {
+      const points = canonical
+        .slice(run.start, run.end + 1)
+        .map((point) => ({ ...point, x: point.x - minX, y: point.y - minY }));
+      let minWidth = Infinity,
+        maxWidth = -Infinity;
+      for (const point of points) {
+        minWidth = Math.min(minWidth, point.width);
+        maxWidth = Math.max(maxWidth, point.width);
       }
-    ];
+      const bodyPath = buildRiverBandPath(points, 0);
+      if (!bodyPath) {
+        return [];
+      }
+      return [
+        {
+          id: run.start === 0 ? river.id : river.id + "-fragment-" + run.start,
+          riverId: river.id,
+          riverName: river.name,
+          bankPath: preview ? null : buildRiverBandPath(points, 3.2),
+          bodyPath,
+          highlightPath: preview ? null : centerPathFromPoints(points),
+          centerPath: centerPathFromPoints(points),
+          color,
+          bankColor: "#9FCBD0",
+          highlightColor: "#D8F2F6",
+          opacity,
+          preview,
+          pointCount: points.length,
+          outlineWidth: Math.max(1.2, minWidth * 0.45),
+          highlightWidth: Math.max(0.6, Math.min(1.8, minWidth * 0.28)),
+          widthRange: {
+            min: minWidth,
+            max: maxWidth
+          },
+          connectedStart: run.start === 0 && connections.startConnected,
+          connectedEnd: run.end === canonical.length - 1 && connections.endConnected
+        }
+      ];
+    });
   });
 }
 
