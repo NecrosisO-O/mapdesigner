@@ -41,6 +41,7 @@ import {
   type FeatureWriteChange
 } from "./repository.js";
 import { assertSafeMapId } from "./storage.js";
+import { restoreMergedOperation } from "./merge.js";
 
 type ExecutionResult = LightweightApplyCommandsResult & { map?: MapRuntimeState };
 
@@ -302,15 +303,40 @@ export async function executeCommands(
 export async function moveHistory(
   id: string,
   direction: "undo" | "redo",
-  includeMap = false
+  includeMap = false,
+  control: { expectedRevision?: number; beforeCommit?: () => void } = {}
 ): Promise<(LightweightHistoryMoveResult & { map?: MapRuntimeState }) | null> {
   const normalizedId = assertSafeMapId(id);
   return withMapTransaction(normalizedId, () => {
+    if (
+      control.expectedRevision !== undefined &&
+      control.expectedRevision !== getMapSummarySync(normalizedId).meta.revision
+    )
+      throw revisionConflict("地图已改变，请刷新后重试历史操作");
     const operation =
       direction === "undo"
         ? getUndoOperationSync(normalizedId)
         : getRedoOperationSync(normalizedId);
     if (!operation) return null;
+    if (operation.action === "merge_maps") {
+      restoreMergedOperation(normalizedId, operation.seq, direction);
+      moveHistoryCursorSync(normalizedId, direction === "undo" ? operation.seq - 1 : operation.seq);
+      const result = {
+        mapId: normalizedId,
+        summary: getMapSummarySync(normalizedId),
+        warnings: [],
+        operation: {
+          seq: operation.seq,
+          action: operation.action,
+          source: operation.source,
+          timestamp: operation.timestamp
+        },
+        status: getHistoryStatusSync(normalizedId),
+        ...(includeMap ? { map: createRuntimeState(getMapDocumentSync(normalizedId)) } : {})
+      };
+      control.beforeCommit?.();
+      return result;
+    }
     const commands = direction === "undo" ? operation.inverseCommands : operation.commands;
     const legacyRiverWidths =
       !operation.summary ||
@@ -319,6 +345,7 @@ export async function moveHistory(
       operation.summary.rules_version !== 2;
     const result = executeSync(normalizedId, commands, {}, includeMap, false, legacyRiverWidths);
     moveHistoryCursorSync(normalizedId, direction === "undo" ? operation.seq - 1 : operation.seq);
+    control.beforeCommit?.();
     return {
       ...result,
       operation: {

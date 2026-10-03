@@ -124,3 +124,66 @@ it("provides render bounds for maps containing only distant rivers", async () =>
     max_col: 1003
   });
 });
+
+it("keeps persistent material counts exact across overwrite, undo, redo and restart", async () => {
+  const id = (await service.createMap({ name: "Counters" })).document.meta.id;
+  await repository.getMapMaterialUsage(id);
+  await service.applyCommandsLight(id, [
+    {
+      action: "set_cell",
+      target: { row: -32, col: -1 },
+      changes: { terrain: "mountain", biome: "conifer_forest", tags: ["peak"] }
+    }
+  ]);
+  expect((await repository.getMapMaterialUsage(id)).tags).toEqual(["peak"]);
+  await service.applyCommandsLight(id, [
+    {
+      action: "set_cell",
+      target: { row: -32, col: -1 },
+      changes: { terrain: "plain", biome: null, tags: [] }
+    }
+  ]);
+  expect((await repository.getMapMaterialUsage(id)).terrains).toEqual(["plain"]);
+  expect((await repository.getMapMaterialUsage(id)).biomes).toEqual([]);
+  await service.undoMapLight(id);
+  database.closeDatabaseForTests();
+  expect((await repository.getMapMaterialUsage(id)).terrains).toEqual(["mountain"]);
+  expect((await repository.getMapMaterialUsage(id)).tags).toEqual(["peak"]);
+  await service.redoMapLight(id);
+  expect((await repository.getMapMaterialUsage(id)).tags).toEqual([]);
+});
+
+it("counts sparse negative coordinates and partial tile edges exactly", async () => {
+  const doc = createEmptyDocument({ id: "partial-tiles", name: "Tiles" });
+  doc.cells = [
+    -2101, -2048, -2047, -65, -64, -33, -32, -31, -1, 0, 1, 31, 32, 33, 2047, 2048, 2101
+  ].flatMap((row) =>
+    [-2048, -31, 0, 31, 2048].map((col) => ({
+      row,
+      col,
+      terrain: "plain" as const,
+      biome: null,
+      tags: [],
+      note: ""
+    }))
+  );
+  await repository.importMapDocument(doc);
+  const { getOverview } = await import("./overview.js");
+  for (const range of [
+    { minRow: -2101, maxRow: 2101, minCol: -2048, maxCol: 2048 },
+    { minRow: -2047, maxRow: 2047, minCol: -2047, maxCol: 2047 },
+    { minRow: -2047, maxRow: 2047, minCol: -1, maxCol: 1 },
+    { minRow: -31, maxRow: 31, minCol: -2047, maxCol: 2047 }
+  ]) {
+    const expected = doc.cells.filter(
+      (c) =>
+        c.row >= range.minRow &&
+        c.row <= range.maxRow &&
+        c.col >= range.minCol &&
+        c.col <= range.maxCol
+    ).length;
+    const overview = await getOverview(doc.meta.id, range);
+    expect(overview.designed_cell_count).toBe(expected);
+    expect(overview.tiles.reduce((n, t) => n + t.count, 0)).toBe(expected);
+  }
+});

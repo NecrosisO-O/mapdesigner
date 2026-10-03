@@ -580,7 +580,13 @@ export async function createServer(): Promise<FastifyInstance> {
       await fs.access(filePath);
       const content = createReadStream(filePath);
       reply.header("Content-Disposition", downloadDisposition(fileName));
-      reply.type(fileName.endsWith(".png") ? "image/png" : "application/json; charset=utf-8");
+      reply.type(
+        fileName.endsWith(".png")
+          ? "image/png"
+          : fileName.endsWith(".zip")
+            ? "application/zip"
+            : "application/json; charset=utf-8"
+      );
       return reply.send(content);
     } catch (error) {
       return sendError(reply, "export_not_found", error, 404);
