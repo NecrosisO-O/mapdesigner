@@ -1621,6 +1621,13 @@ details.editor-section[open] > summary::after {
   outline: none;
   filter: drop-shadow(0 0 3px #d28a22);
 }
+.river-hit-target:focus {
+  outline: none;
+}
+.river-hit-target:focus-visible {
+  stroke: var(--accent);
+  stroke-opacity: 0.28;
+}
 
 .river-fields label {
   margin: 0;
@@ -1712,6 +1719,8 @@ details.editor-section[open] > summary::after {
   color: var(--text);
 }
 .export-preview .empty-state {
+  height: auto;
+  max-width: 420px;
   background: var(--surface);
   margin: 12px;
   padding: 20px;

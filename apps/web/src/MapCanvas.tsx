@@ -1183,6 +1183,7 @@ export function MapCanvas(props: MapCanvasProps) {
                   .map((body) => (
                     <path
                       key={body.id}
+                      className="river-hit-target"
                       d={body.centerPath}
                       fill="none"
                       stroke="transparent"
