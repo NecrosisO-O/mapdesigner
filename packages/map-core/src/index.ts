@@ -3,6 +3,7 @@ export * from "./commands.js";
 export * from "./command-input.js";
 export * from "./coords.js";
 export * from "./dictionaries.js";
+export * from "./materials.js";
 export * from "./history.js";
 export * from "./neighbors.js";
 export * from "./rivers.js";

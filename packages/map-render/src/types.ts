@@ -4,6 +4,7 @@ import type {
   ExportRenderOptions,
   GridCoordinate,
   MapRuntimeState,
+  MapStyle,
   RiverFeature,
   TagKey
 } from "@mapdesigner/map-core";
@@ -61,6 +62,12 @@ export interface RiverControlPointLayout {
 }
 
 export interface MapRenderOptions {
+  mapStyle?: MapStyle;
+  includeTerrain?: boolean;
+  includeTerrainSymbols?: boolean;
+  includeBiomes?: boolean;
+  includeRivers?: boolean;
+  includeTags?: boolean;
   size?: number;
   padding?: number;
   background?: string;

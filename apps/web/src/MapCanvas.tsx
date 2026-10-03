@@ -8,18 +8,16 @@ import {
   type MapRuntimeState,
   type MapOverview,
   type MapSummary,
+  type MapStyle,
   type RiverFeature,
   type TagKey
 } from "@mapdesigner/map-core";
 import {
   buildMapScene,
   centerForCoord,
-  buildCellOpacity,
-  buildCellStroke,
-  buildPatternOverlay,
-  getCellShorthand,
-  getPrimaryTag,
-  getPrimaryTagSymbol,
+  renderCellSurface,
+  renderCellAnnotations,
+  renderRiverLayers,
   getTerrainColor
 } from "@mapdesigner/map-render";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -62,6 +60,10 @@ interface MapCanvasProps {
   showShorthand: boolean;
   showGrid: boolean;
   showUndesigned: boolean;
+  showTerrain?: boolean;
+  showBiomes?: boolean;
+  showRivers?: boolean;
+  showTags?: boolean;
   tagFilter?: TagKey[];
 }
 
@@ -254,34 +256,32 @@ function CellGroup(props: {
   selected: boolean;
   batchSelected: boolean;
   hovered: boolean;
-  showCoordinates: boolean;
-  showShorthand: boolean;
   showPattern: boolean;
-  showPrimaryTag: boolean;
   showGrid: boolean;
   dimmed: boolean;
+  mapStyle: MapStyle;
+  showTerrain: boolean;
+  showSymbols: boolean;
   onSelect: () => void;
 }) {
   const { cell } = props;
-  const patternFill = props.showPattern ? buildPatternOverlay(cell.biome) : null;
-  const shorthand = props.showShorthand ? getCellShorthand(cell) : null;
-  const primaryTag = getPrimaryTag(cell);
-  const primaryTagText = props.showPrimaryTag
-    ? getPrimaryTagSymbol(primaryTag as TagKey | null)
-    : null;
-  const stroke = props.batchSelected
-    ? "#B66219"
-    : buildCellStroke(cell, props.selected, props.hovered);
-  const opacity = buildCellOpacity(cell);
-  const textFill = cell.status === "designed" ? "#1D1B18" : "#6F675D";
-
+  const content = renderCellSurface(
+    { cell, points: props.points, centerX: props.centerX, centerY: props.centerY },
+    {
+      mapStyle: props.mapStyle,
+      includeGrid: props.showGrid,
+      usePatternOverlays: props.showPattern,
+      includeTerrain: props.showTerrain,
+      includeTerrainSymbols: props.showSymbols
+    }
+  );
   return (
     <g
       className="hex-cell"
       data-cell-id={cell.id}
       data-batch-selected={props.batchSelected ? "true" : undefined}
       data-filter-match={props.dimmed ? "false" : "true"}
-      aria-label={`${cell.display_coord} ${cell.status === "designed" ? "已设计" : "待设计"}`}
+      aria-label={cell.display_coord + " " + (cell.status === "designed" ? "已设计" : "待设计")}
       onClick={props.onSelect}
       role="button"
       tabIndex={props.selected ? 0 : -1}
@@ -292,70 +292,9 @@ function CellGroup(props: {
           props.onSelect();
         }
       }}
-    >
-      <polygon
-        points={props.points}
-        fill={getTerrainColor(cell.terrain)}
-        stroke={stroke}
-        strokeWidth={props.batchSelected ? 2.6 : props.showGrid ? 1.2 : 0.6}
-        opacity={props.dimmed ? opacity * 0.32 : opacity}
-      />
-      {props.batchSelected ? (
-        <polygon
-          points={props.points}
-          fill="none"
-          stroke="#FFF4CC"
-          strokeWidth="0.9"
-          opacity={props.dimmed ? 0.45 : 0.95}
-        />
-      ) : null}
-      {patternFill ? (
-        <polygon
-          points={props.points}
-          fill={patternFill}
-          opacity={props.dimmed ? 0.2 : cell.status === "designed" ? 0.9 : 0.5}
-        />
-      ) : null}
-      {primaryTagText ? (
-        <text
-          x={props.centerX}
-          y={props.centerY - 16}
-          textAnchor="middle"
-          fontSize="9"
-          fontWeight="700"
-          fill="#6B2F18"
-          opacity={props.dimmed ? 0.35 : 1}
-        >
-          {primaryTagText}
-        </text>
-      ) : null}
-      {props.showCoordinates ? (
-        <text
-          x={props.centerX}
-          y={props.centerY - 3}
-          textAnchor="middle"
-          fontSize="9"
-          fontWeight="600"
-          fill={textFill}
-          opacity={props.dimmed ? 0.35 : 1}
-        >
-          {cell.display_coord}
-        </text>
-      ) : null}
-      {shorthand && cell.status === "designed" ? (
-        <text
-          x={props.centerX}
-          y={props.centerY + 11}
-          textAnchor="middle"
-          fontSize="8.5"
-          fontWeight="500"
-          fill={textFill}
-          opacity={props.dimmed ? 0.35 : 1}
-        >
-          {shorthand}
-        </text>
-      ) : null}
-    </g>
+      opacity={props.dimmed ? 0.3 : 1}
+      dangerouslySetInnerHTML={{ __html: content }}
+    />
   );
 }
 
@@ -398,6 +337,10 @@ export function MapCanvas(props: MapCanvasProps) {
         includeShorthand: props.showShorthand,
         includeGrid: props.showGrid,
         includeUndesigned: props.showUndesigned,
+        includeTerrain: props.showTerrain,
+        includeBiomes: props.showBiomes,
+        includeRivers: props.showRivers,
+        includeTags: props.showTags,
         previewRivers: props.riverPreview ? [props.riverPreview] : [],
         boundsCoords: boundsCoordsFromSummary(props.mapSummary),
         riverDetail
@@ -410,7 +353,11 @@ export function MapCanvas(props: MapCanvasProps) {
       props.showCoordinates,
       props.showGrid,
       props.showShorthand,
-      props.showUndesigned
+      props.showUndesigned,
+      props.showTerrain,
+      props.showBiomes,
+      props.showRivers,
+      props.showTags
     ]
   );
   const sceneCellsById = useMemo(
@@ -1010,10 +957,8 @@ export function MapCanvas(props: MapCanvasProps) {
                   <polygon
                     key={tile.row + "," + tile.col}
                     points={points}
-                    fill={tile.river ? "#4e9bb9" : getTerrainColor(tile.terrain)}
-                    opacity={
-                      tile.river ? 0.8 : Math.max(0.28, Math.min(1, tile.count / (step * step)))
-                    }
+                    fill={getTerrainColor(tile.terrain, scene.options.mapStyle)}
+                    opacity={Math.max(0.28, Math.min(1, tile.count / (step * step)))}
                   >
                     <title>
                       {tile.count} 格{tile.river ? " · 河流" : ""}
@@ -1045,10 +990,10 @@ export function MapCanvas(props: MapCanvasProps) {
                   batchSelectedCellIds.has(entry.cell.id) || strokeIds.has(entry.cell.id)
                 }
                 hovered={hoveredCellId === entry.cell.id}
-                showCoordinates={shouldShowCoordinatesForEntry(entry)}
-                showShorthand={effectiveShowShorthand && isEntryInLabelViewport(entry)}
-                showPattern={effectiveShowPattern}
-                showPrimaryTag={effectiveShowPrimaryTag && isEntryInLabelViewport(entry)}
+                showPattern={effectiveShowPattern && props.showBiomes !== false}
+                showSymbols={effectiveShowPattern}
+                showTerrain={props.showTerrain !== false}
+                mapStyle={scene.options.mapStyle}
                 showGrid={props.showGrid}
                 dimmed={!doesCellMatchTagFilter(entry.cell)}
                 onSelect={() => {
@@ -1061,105 +1006,65 @@ export function MapCanvas(props: MapCanvasProps) {
               />
             </g>
           ))}
-          {scene.riverBodies.length > 0 || scene.riverControlPoints.length > 0 ? (
-            <g className="river-layer" pointerEvents="none" aria-hidden="true">
-              {scene.riverBodies.map((body) =>
-                body.bankPath ? (
-                  <path
-                    key={`${body.id}-bank`}
-                    data-river-layer="bank"
-                    data-river-id={body.riverId}
-                    data-river-preview={body.preview ? "true" : undefined}
-                    data-river-connected-start={body.connectedStart ? "true" : undefined}
-                    data-river-connected-end={body.connectedEnd ? "true" : undefined}
-                    d={body.bankPath}
-                    fill={body.bankColor}
-                    opacity={Math.min(0.5, body.opacity * 0.42)}
-                  />
-                ) : null
-              )}
-              {scene.riverBodies.map((body) => (
-                <path
-                  key={`${body.id}-body`}
-                  data-river-layer="body"
-                  data-river-id={body.riverId}
-                  data-river-preview={body.preview ? "true" : undefined}
-                  data-river-connected-start={body.connectedStart ? "true" : undefined}
-                  data-river-connected-end={body.connectedEnd ? "true" : undefined}
-                  d={body.bodyPath}
-                  fill={body.color}
-                  opacity={body.preview ? Math.min(0.52, body.opacity * 0.66) : body.opacity}
-                />
-              ))}
-              {scene.riverBodies.map((body) =>
-                body.highlightPath ? (
-                  <path
-                    key={`${body.id}-highlight`}
-                    data-river-layer="highlight"
-                    data-river-id={body.riverId}
-                    data-river-preview={body.preview ? "true" : undefined}
-                    data-river-connected-start={body.connectedStart ? "true" : undefined}
-                    data-river-connected-end={body.connectedEnd ? "true" : undefined}
-                    d={body.highlightPath}
-                    fill="none"
-                    stroke={body.highlightColor}
-                    strokeWidth={body.highlightWidth}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    opacity={Math.min(0.28, body.opacity * 0.3)}
-                  />
-                ) : null
-              )}
-              {scene.riverBodies.map((body) =>
-                body.preview ? (
-                  <path
-                    key={`${body.id}-preview-center`}
-                    data-river-layer="preview-center"
-                    data-river-id={body.riverId}
-                    data-river-preview="true"
-                    data-river-connected-start={body.connectedStart ? "true" : undefined}
-                    data-river-connected-end={body.connectedEnd ? "true" : undefined}
-                    d={body.centerPath}
-                    fill="none"
-                    stroke={body.color}
-                    strokeWidth={Math.max(1.4, body.widthRange.max * 0.32)}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeDasharray="7 5"
-                    opacity={Math.min(0.82, body.opacity)}
-                  />
-                ) : null
-              )}
-              {scene.riverControlPoints.map((point) => (
-                <g
-                  key={point.id}
-                  data-river-control-point={point.position}
-                  data-river-id={point.riverId}
-                  data-river-preview={point.preview ? "true" : undefined}
-                >
-                  <circle
-                    cx={point.x}
-                    cy={point.y}
-                    r={point.radius}
-                    fill="#F7FBFC"
-                    stroke={point.color}
-                    strokeWidth="1.8"
-                    opacity={Math.min(1, point.opacity + 0.08)}
-                  />
-                  <text
-                    x={point.x}
-                    y={point.y + 2.5}
-                    textAnchor="middle"
-                    fontSize="7"
-                    fontWeight="800"
-                    fill={point.color}
-                  >
-                    {point.label}
-                  </text>
-                </g>
-              ))}
-            </g>
-          ) : null}
+          <g
+            className="river-layer"
+            pointerEvents="none"
+            aria-hidden="true"
+            dangerouslySetInnerHTML={{ __html: renderRiverLayers(scene) }}
+          />
+          <g className="map-annotation-layer" pointerEvents="none" aria-hidden="true">
+            {scene.layout.filter(isEntryInLabelViewport).map((entry) => (
+              <g
+                key={entry.cell.id}
+                opacity={doesCellMatchTagFilter(entry.cell) ? 1 : 0.3}
+                dangerouslySetInnerHTML={{
+                  __html: renderCellAnnotations(entry, {
+                    ...scene.options,
+                    includeCoordinates: shouldShowCoordinatesForEntry(entry),
+                    includeShorthand: effectiveShowShorthand,
+                    includeTags: effectiveShowPrimaryTag && props.showTags !== false
+                  })
+                }}
+              />
+            ))}
+          </g>
+          <g className="map-feedback-layer" pointerEvents="none" aria-hidden="true">
+            {scene.layout
+              .filter(
+                (entry) =>
+                  entry.cell.id === props.selectedCellId ||
+                  entry.cell.id === hoveredCellId ||
+                  entry.cell.id === keyboardCell?.id ||
+                  batchSelectedCellIds.has(entry.cell.id) ||
+                  strokeIds.has(entry.cell.id)
+              )
+              .map((entry) => {
+                const selected = entry.cell.id === props.selectedCellId;
+                const stroke = strokeIds.has(entry.cell.id);
+                const batch = batchSelectedCellIds.has(entry.cell.id);
+                const focused = entry.cell.id === keyboardCell?.id;
+                return (
+                  <g key={entry.cell.id}>
+                    <polygon
+                      points={entry.points}
+                      fill={stroke ? "#E5A944" : batch ? "#337F9F" : "none"}
+                      fillOpacity=".18"
+                      stroke="#F8F8EE"
+                      strokeWidth="4.5"
+                    />
+                    <polygon
+                      points={entry.points}
+                      fill="none"
+                      stroke={
+                        stroke ? "#986113" : selected ? "#164F41" : batch ? "#216A94" : "#54675D"
+                      }
+                      strokeWidth={selected || batch || stroke ? 2.5 : 1.5}
+                      strokeDasharray={focused ? "2 3" : selected ? undefined : "6 3"}
+                    />
+                  </g>
+                );
+              })}
+          </g>
         </g>
       </svg>
     </div>

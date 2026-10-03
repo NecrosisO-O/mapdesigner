@@ -1196,7 +1196,8 @@ describe("App", () => {
       "coast",
       "beach",
       "tidal_flat",
-      "reef"
+      "reef",
+      "estuary"
     ]);
   });
 

@@ -225,7 +225,7 @@ describe("river rendering", () => {
 });
 
 describe("export rendering", () => {
-  it("uses lightweight fills for png export while preserving river overlays", () => {
+  it("uses the same terrain, texture, labels and rivers for the canvas and export", () => {
     let runtime = createRuntimeState(
       createEmptyDocument({ id: "export-render", name: "Export Render" })
     );
@@ -255,8 +255,17 @@ describe("export rendering", () => {
     });
     expect(riverResult.ok).toBe(true);
 
-    const interactiveSvg = renderSvgString(buildMapScene(riverResult.map));
-    expect(interactiveSvg).toContain("url(#pattern-grass)");
+    const interactiveSvg = renderSvgString(
+      buildMapScene(riverResult.map, {
+        includeCoordinates: true,
+        includeShorthand: true,
+        includeGrid: true,
+        includeUndesigned: false,
+        background: "#FFFFFF",
+        padding: 24,
+        size: 36
+      })
+    );
 
     const exportSvg = renderSvgString(
       buildExportScene({
@@ -273,7 +282,7 @@ describe("export rendering", () => {
         }
       })
     );
-    expect(exportSvg).not.toContain("url(#pattern-grass)");
+    expect(exportSvg).toEqual(interactiveSvg);
     expect(exportSvg).toContain('data-river-id="export-river"');
   });
 
