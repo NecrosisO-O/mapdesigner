@@ -295,6 +295,7 @@ export default function App() {
           {activeMap ? (
             <MapCanvas
               map={activeMap}
+              overview={workspace.overview}
               mapSummary={workspace.mapSummary}
               selectedCell={editor.selectedCell}
               selectedCellId={editor.selectedCellId}

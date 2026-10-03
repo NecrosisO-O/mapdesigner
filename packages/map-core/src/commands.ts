@@ -218,7 +218,7 @@ export function applyCommand(state: MapRuntimeState, command: MapCommand): Comma
       }
       if (errors.length) return finalize(state, working, [], warnings, errors, "patch_cells", source);
       for (const target of new Map(command.targets.map(target => [createCellId(target.row, target.col), target])).values()) {
-        const previous = working.cells.find(cell => sameCoord(cell, target));
+        const previous = cells.get(createCellId(target.row, target.col));
         const terrain = command.changes.terrain ?? previous?.terrain;
         if (!isTerrainKey(terrain)) {
           errors.push({ code: "invalid_terrain", message: "new cells require a valid terrain", severity: "invalid", target: createCellId(target.row, target.col) });

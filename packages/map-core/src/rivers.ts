@@ -64,6 +64,7 @@ export function getHexDistance(left: GridCoordinate, right: GridCoordinate): num
 
 export function buildHexLine(start: GridCoordinate, end: GridCoordinate): GridCoordinate[] {
   const distance = getHexDistance(start, end);
+  if (!Number.isSafeInteger(distance) || distance > 500_000) throw new Error("hex line exceeds the 500000 cell budget");
   if (distance === 0) {
     return [{ row: start.row, col: start.col }];
   }
@@ -71,6 +72,7 @@ export function buildHexLine(start: GridCoordinate, end: GridCoordinate): GridCo
   const startCube = axialToCube(start);
   const endCube = axialToCube(end);
   const line: GridCoordinate[] = [];
+  const seen = new Set<string>();
 
   for (let index = 0; index <= distance; index += 1) {
     const amount = index / distance;
@@ -80,7 +82,9 @@ export function buildHexLine(start: GridCoordinate, end: GridCoordinate): GridCo
       z: lerp(startCube.z, endCube.z, amount)
     });
     const coord = cubeToAxial(rounded);
-    if (!line.some((entry) => sameCoord(entry, coord))) {
+    const key = coord.row + "," + coord.col;
+    if (!seen.has(key)) {
+      seen.add(key);
       line.push(coord);
     }
   }
@@ -95,53 +99,32 @@ function normalizeRiverWidth(value: number | null | undefined): number | null {
   return Math.min(MAX_RIVER_WIDTH, Math.max(MIN_RIVER_WIDTH, value));
 }
 
-function getPointWidth(points: RiverPoint[], index: number): number {
-  const ownWidth = normalizeRiverWidth(points[index]?.width);
-  if (ownWidth !== null) {
-    return ownWidth;
-  }
-
-  let previousIndex = -1;
-  let previousWidth: number | null = null;
-  for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
-    const width = normalizeRiverWidth(points[cursor]?.width);
-    if (width !== null) {
-      previousIndex = cursor;
-      previousWidth = width;
-      break;
-    }
-  }
-
-  let nextIndex = -1;
-  let nextWidth: number | null = null;
-  for (let cursor = index + 1; cursor < points.length; cursor += 1) {
-    const width = normalizeRiverWidth(points[cursor]?.width);
-    if (width !== null) {
-      nextIndex = cursor;
-      nextWidth = width;
-      break;
-    }
-  }
-
-  if (previousWidth !== null && nextWidth !== null) {
-    const span = nextIndex - previousIndex;
-    const amount = span > 0 ? (index - previousIndex) / span : 0;
-    return lerp(previousWidth, nextWidth, amount);
-  }
-  return previousWidth ?? nextWidth ?? DEFAULT_RIVER_WIDTH;
+function pointWidths(points: RiverPoint[]): number[] {
+  const widths = points.map(point => normalizeRiverWidth(point.width));
+  const next = new Array<number>(points.length).fill(-1);
+  let following = -1;
+  for (let i = points.length - 1; i >= 0; i--) { if (widths[i] !== null) following = i; next[i] = following; }
+  let previous = -1;
+  return widths.map((width, i) => {
+    if (width !== null) { previous = i; return width!; }
+    const after = next[i]!;
+    if (previous >= 0 && after >= 0) return lerp(widths[previous]!, widths[after]!, (i - previous) / (after - previous));
+    return previous >= 0 ? widths[previous]! : after >= 0 ? widths[after]! : DEFAULT_RIVER_WIDTH;
+  });
 }
 
 export function expandRiverPath(river: RiverFeature): RiverPathSample[] {
   if (river.points.length === 0) {
     return [];
   }
+  const widths = pointWidths(river.points);
   if (river.points.length === 1) {
     const point = river.points[0]!;
     return [
       {
         row: point.row,
         col: point.col,
-        width: getPointWidth(river.points, 0),
+        width: widths[0]!,
         river_id: river.id,
         river_name: river.name,
         index: 0
@@ -153,8 +136,8 @@ export function expandRiverPath(river: RiverFeature): RiverPathSample[] {
   for (let pointIndex = 0; pointIndex < river.points.length - 1; pointIndex += 1) {
     const start = river.points[pointIndex]!;
     const end = river.points[pointIndex + 1]!;
-    const startWidth = getPointWidth(river.points, pointIndex);
-    const endWidth = getPointWidth(river.points, pointIndex + 1);
+    const startWidth = widths[pointIndex]!;
+    const endWidth = widths[pointIndex + 1]!;
     const line = buildHexLine(start, end);
 
     line.forEach((coord, lineIndex) => {
