@@ -186,6 +186,8 @@ const apiMock = vi.hoisted(() => ({
   deleteMap: vi.fn(),
   importMap: vi.fn(),
   exportJson: vi.fn(),
+  previewPng: vi.fn(),
+  getMaterialUsage: vi.fn(),
   exportPng: vi.fn()
 }));
 
@@ -534,6 +536,31 @@ describe("App", () => {
             name: "Copied Map"
           }
         }
+      },
+      warnings: [],
+      errors: []
+    });
+    apiMock.previewPng.mockResolvedValue({
+      ok: true,
+      result: {
+        image: "data:image/png;base64,test",
+        width: 640,
+        height: 480,
+        revision: 1,
+        cellCount: 1
+      },
+      warnings: [],
+      errors: []
+    });
+    apiMock.getMaterialUsage.mockResolvedValue({
+      ok: true,
+      result: {
+        map_id: "sample-map",
+        revision: 1,
+        terrains: ["plain"],
+        biomes: ["grassland"],
+        tags: [],
+        river_count: 0
       },
       warnings: [],
       errors: []
@@ -1367,12 +1394,18 @@ describe("App", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "导出" }));
 
+    fireEvent.change(screen.getByLabelText("导出范围"), { target: { value: "visible" } });
     fireEvent.change(screen.getByLabelText("预设"), {
       target: { value: "reference" }
     });
     fireEvent.change(screen.getByLabelText("缩放倍率"), {
       target: { value: "3" }
     });
+    await waitFor(() =>
+      expect((screen.getByRole("button", { name: "导出图片" }) as HTMLButtonElement).disabled).toBe(
+        false
+      )
+    );
     fireEvent.click(screen.getByText("导出图片"));
 
     await waitFor(() =>
@@ -1397,7 +1430,11 @@ describe("App", () => {
       )
     );
     expect(clickSpy).toHaveBeenCalledTimes(1);
-    expect(await screen.findByText("PNG 已导出并开始下载：sample-map-reference.png")).toBeTruthy();
+    expect(
+      await within(screen.getByRole("dialog", { name: "导出地图" })).findByRole("link", {
+        name: "再次下载 · sample-map-reference.png"
+      })
+    ).toBeTruthy();
   });
 
   it("shows png export progress and prevents duplicate export clicks", async () => {
@@ -1412,6 +1449,11 @@ describe("App", () => {
     await screen.findByText("已打开 Sample Map");
 
     fireEvent.click(screen.getByRole("button", { name: "导出" }));
+    await waitFor(() =>
+      expect((screen.getByRole("button", { name: "导出图片" }) as HTMLButtonElement).disabled).toBe(
+        false
+      )
+    );
     fireEvent.click(screen.getByRole("button", { name: "导出图片" }));
 
     expect(await screen.findByText("正在导出 PNG...")).toBeTruthy();
@@ -1431,7 +1473,11 @@ describe("App", () => {
       errors: []
     });
 
-    expect(await screen.findByText("PNG 已导出并开始下载：sample-map-clean.png")).toBeTruthy();
+    expect(
+      await within(screen.getByRole("dialog", { name: "导出地图" })).findByRole("link", {
+        name: "再次下载 · sample-map-clean.png"
+      })
+    ).toBeTruthy();
     expect(clickSpy).toHaveBeenCalledTimes(1);
   });
 
@@ -1441,7 +1487,13 @@ describe("App", () => {
     await screen.findByText("已打开 Sample Map");
 
     fireEvent.click(screen.getByRole("button", { name: "导出" }));
+    fireEvent.click(screen.getByText("图层与背景"));
     fireEvent.click(screen.getByLabelText("透明背景"));
+    await waitFor(() =>
+      expect((screen.getByRole("button", { name: "导出图片" }) as HTMLButtonElement).disabled).toBe(
+        false
+      )
+    );
     fireEvent.click(screen.getByText("导出图片"));
 
     await waitFor(() =>
@@ -1479,9 +1531,14 @@ describe("App", () => {
     await screen.findByText("已打开 Sample Map");
     fireEvent.click(screen.getByRole("button", { name: "导出" }));
     const dialog = screen.getByRole("dialog", { name: "导出地图" });
+    await waitFor(() =>
+      expect(
+        (within(dialog).getByRole("button", { name: "导出图片" }) as HTMLButtonElement).disabled
+      ).toBe(false)
+    );
     fireEvent.click(within(dialog).getByRole("button", { name: "导出图片" }));
     fireEvent.click(within(dialog).getByRole("button", { name: "取消任务" }));
-    expect(await within(dialog).findByText("导出结果：任务已取消")).toBeTruthy();
+    expect(await within(dialog).findByText("导出已取消")).toBeTruthy();
     expect(within(dialog).queryByRole("button", { name: "取消任务" })).toBeNull();
     expect(clickSpy).not.toHaveBeenCalled();
   });
@@ -1495,6 +1552,11 @@ describe("App", () => {
     fireEvent.change(screen.getByLabelText("导出范围"), {
       target: { value: "full" }
     });
+    await waitFor(() =>
+      expect((screen.getByRole("button", { name: "导出图片" }) as HTMLButtonElement).disabled).toBe(
+        false
+      )
+    );
     fireEvent.click(screen.getByText("导出图片"));
 
     await waitFor(() =>

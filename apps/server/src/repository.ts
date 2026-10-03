@@ -19,6 +19,7 @@ import {
   type MapFeaturePage,
   type MapFeatures,
   type MapMeta,
+  type MapMaterialUsage,
   type MapSummary,
   type RiverFeature
 } from "@mapdesigner/map-core";
@@ -103,6 +104,7 @@ export interface HistoryEntry {
   source: HistorySource;
   action: string;
   timestamp: string;
+  description?: string;
 }
 
 export interface MapHistory {
@@ -999,6 +1001,36 @@ export async function writeMapDocumentJsonExport(id: string, filePath: string): 
   });
 }
 
+export async function getMapMaterialUsage(id: string): Promise<MapMaterialUsage> {
+  await ensureMapInDatabase(id);
+  const db = getDatabase(),
+    row = getMapRowOrThrow(db, id);
+  const terrains = db
+    .prepare("SELECT DISTINCT terrain AS value FROM cells WHERE map_id=? ORDER BY terrain")
+    .all(row.id) as Array<{ value: MapMaterialUsage["terrains"][number] }>;
+  const biomes = db
+    .prepare(
+      "SELECT DISTINCT biome AS value FROM cells WHERE map_id=? AND biome IS NOT NULL ORDER BY biome"
+    )
+    .all(row.id) as Array<{ value: MapMaterialUsage["biomes"][number] }>;
+  const tags = db
+    .prepare(
+      "SELECT DISTINCT j.value FROM cells c, json_each(c.tags_json) j WHERE c.map_id=? ORDER BY j.value"
+    )
+    .all(row.id) as Array<{ value: MapMaterialUsage["tags"][number] }>;
+  const rivers = db
+    .prepare("SELECT COUNT(*) AS count FROM features WHERE map_id=? AND kind='river'")
+    .get(row.id) as { count: number };
+  return {
+    map_id: row.id,
+    revision: row.revision,
+    terrains: terrains.map((v) => v.value),
+    biomes: biomes.map((v) => v.value),
+    tags: tags.map((v) => v.value),
+    river_count: rivers.count
+  };
+}
+
 export async function getMapFeatures(id: string): Promise<MapFeatures> {
   await ensureMapInDatabase(id);
   return getMapFeaturesSync(id);
@@ -1487,16 +1519,17 @@ export async function getMapHistory(mapId: string, limit = 5): Promise<MapHistor
   const status = await getHistoryStatus(normalizedId);
   const rows = db
     .prepare(
-      `SELECT seq, source, action, timestamp FROM operations
+      `SELECT seq, source, action, timestamp, json_extract(summary_json, '$.history_description') AS description FROM operations
        WHERE map_id = ? AND seq <= ?
        ORDER BY seq DESC
        LIMIT ?`
     )
-    .all(normalizedId, status.cursor, limit) as Array<{
+    .all(normalizedId, status.cursor + Math.ceil(limit / 2), limit) as Array<{
     seq: number;
     source: HistorySource;
     action: string;
     timestamp: string;
+    description: string | null;
   }>;
   return {
     status,
@@ -1504,7 +1537,8 @@ export async function getMapHistory(mapId: string, limit = 5): Promise<MapHistor
       seq: row.seq,
       source: row.source,
       action: row.action,
-      timestamp: row.timestamp
+      timestamp: row.timestamp,
+      ...(row.description ? { description: row.description } : {})
     }))
   };
 }

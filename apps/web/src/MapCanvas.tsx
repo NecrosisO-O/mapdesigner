@@ -3,6 +3,9 @@ import type { InteractionMode } from "./TopToolbar.js";
 import { materialForCell, type Material } from "./useMaterialBrush.js";
 import type { LegendHighlight } from "./LegendPanel.js";
 import {
+  TAG_ENTRIES,
+  TERRAIN_ENTRIES,
+  BIOME_ENTRIES,
   buildHexLine,
   propagateRiverJunctions,
   type RiverPoint,
@@ -19,6 +22,7 @@ import {
   type TagKey
 } from "@mapdesigner/map-core";
 import {
+  escapeXml,
   buildMapScene,
   centerForCoord,
   coordForPoint,
@@ -282,7 +286,12 @@ function CellGroup(props: {
 }) {
   const { cell } = props;
   const content = renderCellSurface(
-    { cell, points: props.points, centerX: props.centerX, centerY: props.centerY },
+    {
+      cell: props.preview ?? cell,
+      points: props.points,
+      centerX: props.centerX,
+      centerY: props.centerY
+    },
     {
       mapStyle: props.mapStyle,
       includeGrid: props.showGrid,
@@ -309,12 +318,28 @@ function CellGroup(props: {
         }
       }}
       opacity={props.dimmed ? 0.3 : 1}
-      dangerouslySetInnerHTML={{ __html: content }}
+      dangerouslySetInnerHTML={{
+        __html:
+          "<title>" +
+          escapeXml(
+            [
+              cell.display_coord,
+              cell.terrain ? TERRAIN_ENTRIES[cell.terrain].label : "待设计",
+              cell.biome ? BIOME_ENTRIES[cell.biome].label : "",
+              ...cell.tags.map((tag) => TAG_ENTRIES[tag].label)
+            ]
+              .filter(Boolean)
+              .join(" · ")
+          ) +
+          "</title>" +
+          content
+      }}
     />
   );
 }
 
 export function MapCanvas(props: MapCanvasProps) {
+  const [visualDetail, setVisualDetail] = useState(1);
   const [gestureRiver, setGestureRiver] = useState<RiverFeature | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [hoveredCellId, setHoveredCellId] = useState<string | null>(null);
@@ -360,7 +385,7 @@ export function MapCanvas(props: MapCanvasProps) {
       document: { ...props.map.document, features: { ...props.map.document.features, rivers } }
     };
   }, [props.map, preview, props.interactionMode]);
-  const riverDetail = camera.zoom >= 0.8 ? "high" : "low";
+  const riverDetail = visualDetail >= 2 ? "high" : "low";
   const scene = useMemo(
     () =>
       buildMapScene(displayMap, {
@@ -407,8 +432,8 @@ export function MapCanvas(props: MapCanvasProps) {
   const effectiveScale = viewportMetrics.baseScale * camera.zoom;
   const effectiveShowShorthand =
     props.showShorthand && effectiveScale >= SHORTHAND_VISIBILITY_SCALE;
-  const effectiveShowPrimaryTag = effectiveScale >= TAG_VISIBILITY_SCALE;
-  const effectiveShowPattern = effectiveScale >= PATTERN_VISIBILITY_SCALE;
+  const effectiveShowPrimaryTag = visualDetail >= 3;
+  const effectiveShowPattern = visualDetail >= 2;
   const coordinateLabelStep = getCoordinateLabelStep(coordinateLabelMode);
   const labelViewportBounds = useMemo(() => {
     const translateX = viewportMetrics.baseOffset.x + camera.offset.x;
@@ -429,14 +454,17 @@ export function MapCanvas(props: MapCanvasProps) {
     viewportSize.height,
     viewportSize.width
   ]);
-  const renderDetail =
-    effectiveScale >= SHORTHAND_VISIBILITY_SCALE
-      ? "near"
-      : effectiveScale >= COORDINATE_VISIBILITY_SCALE
-        ? "mid"
-        : effectiveScale >= PATTERN_VISIBILITY_SCALE
-          ? "far"
-          : "extreme-far";
+  const renderDetail = ["extreme-far", "far", "mid", "near"][visualDetail];
+  useEffect(() => {
+    setVisualDetail((current) => {
+      let level = current;
+      const show = [0.28, 0.78, 1.12],
+        hide = [0.22, 0.66, 0.98];
+      while (level < 3 && effectiveScale >= show[level]!) level++;
+      while (level > 0 && effectiveScale < hide[level - 1]!) level--;
+      return level;
+    });
+  }, [effectiveScale]);
   const isRiverDrawing = props.interactionMode === "river-draw";
   const isBatchSelecting = props.interactionMode === "batch-select";
   const riverDrawingPointCount = props.riverDrawingPointCount ?? 0;
@@ -1010,7 +1038,8 @@ export function MapCanvas(props: MapCanvasProps) {
       ) : null}
       <div className="canvas-help-overlay" aria-hidden="true">
         {props.overview
-          ? "全图概览 · 放大后编辑单元格"
+          ? "全图概览 · 放大后编辑单元格" +
+            (props.overview.river_detail_limited ? " · 部分水系请放大查看" : "")
           : isRiverDrawing
             ? "河流绘制 · 点击单元格添加路径点"
             : isBatchSelecting
@@ -1050,7 +1079,10 @@ export function MapCanvas(props: MapCanvasProps) {
                   <polygon
                     key={tile.row + "," + tile.col}
                     points={points}
-                    fill={getTerrainColor(tile.terrain, scene.options.mapStyle)}
+                    fill={getTerrainColor(
+                      props.showTerrain === false ? null : tile.terrain,
+                      scene.options.mapStyle
+                    )}
                     opacity={Math.max(0.28, Math.min(1, tile.count / (step * step)))}
                   >
                     <title>
@@ -1059,6 +1091,34 @@ export function MapCanvas(props: MapCanvasProps) {
                   </polygon>
                 );
               })}
+            </g>
+          )}
+          {props.overview && props.showRivers !== false && (
+            <g aria-label="远景河网" fill="none" strokeLinecap="round" strokeLinejoin="round">
+              {props.overview.rivers?.map((river) => (
+                <path
+                  key={river.id}
+                  d={river.paths
+                    .map((path) =>
+                      path
+                        .map((p, i) => {
+                          const point = centerForCoord(p, 36);
+                          return (
+                            (i ? "L " : "M ") +
+                            (point.x - scene.minX) +
+                            " " +
+                            (point.y - scene.minY)
+                          );
+                        })
+                        .join(" ")
+                    )
+                    .join(" ")}
+                  stroke={river.color}
+                  strokeWidth={Math.max(1.25 / Math.max(effectiveScale, 0.0001), river.width)}
+                >
+                  <title>{river.name} · 远景概括路径</title>
+                </path>
+              ))}
             </g>
           )}
           {scene.layout.map((entry) => (
@@ -1084,7 +1144,7 @@ export function MapCanvas(props: MapCanvasProps) {
                 }
                 hovered={hoveredCellId === entry.cell.id}
                 showPattern={effectiveShowPattern && props.showBiomes !== false}
-                showSymbols={effectiveScale >= 0.28}
+                showSymbols={visualDetail >= 1}
                 showTerrain={props.showTerrain !== false}
                 mapStyle={scene.options.mapStyle}
                 preview={
@@ -1096,7 +1156,7 @@ export function MapCanvas(props: MapCanvasProps) {
                       )
                     : undefined
                 }
-                showGrid={props.showGrid}
+                showGrid={props.showGrid && visualDetail >= 2}
                 dimmed={!doesCellMatchTagFilter(entry.cell)}
                 onSelect={() => {
                   if (suppressNextCellClickRef.current) {

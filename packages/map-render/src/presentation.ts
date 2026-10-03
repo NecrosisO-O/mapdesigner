@@ -1,4 +1,5 @@
 import {
+  isOpenWaterTerrain,
   TAG_ENTRIES,
   PRIMARY_TAG_PRIORITY,
   type ActiveCell,
@@ -50,7 +51,7 @@ export function renderCellSurface(
   const fill = options.includeTerrain === false ? "#EEEDE5" : getTerrainColor(cell.terrain, style);
   const pattern =
     options.usePatternOverlays !== false && options.includeBiomes !== false
-      ? buildPatternOverlay(cell.biome, style)
+      ? buildPatternOverlay(cell.biome, style, options.size ?? 36)
       : null;
   const symbol =
     options.includeTerrain !== false &&
@@ -72,9 +73,9 @@ export function renderCellSurface(
     '" stroke="' +
     (options.includeGrid !== false ? "#59675B" : fill) +
     '" stroke-width="' +
-    (options.includeGrid !== false ? 0.8 : 0.45) +
+    (options.includeGrid !== false ? 0.8 : 1.05) * scale +
     '" stroke-opacity="' +
-    (options.includeGrid !== false ? 0.38 : 1) +
+    (options.includeGrid !== false ? (isOpenWaterTerrain(cell.terrain) ? 0.16 : 0.38) : 1) +
     '"/>' +
     (pattern ? '<polygon points="' + points + '" fill="' + pattern + '"/>' : "") +
     (symbol && (sample || hash % 4 !== 0)
@@ -105,7 +106,7 @@ export function renderCellAnnotations(entry: HexCellLayout, options: MapRenderOp
     x +
     '" y="' +
     (y + dy * scale) +
-    '" text-anchor="middle" font-size="' +
+    '" text-anchor="middle" font-family="sans-serif" font-size="' +
     size * scale +
     '" font-weight="600" fill="' +
     ink +
@@ -184,8 +185,8 @@ export function renderMaterialSvg(
     " " +
     layout.height +
     '" aria-hidden="true"><defs>' +
-    buildSvgDefs(mapStyle)
-      .filter((def) => biome && def.includes('id="' + getBiomePatternId(biome, mapStyle) + '"'))
+    buildSvgDefs(mapStyle, 28, layout.minX, layout.minY)
+      .filter((def) => biome && def.includes('id="' + getBiomePatternId(biome, mapStyle, 28) + '"'))
       .join("") +
     "</defs>" +
     renderCellSurface(layout.layout[0]!, options, true) +

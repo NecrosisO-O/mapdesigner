@@ -158,20 +158,18 @@ export function useCellEditor(
 
   function handleTerrainChange(nextTerrain: string): void {
     setTerrainCategory(nextTerrain ? resolveTerrainCategory(nextTerrain) : terrainCategory);
-    setDraft((current) => {
-      if (!nextTerrain) {
-        return {
-          ...current,
-          terrain: ""
-        };
-      }
-      const resolved = resolveMaterial(
-        nextTerrain as TerrainKey,
-        (current.biome || null) as BiomeKey | null
-      );
-      setMaterialNotice(resolved.notice);
-      return { ...current, terrain: resolved.terrain, biome: resolved.biome ?? "" };
-    });
+    const resolved = nextTerrain
+      ? resolveMaterial(
+          nextTerrain as TerrainKey,
+          (latest.current.draft.biome || null) as BiomeKey | null
+        )
+      : null;
+    setMaterialNotice(resolved?.notice ?? null);
+    setDraft((current) =>
+      resolved
+        ? { ...current, terrain: resolved.terrain, biome: resolved.biome ?? "" }
+        : { ...current, terrain: "" }
+    );
   }
 
   function handleBiomeChange(nextBiome: string): void {

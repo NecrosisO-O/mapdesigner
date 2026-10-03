@@ -13,7 +13,7 @@ import { createEnvelope } from "./utils.js";
 import { downloadUrl } from "./downloads.js";
 export type JobInput =
   | { kind: "import"; filePath: string; generateNewId: boolean }
-  | { kind: "png" | "json"; mapId: string; options?: Partial<ExportRenderOptions> };
+  | { kind: "png" | "json" | "preview"; mapId: string; options?: Partial<ExportRenderOptions> };
 export interface JobStatus {
   id: string;
   kind: JobInput["kind"];
@@ -188,10 +188,15 @@ export async function registerJobs(app: FastifyInstance): Promise<void> {
     }
   );
   app.post<{
-    Body: { kind: "png" | "json"; mapId: string; options?: Partial<ExportRenderOptions> };
+    Body: {
+      kind: "png" | "json" | "preview";
+      mapId: string;
+      options?: Partial<ExportRenderOptions>;
+    };
   }>("/api/jobs/export", async (request, reply) => {
     const body = request.body;
-    if (!body || !["png", "json"].includes(body.kind)) throw badRequest("请选择导出格式");
+    if (!body || !["png", "json", "preview"].includes(body.kind))
+      throw badRequest("请选择导出格式");
     return reply.code(202).send(
       createEnvelope({
         result: create({

@@ -101,6 +101,19 @@ export interface MapScene {
     boundsCoords?: GridCoordinate[];
     riverClipRange?: CellRange;
   };
+  composition?: {
+    mapWidth: number;
+    mapHeight: number;
+    headerHeight: number;
+    legendWidth: number;
+    footerHeight: number;
+    titleLines: string[];
+    captionLines: string[];
+    scale: number;
+    northArrow: boolean;
+    gridScale: boolean;
+    legend: Array<{ kind: "terrain" | "biome" | "tag" | "river"; key: string }>;
+  };
 }
 
 export interface RenderLabel {

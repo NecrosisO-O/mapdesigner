@@ -241,6 +241,11 @@ describe("server service", () => {
 
     const undone = await service.undoMap(mapId);
     expect(undone?.map.document.cells).toHaveLength(0);
+    const history = await service.getMapHistory(mapId);
+    expect(history.entries).toHaveLength(1);
+    expect(history.entries[0]).toMatchObject({ seq: 1, description: "格子 R0C0" });
+    expect(history.entries[0]!.seq).toBeGreaterThan(history.status.cursor);
+    expect(history.entries[0]).not.toHaveProperty("commands");
     expect(undone?.status).toEqual({
       canUndo: false,
       canRedo: true,

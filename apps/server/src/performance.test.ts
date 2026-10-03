@@ -94,7 +94,8 @@ it("covers all sparse edges and rivers in a bounded overview", async () => {
   expect(overview.tiles.reduce((sum, tile) => sum + tile.count, 0)).toBe(2);
   expect(overview.tiles.some((tile) => tile.row < 0 && tile.count)).toBe(true);
   expect(overview.tiles.some((tile) => tile.row > 900 && tile.count)).toBe(true);
-  expect(overview.tiles.some((tile) => tile.river)).toBe(true);
+  expect(overview.rivers?.some((river) => river.paths.length > 0)).toBe(true);
+  expect(overview.tiles.every((tile) => tile.count > 0)).toBe(true);
   const summary = await service.getMapSummary(doc.meta.id);
   expect(summary.render_bounds).toEqual({
     min_row: -1000,

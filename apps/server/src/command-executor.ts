@@ -234,7 +234,22 @@ function executeSync(
         action: commands.length === 1 ? commands[0]!.action : "commands",
         commands: resolved,
         inverseCommands: inverse,
-        summary: { ...stats, rules_version: 2 }
+        summary: {
+          ...stats,
+          rules_version: 2,
+          history_description:
+            [
+              writes.size === 1
+                ? "格子 R" + [...writes.values()][0]!.row + "C" + [...writes.values()][0]!.col
+                : writes.size
+                  ? writes.size + " 个格子"
+                  : "",
+              featureWrites.size ? featureWrites.size + " 条河流" : "",
+              commands.some((command) => command.action === "set_map_style") ? "地图样式" : ""
+            ]
+              .filter(Boolean)
+              .join(" · ") || "未改变地图内容"
+        }
       });
     summary = getMapSummarySync(id);
   }

@@ -46,6 +46,7 @@ jobs:
             sleep 1
           done
           test "$(docker exec mapdesigner-smoke id -u)" != "0"
+          docker exec mapdesigner-smoke test -f /usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc
           curl -fsS http://127.0.0.1:3010/ > /tmp/index.html
           grep -q MapDesigner /tmp/index.html
           test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3010/api/maps)" = "401"

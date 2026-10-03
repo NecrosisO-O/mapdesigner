@@ -37,6 +37,10 @@ export function HistoryPanel({ history }: { history: MapHistory | null }) {
               {entry.seq}. {labels[entry.action] ?? "地图编辑"}
             </strong>
             <span>
+              {entry.description ? entry.description + " · " : ""}
+              {entry.seq > history.status.cursor ? "已撤销，可重做" : "已应用"}
+            </span>
+            <span>
               {formatDateTime(entry.timestamp)} ·{" "}
               {{ webui: "编辑器", cli: "命令行", system: "系统" }[entry.source]}
             </span>

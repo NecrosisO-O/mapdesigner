@@ -155,7 +155,18 @@ function readBooleanOption(
   input: Partial<ExportRenderOptions>,
   key: keyof Pick<
     ExportRenderOptions,
-    "includeCoordinates" | "includeShorthand" | "includeGrid" | "includeUndesigned"
+    | "includeCoordinates"
+    | "includeShorthand"
+    | "includeGrid"
+    | "includeUndesigned"
+    | "includeTerrain"
+    | "includeTerrainSymbols"
+    | "includeBiomes"
+    | "includeRivers"
+    | "includeTags"
+    | "includeLegend"
+    | "northArrow"
+    | "gridScale"
   >
 ): boolean | undefined {
   const value = input[key];
@@ -275,6 +286,35 @@ export function normalizeExportOptions(
     normalized.includeUndesigned = includeUndesigned;
   }
 
+  for (const key of [
+    "includeTerrain",
+    "includeTerrainSymbols",
+    "includeBiomes",
+    "includeRivers",
+    "includeTags",
+    "includeLegend",
+    "northArrow",
+    "gridScale"
+  ] as const) {
+    const value = readBooleanOption(input, key);
+    if (value !== undefined) normalized[key] = value;
+  }
+  for (const [key, limit] of [
+    ["title", 120],
+    ["caption", 500]
+  ] as const) {
+    const value = input[key];
+    if (value !== undefined) {
+      if (typeof value !== "string" || value.length > limit)
+        throw badRequest(key + " exceeds its text limit");
+      normalized[key] = value;
+    }
+  }
+  if (input.expectedRevision !== undefined) {
+    if (!Number.isSafeInteger(input.expectedRevision) || input.expectedRevision < 1)
+      throw badRequest("invalid expectedRevision");
+    normalized.expectedRevision = input.expectedRevision;
+  }
   const range = normalizeExportRange(input.range);
   if (range !== undefined) {
     normalized.range = range;

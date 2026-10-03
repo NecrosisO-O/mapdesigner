@@ -101,6 +101,14 @@ export interface CellRange {
 }
 
 export interface MapOverview {
+  rivers?: Array<{
+    id: string;
+    name: string;
+    color: string;
+    width: number;
+    paths: GridCoordinate[][];
+  }>;
+  river_detail_limited?: boolean;
   map_id: string;
   revision: number;
   range: CellRange;
@@ -443,6 +451,7 @@ export type TagKey =
   | "fault_line";
 
 export interface ExportRenderOptions {
+  expectedRevision?: number;
   preset: "clean" | "reference";
   includeCoordinates: boolean;
   includeShorthand: boolean;
@@ -452,4 +461,31 @@ export interface ExportRenderOptions {
   padding: number;
   scale: number;
   range?: CellRange | null;
+  includeTerrain?: boolean;
+  includeTerrainSymbols?: boolean;
+  includeBiomes?: boolean;
+  includeRivers?: boolean;
+  includeTags?: boolean;
+  includeLegend?: boolean;
+  title?: string;
+  caption?: string;
+  northArrow?: boolean;
+  gridScale?: boolean;
+}
+
+export interface MapMaterialUsage {
+  map_id: string;
+  revision: number;
+  terrains: TerrainKey[];
+  biomes: BiomeKey[];
+  tags: TagKey[];
+  river_count: number;
+}
+
+export interface ExportPreview {
+  image: string;
+  width: number;
+  height: number;
+  revision: number;
+  cellCount: number;
 }
