@@ -2,6 +2,7 @@ export type LayoutType = "flat-top-even-q";
 export type CellStatus = "designed" | "undesigned";
 export type IssueSeverity = "warning" | "invalid";
 export type HistorySource = "webui" | "cli" | "system";
+export type MapStyle = "classic-v1" | "atlas-v1";
 
 export interface GridCoordinate {
   row: number;
@@ -16,6 +17,7 @@ export interface MapMeta {
   created_at: string;
   updated_at: string;
   revision: number;
+  map_style?: MapStyle;
 }
 
 export interface GridConfig {
@@ -32,7 +34,10 @@ export interface DesignedCellRecord extends GridCoordinate {
 
 export interface RiverPoint extends GridCoordinate {
   width?: number | null;
+  junction_id?: string | null;
 }
+export type RiverFlow = "unspecified" | "forward" | "reverse";
+export type RiverEndpoint = "auto" | "spring" | "water" | "open";
 
 export interface RiverFeature {
   id: string;
@@ -41,6 +46,9 @@ export interface RiverFeature {
   color?: string | null;
   opacity?: number | null;
   width_mode?: "legacy" | "distance";
+  flow_direction?: RiverFlow;
+  start_kind?: RiverEndpoint;
+  end_kind?: RiverEndpoint;
 }
 
 export interface MapFeatures {
@@ -268,6 +276,9 @@ export interface CreateRiverCommand extends MapCommandBase {
     color?: string | null;
     opacity?: number | null;
     width_mode?: RiverFeature["width_mode"];
+    flow_direction?: RiverFlow;
+    start_kind?: RiverEndpoint;
+    end_kind?: RiverEndpoint;
   };
 }
 
@@ -280,6 +291,9 @@ export interface UpdateRiverCommand extends MapCommandBase {
     color?: string | null;
     opacity?: number | null;
     width_mode?: RiverFeature["width_mode"];
+    flow_direction?: RiverFlow;
+    start_kind?: RiverEndpoint;
+    end_kind?: RiverEndpoint;
   };
 }
 
@@ -302,6 +316,10 @@ export interface SetRiverWidthCommand extends MapCommandBase {
 }
 
 export type MapCommand =
+  | (MapCommandBase & { action: "set_map_style"; style: MapStyle })
+  | (MapCommandBase & { action: "connect_river_points"; points: RiverPointReference[] })
+  | (MapCommandBase & { action: "disconnect_river_point"; point: RiverPointReference })
+  | (MapCommandBase & { action: "restore_rivers"; rivers: RiverFeature[]; remove_ids: string[] })
   | PatchCellsCommand
   | SetCellCommand
   | SetCellsCommand
@@ -314,6 +332,11 @@ export type MapCommand =
   | DeleteRiverCommand
   | SetRiverPathCommand
   | SetRiverWidthCommand;
+
+export interface RiverPointReference {
+  river_id: string;
+  point_index: number;
+}
 
 export interface CommandResult {
   ok: boolean;

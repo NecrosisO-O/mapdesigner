@@ -51,6 +51,7 @@ function normalizeRiverPoint(point: RiverPoint): RiverPoint {
   return {
     row: point.row,
     col: point.col,
+    ...(point.junction_id ? { junction_id: point.junction_id } : {}),
     ...(typeof point.width === "number" ? { width: point.width } : {})
   };
 }
@@ -61,6 +62,9 @@ export function normalizeStoredRiver(river: RiverFeature): RiverFeature {
     name: river.name,
     points: river.points.map(normalizeRiverPoint),
     width_mode: river.width_mode ?? "legacy",
+    flow_direction: river.flow_direction ?? "unspecified",
+    start_kind: river.start_kind ?? "auto",
+    end_kind: river.end_kind ?? "auto",
     ...(river.color ? { color: river.color } : {}),
     ...(typeof river.opacity === "number" ? { opacity: river.opacity } : {})
   };
@@ -97,7 +101,8 @@ export function normalizeMeta(meta: MapMeta): MapMeta {
     tags: [...new Set(meta.tags ?? [])].sort(),
     created_at: meta.created_at,
     updated_at: meta.updated_at,
-    revision: meta.revision
+    revision: meta.revision,
+    map_style: meta.map_style ?? "classic-v1"
   };
 }
 
@@ -117,7 +122,8 @@ export function createEmptyDocument(input: {
       tags: [],
       created_at: now,
       updated_at: now,
-      revision: 1
+      revision: 1,
+      map_style: "atlas-v1"
     },
     grid: {
       layout: "flat-top-even-q",

@@ -47,6 +47,7 @@ interface MapRow {
   bounds_max_col: number | null;
   designed_cell_count: number;
   history_cursor: number;
+  map_style: MapMeta["map_style"] | null;
 }
 
 interface CellRow {
@@ -208,7 +209,8 @@ function mapRowToMeta(row: MapRow): MapMeta {
     tags: safeJsonArray(row.tags_json),
     created_at: row.created_at,
     updated_at: row.updated_at,
-    revision: row.revision
+    revision: row.revision,
+    map_style: row.map_style ?? "classic-v1"
   };
 }
 
@@ -578,6 +580,11 @@ function updateMapRevision(db: Database.Database, id: string, revisionIncrement:
   return getMapRowOrThrow(db, id);
 }
 
+/** Revision/history are owned by the enclosing command transaction. */
+export function setMapStyleSync(id: string, style: NonNullable<MapMeta["map_style"]>): void {
+  getDatabase().prepare("UPDATE maps SET map_style = ? WHERE id = ?").run(style, id);
+}
+
 export function advanceMapRevisionSync(id: string, increment: number): void {
   updateMapRevision(getDatabase(), id, increment);
 }
@@ -588,10 +595,10 @@ function writeDocument(db: Database.Database, document: MapDocument): void {
   const write = db.transaction(() => {
     db.prepare(
       `INSERT INTO maps (
-        id, name, description, tags_json, layout, schema_version, created_at, updated_at, revision,
+        id, name, description, tags_json, layout, schema_version, created_at, updated_at, revision, map_style,
         bounds_min_row, bounds_max_row, bounds_min_col, bounds_max_col, designed_cell_count
       ) VALUES (
-        @id, @name, @description, @tags_json, @layout, @schema_version, @created_at, @updated_at, @revision,
+        @id, @name, @description, @tags_json, @layout, @schema_version, @created_at, @updated_at, @revision, @map_style,
         @bounds_min_row, @bounds_max_row, @bounds_min_col, @bounds_max_col, @designed_cell_count
       )
       ON CONFLICT(id) DO UPDATE SET
@@ -602,6 +609,7 @@ function writeDocument(db: Database.Database, document: MapDocument): void {
         schema_version = excluded.schema_version,
         updated_at = excluded.updated_at,
         revision = excluded.revision,
+        map_style = excluded.map_style,
         bounds_min_row = excluded.bounds_min_row,
         bounds_max_row = excluded.bounds_max_row,
         bounds_min_col = excluded.bounds_min_col,
@@ -617,6 +625,7 @@ function writeDocument(db: Database.Database, document: MapDocument): void {
       created_at: normalized.meta.created_at,
       updated_at: normalized.meta.updated_at,
       revision: normalized.meta.revision,
+      map_style: normalized.meta.map_style,
       bounds_min_row: bounds.min_row,
       bounds_max_row: bounds.max_row,
       bounds_min_col: bounds.min_col,
@@ -667,10 +676,10 @@ function writeDocument(db: Database.Database, document: MapDocument): void {
 function upsertMapRow(db: Database.Database, document: MapDocument, bounds: MapBounds): void {
   db.prepare(
     `INSERT INTO maps (
-      id, name, description, tags_json, layout, schema_version, created_at, updated_at, revision,
+      id, name, description, tags_json, layout, schema_version, created_at, updated_at, revision, map_style,
       bounds_min_row, bounds_max_row, bounds_min_col, bounds_max_col, designed_cell_count
     ) VALUES (
-      @id, @name, @description, @tags_json, @layout, @schema_version, @created_at, @updated_at, @revision,
+      @id, @name, @description, @tags_json, @layout, @schema_version, @created_at, @updated_at, @revision, @map_style,
       @bounds_min_row, @bounds_max_row, @bounds_min_col, @bounds_max_col, @designed_cell_count
     )
     ON CONFLICT(id) DO UPDATE SET
@@ -681,6 +690,7 @@ function upsertMapRow(db: Database.Database, document: MapDocument, bounds: MapB
       schema_version = excluded.schema_version,
       updated_at = excluded.updated_at,
       revision = excluded.revision,
+        map_style = excluded.map_style,
       bounds_min_row = excluded.bounds_min_row,
       bounds_max_row = excluded.bounds_max_row,
       bounds_min_col = excluded.bounds_min_col,
@@ -696,6 +706,7 @@ function upsertMapRow(db: Database.Database, document: MapDocument, bounds: MapB
     created_at: document.meta.created_at,
     updated_at: document.meta.updated_at,
     revision: document.meta.revision,
+    map_style: document.meta.map_style ?? "classic-v1",
     bounds_min_row: bounds.min_row,
     bounds_max_row: bounds.max_row,
     bounds_min_col: bounds.min_col,
@@ -933,20 +944,22 @@ export async function writeMapDocumentJsonExport(id: string, filePath: string): 
     tags: normalizeStringArray(mapRowToMeta(row).tags)
   };
   const grid = mapRowToGrid(row);
-  const cellRows = db
-    .prepare(
-      "SELECT map_id, row, col, terrain, biome, tags_json, note FROM cells WHERE map_id = ? ORDER BY row, col"
-    )
-    .iterate(row.id) as Iterable<CellRow>;
-  const riverRows = db
-    .prepare(
-      `SELECT map_id, kind, feature_id, json,
+  const cellRows = () =>
+    db
+      .prepare(
+        "SELECT map_id, row, col, terrain, biome, tags_json, note FROM cells WHERE map_id = ? ORDER BY row, col"
+      )
+      .iterate(row.id) as Iterable<CellRow>;
+  const riverRows = () =>
+    db
+      .prepare(
+        `SELECT map_id, kind, feature_id, json,
               bounds_min_row, bounds_max_row, bounds_min_col, bounds_max_col
        FROM features
        WHERE map_id = ? AND kind = 'river'
        ORDER BY feature_id`
-    )
-    .iterate(row.id) as Iterable<FeatureRow>;
+      )
+      .iterate(row.id) as Iterable<FeatureRow>;
 
   await writeFileAtomicStream(filePath, async (write) => {
     await write("{\n");
@@ -955,7 +968,7 @@ export async function writeMapDocumentJsonExport(id: string, filePath: string): 
     await write(`  "grid": ${JSON.stringify(grid, null, 2).replace(/\n/g, "\n  ")},\n`);
     await write('  "cells": [');
     let hasCell = false;
-    for (const cellRow of cellRows) {
+    for (const cellRow of cellRows()) {
       await write(`${hasCell ? "," : ""}\n${indentJson(normalizeCellForExport(cellRow), 4)}`);
       hasCell = true;
     }
@@ -963,7 +976,7 @@ export async function writeMapDocumentJsonExport(id: string, filePath: string): 
     await write('  "features": {\n');
     await write('    "rivers": [');
     let hasRiver = false;
-    for (const featureRow of riverRows) {
+    for (const featureRow of riverRows()) {
       const river = normalizeRiverForExport(JSON.parse(featureRow.json) as RiverFeature);
       await write(`${hasRiver ? "," : ""}\n${indentJson(river, 6)}`);
       hasRiver = true;

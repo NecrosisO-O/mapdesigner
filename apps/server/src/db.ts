@@ -88,6 +88,7 @@ export function getDatabase(): Database.Database {
       );
     `);
     addColumnIfMissing(connection, "maps", "history_cursor", "INTEGER NOT NULL DEFAULT 0");
+    addColumnIfMissing(connection, "maps", "map_style", "TEXT");
     addColumnIfMissing(connection, "features", "bounds_min_row", "INTEGER");
     addColumnIfMissing(connection, "features", "bounds_max_row", "INTEGER");
     addColumnIfMissing(connection, "features", "bounds_min_col", "INTEGER");

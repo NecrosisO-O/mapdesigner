@@ -433,6 +433,7 @@ export async function importMap(input: {
 }
 
 export async function exportJson(id: string): Promise<{ fileName: string; path: string }> {
+  await ensureDirectories();
   const normalizedId = assertSafeMapId(id);
   const summary = await getMapSummary(normalizedId);
   const fileName = `${slugify(summary.meta.name) || normalizedId}-${randomUUID()}.json`;
@@ -445,6 +446,7 @@ export async function exportPng(
   id: string,
   options: Partial<ExportRenderOptions> = {}
 ): Promise<{ fileName: string; path: string }> {
+  await ensureDirectories();
   const baseOptions: ExportRenderOptions = {
     preset: "clean",
     includeCoordinates: false,

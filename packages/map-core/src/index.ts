@@ -6,6 +6,7 @@ export * from "./dictionaries.js";
 export * from "./history.js";
 export * from "./neighbors.js";
 export * from "./rivers.js";
+export * from "./river-network.js";
 export * from "./serialization.js";
 export * from "./types.js";
 export * from "./validation.js";
