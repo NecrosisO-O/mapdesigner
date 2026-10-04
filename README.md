@@ -1,6 +1,6 @@
 # MapDesigner
 
-[![Version](https://img.shields.io/badge/version-0.3.0--rc.1-2563eb)](./package.json)
+[![Version](https://img.shields.io/badge/version-0.3.0--rc.2-2563eb)](./package.json)
 [![Node.js](https://img.shields.io/badge/node-24-339933)](https://nodejs.org/)
 [![pnpm](https://img.shields.io/badge/pnpm-10-f69220)](https://pnpm.io/)
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-dc2626.svg)](./LICENSE)
@@ -20,6 +20,8 @@ It combines a visual WebUI with a structured CLI, so the same map can evolve alo
 - Search visual materials, sample terrain, paint strokes, and edit river nodes and widths directly
 - Read shared terrain symbols, ecology textures, whole-map legends, and continuous water surfaces
 - Preview and export PNG maps with titles, legends, transparent backgrounds, and grid-distance references
+- Stream large JSON files into SQLite and export tiled PNG packages with a position manifest and browsable index
+- Merge maps with placement previews, overlap rules, river copying, and persistent undo/redo
 - Inspect and modify maps through a structured CLI for scripts and AI agents
 - Use summary and range-based queries for larger maps instead of loading every cell
 - Use the same map rules across WebUI, CLI, and exports
@@ -45,14 +47,14 @@ Then open `http://localhost:3010`.
 ### Run with Docker
 
 ```bash
-docker build -t mapdesigner:0.3.0-rc.1 .
-docker run --rm -p 127.0.0.1:3010:3010 -e MAPDESIGNER_TOKEN=replace-with-a-long-random-token -v mapdesigner-data:/data mapdesigner:0.3.0-rc.1
+docker build -t mapdesigner:0.3.0-rc.2 .
+docker run --rm -p 127.0.0.1:3010:3010 -e MAPDESIGNER_TOKEN=replace-with-a-long-random-token -v mapdesigner-data:/data mapdesigner:0.3.0-rc.2
 ```
 
 Then open `http://localhost:3010`.
 
 For detailed setup steps, see the [Deployment Guide](./docs/deployment.md) and [Docker Guide](./docs/docker.md).
-For an existing installation, follow the [upgrade steps](./docs/deployment.md#升级到-v030-rc1) before starting this version with your data.
+For an existing installation, follow the [upgrade steps](./docs/deployment.md#升级到-v030-rc2) before starting this version with your data.
 
 ## AI Agent / CLI
 
@@ -77,11 +79,9 @@ More examples and command conventions are documented in [Agent CLI Guide](./docs
 
 ## Current Release
 
-`v0.3.0-rc.1` brings a redesigned map workspace, visual material painting, direct river editing, shared cartographic output, SQLite storage with persistent history, and background import/export tasks. See the [changelog](./CHANGELOG.md) for the changes since `v0.2.0` and the [acceptance record](./docs/research/2026-10-03/visual-redesign/README.md) for verification evidence.
+`v0.3.0-rc.2` adds streamed large-file import, faster overviews, tiled image packages, and map merging with persistent undo/redo. It includes the redesigned workspace, visual materials, direct river editing, and shared cartographic output from RC1. See the [changelog](./CHANGELOG.md), [user manual](./docs/user-manual.md), and [capacity/workflow record](./docs/research/large-map-capacity/README.md).
 
 ## Development Note
-
-The current source also includes unreleased streamed large-file import, tiled image packages, and map merging with persistent undo/redo. See the [user manual](./docs/user-manual.md) and [capacity/workflow record](./docs/research/large-map-capacity/README.md). These additions are not included in the published RC1 package.
 
 Use the Node.js version in `.nvmrc` and the pnpm version in `package.json`.
 After `pnpm install --frozen-lockfile`, run `pnpm check` to build, typecheck, and test,
