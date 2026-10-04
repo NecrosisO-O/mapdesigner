@@ -2,7 +2,9 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.3.0-rc.2] - 2026-10-04
+
+Second release candidate for 0.3.0. This entry covers changes since 0.3.0-rc.1; all RC1 features are included.
 
 ### Added
 
@@ -26,6 +28,18 @@ All notable changes to this project will be documented in this file.
 ### Project scope
 
 - Historical PR #3 was reviewed and closed with attribution. Its applicable requests are handled in #7, #8, and #9 on the current architecture. Square grids are outside the supported model; forks may add them. Original large-map feedback files are still requested in #2.
+
+### Upgrade
+
+- Stop the server and CLI processes, back up the data directory or Docker volume, and keep the existing data root when starting RC2. Existing SQLite maps and history are retained; the additional aggregate and merge-history tables are initialized automatically.
+- Use Node.js 24.16.0 and pnpm 10.23.0, then run `pnpm install --frozen-lockfile` and `pnpm build`. Docker users rebuild the RC2 image and reuse their data volume and access token.
+- Import large legacy JSON files through the WebUI file importer or CLI `maps import --file ./map.json --summary`. The legacy directory scan retains its existing file-size budget. See the [upgrade guide](./docs/deployment.md#升级到-v030-rc2) and [Docker instructions](./docs/docker.md#升级已有数据卷).
+
+### Validation
+
+- 235 regression tests cover core, rendering, storage, background jobs, CLI, and editor workflows; builds, types, formatting, and production container checks pass.
+- Synthetic capacity measurements cover 110,000 through 23 million cells; a million-cell workflow covers merging, persistent undo/redo, JSON round trips, and regional tiled output.
+- Browser acceptance covers desktop/narrow-screen merging, dark-theme tiled exports and real ZIP downloads, plus million-cell import, zoom, local editing, and undo. Measurements, scope, and screenshots are in the [capacity record](./docs/research/large-map-capacity/README.md).
 
 ## [0.3.0-rc.1] - 2026-10-03
 
