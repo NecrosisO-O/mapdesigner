@@ -13,6 +13,8 @@ MapDesigner 是一个本地优先的六角格地图设计工具，适合异世�
 - 使用可搜索的材料样本、取样、笔刷及直接河流节点/宽度编辑
 - 以共享地貌符号、生态纹理、全图图例和连续水面表达地图
 - 真实预览并导出带标题、图例、透明背景和格距说明的 PNG
+- 流式导入大 JSON 文件，按区域或整图导出附位置清单与索引页的分块图片包
+- 预览位置与重叠后合并地图，复制河流，并持久化保存整次合并的撤销/重做历史
 - 通过 CLI 进行查询、批量修改与导出
 - 针对大地图使用摘要与范围查询，避免默认读取所有单元格
 - 让 WebUI、CLI 与导出结果共享同一套地图规则
@@ -36,13 +38,13 @@ pnpm start
 ### Docker 运行
 
 ```bash
-docker build -t mapdesigner:0.3.0-rc.1 .
-docker run --rm -p 127.0.0.1:3010:3010 -e MAPDESIGNER_TOKEN=replace-with-a-long-random-token -v mapdesigner-data:/data mapdesigner:0.3.0-rc.1
+docker build -t mapdesigner:0.3.0-rc.2 .
+docker run --rm -p 127.0.0.1:3010:3010 -e MAPDESIGNER_TOKEN=replace-with-a-long-random-token -v mapdesigner-data:/data mapdesigner:0.3.0-rc.2
 ```
 
 然后访问 `http://localhost:3010`。
 
-已有安装请先阅读[升级步骤](./docs/deployment.md#升级到-v030-rc1)，再使用原有数据启动新版本。
+已有安装请先阅读[升级步骤](./docs/deployment.md#升级到-v030-rc2)，再使用原有数据启动新版本。
 
 ## 文档导航
 
@@ -56,11 +58,9 @@ docker run --rm -p 127.0.0.1:3010:3010 -e MAPDESIGNER_TOKEN=replace-with-a-long-
 
 ## 当前版本
 
-`v0.3.0-rc.1` 完成了工作区重设计、可视化材料绘制、河流节点与宽度直接编辑，以及画布和导出共享的制图表现。地图与操作历史由 SQLite 保存，导入和导出支持后台任务，并保留旧地图与历史规则的兼容处理。自 `v0.2.0` 以来的完整变化见[版本记录](./CHANGELOG.md)，验证依据见[验收记录](./docs/research/2026-10-03/visual-redesign/README.md)。
+`v0.3.0-rc.2` 新增流式大文件导入、更快的远景查询、分块图片包和可完整撤销/重做的地图合并，并包含 RC1 的工作区重设计、可视化材料绘制、直接河流编辑和共享制图表现。使用方法见[用户手册](./docs/user-manual.md)，完整变化见[版本记录](./CHANGELOG.md)，测量和验收依据见[容量与流程记录](./docs/research/large-map-capacity/README.md)。
 
 ## 开发说明
-
-当前源码还包含未发布的流式大文件导入、分块图片包和可完整撤销/重做的地图合并。使用方法见[用户手册](./docs/user-manual.md)，测量和验收依据见[容量与流程记录](./docs/research/large-map-capacity/README.md)。已发布 RC1 包不包含这些新增能力。
 
 Node.js 版本见 `.nvmrc`，pnpm 版本见 `package.json`。
 执行 `pnpm install --frozen-lockfile` 后，可以用 `pnpm check` 完成构建、类型检查与测试，
