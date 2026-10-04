@@ -1,217 +1,86 @@
-# 开发说明与接手基线
+# 开发指南
 
-2026-10-03 更新：下方环境和告警数量保留接手时的历史基线；本轮重构的当前状态以[实施记录](./IMPLEMENTATION_PLAN.md)、[发布验证](./research/2026-10-03/release-validation.md)和[浏览器验收](./research/2026-10-03/browser-acceptance.md)为准。依赖审计已清零，生产容器已通过远端构建和运行验证。
+本指南说明现行开发流程。目录和职责见[架构说明](./architecture.md)，环境调查与旧测试结果保存在[接手档案](./archive/takeover-notes.md)。
 
-记录日期：2026-10-02。基线提交：`be10266`（2026-06-16，`Improve river rendering`）。
-包版本为 `0.2.0`；主分支还包含该版本发布后的 SQLite、范围查询和河流相关改动。
+## 环境准备
 
-后续[代码与架构审查](./research/2026-10-02/README.md)已复现数据一致性与输入输出问题，
-并将事务、操作历史和编辑会话列为重构的首要工作。
+使用根目录 [.nvmrc](../.nvmrc) 指定的 Node.js，以及 [package.json](../package.json) 中 `packageManager` 指定的 pnpm。原生依赖包括 `better-sqlite3`、`sharp` 和 `esbuild`；安装行为由锁文件与 [工作区配置](../pnpm-workspace.yaml) 管理。
 
-## 本机环境
+在仓库根目录执行：
 
-| 项目 | 已确认状态 |
-| --- | --- |
-| 工作目录 | `/Users/manatsu/Workspace/MapDesigner` |
-| GitHub CLI | `/opt/homebrew/bin/gh`，`2.94.0` |
-| GitHub 账号 | `NecrosisO-O`，登录有效，对仓库有 ADMIN 权限 |
-| 远程仓库 | `https://github.com/NecrosisO-O/mapdesigner.git` |
-| 默认分支 | `main` |
-| 本地准备分支 | `codex/development-setup` |
-| Node.js | `24.16.0`，已写入根目录 `.nvmrc` |
-| pnpm | 项目固定使用 `10.23.0`；本机全局启动器为 `11.8.0`，会按 `packageManager` 切换 |
-| 原生依赖 | `better-sqlite3`、`sharp`、`esbuild` 安装成功 |
-| Docker | 已有 CLI；daemon 未运行，容器构建尚未验证 |
-
-Codex 的命令沙箱限制网络和系统凭据访问。本次 `gh auth status` 在沙箱内出现登录失败，
-获准联网重试后确认登录正常。pnpm 启动器的版本签名校验也需要网络；
-网络受限时应先确认连接和授权，保留包管理器的校验。
-
-## 开始开发
-
-```bash
-# 使用 nvm 时，在仓库根目录读取 .nvmrc
+```sh
+# 使用 nvm 时
 nvm install
 nvm use
 
 pnpm install --frozen-lockfile
 pnpm check
-pnpm dev
 ```
 
-`pnpm dev` 先按依赖顺序构建两个共享包，再同时启动后端和前端：
+## 启动与构建
 
-- WebUI：`http://localhost:5173`
-- API：`http://localhost:3010/api`
-- 健康检查：`http://localhost:3010/api/health`
+| 命令 | 用途 |
+| --- | --- |
+| `pnpm dev` | 构建共享包，再并行启动 API 与 WebUI |
+| `pnpm dev:server` | 单独启动后端源码监听 |
+| `pnpm dev:web` | 单独启动 Vite |
+| `pnpm build` | 按包依赖顺序构建共享包、后端与 WebUI |
+| `pnpm start` | 运行已构建的后端，同时提供 API 与 WebUI |
 
-前端将 `/api` 请求代理到 `3010`。后端端口可通过 `PORT` 修改；更换端口时，
-还需同步修改 `apps/web/vite.config.ts` 中的代理目标。
+开发 WebUI 位于 `http://127.0.0.1:5173`，API 位于 `http://127.0.0.1:3010/api`，健康检查为 `/api/health`。Vite 在 [配置文件](../apps/web/vite.config.ts) 中将 `/api` 代理到后端；修改后端 `PORT` 时同步调整代理目标。
 
-也可以分别运行 `pnpm dev:server` 和 `pnpm dev:web`。单独启动前先执行 `pnpm build`。
-前端使用共享包源码别名，后端使用共享包构建产物；修改 `map-core` 或 `map-render` 后，
-重新运行 `pnpm dev`，保证后端加载更新后的共享模块。
+单独启动前先执行 `pnpm build`。WebUI 通过 Vite 别名读取共享包源码，后端通过包入口读取构建产物。修改 `map-core` 或 `map-render` 后重新运行 `pnpm dev`，使后端加载更新后的共享模块。
 
-发布态使用 `pnpm build` 后执行 `pnpm start`，由后端在 `3010` 同时提供 API 与 WebUI。
+发布态先运行 `pnpm build`，再执行 `pnpm start`，访问 `http://127.0.0.1:3010`。网络监听、访问令牌和 Docker 配置见[部署说明](./deployment.md#网络访问)。
 
-## 验证入口
+## 数据隔离
 
-`pnpm check` 依次执行构建、类型检查和现有测试。构建放在最前面，
-因为服务端、CLI 和部分测试通过包入口加载共享包的 `dist` 产物。
+默认使用仓库下的 `storage/`。开发时可以指定独立的 `MAPDESIGNER_ROOT`，程序在该目录下创建 `storage/`；该变量指向数据根目录，而非数据库文件或 `storage/` 本身。
 
-按改动范围可单独运行：
+例如，在类 Unix 环境中为一次本地验收建立临时根目录：
 
-```bash
-pnpm build
-pnpm typecheck
-pnpm test
+```sh
+MAPDESIGNER_ROOT="$(mktemp -d)" pnpm dev
+```
+
+停止开发服务后数据仍保存在该临时目录中，可按需要归档或清理。CLI 直接读写本地数据库，手动调用 CLI 时也要设置相同的 `MAPDESIGNER_ROOT`。自动测试和数据基准脚本使用独立临时数据库。
+
+仓库忽略数据库、上传暂存、备份和导出内容，仅跟踪 `storage/maps/.gitkeep` 与 `storage/exports/.gitkeep`。自定义数据目录应放在仓库之外。保留实际数据前先阅读[备份与恢复](./deployment.md#备份与恢复)。
+
+## 验证改动
+
+`pnpm check` 依次执行构建、类型检查和测试。构建先于测试，因为服务、CLI 和部分测试通过包入口使用共享包产物。
+
+```sh
+pnpm check
+pnpm format:check
+```
+
+小范围修改可在构建后先验证受影响的包：
+
+```sh
 pnpm --filter @mapdesigner/map-core test
 pnpm --filter @mapdesigner/map-render test
 pnpm --filter @mapdesigner/server test
 pnpm --filter @mapdesigner/web test
 ```
 
-本次基线验证结果：
+测试随源码放在各包的 `src/` 下。数据契约、事务、撤销和渲染几何的修改应验证实际行为及兼容性；布局和制图改动还需核对真实界面和固定样例。文档整理检查本地链接、资源路径与引用，依赖或共享契约变化执行完整检查。
 
-| 检查 | 结果 |
-| --- | --- |
-| 按锁文件安装 | 通过，`pnpm-lock.yaml` 无改动 |
-| 四个工作区包构建 | 通过 |
-| TypeScript 类型检查 | 通过 |
-| 地图规则测试 | 20 项通过 |
-| 渲染测试 | 7 项通过 |
-| 后端、API、CLI、配置测试 | 59 项通过 |
-| 前端测试 | 42 项通过 |
-| 测试合计 | 9 个测试文件，128 项通过 |
-| 一键开发启动 | 前端与后端启动成功 |
-| 浏览器 | WebUI 加载成功，显示“准备就绪” |
-| HTTP 健康检查 | `ok: true`、`status: ok`、端口 `3010` |
-| 依赖审计 | 53 条告警，详见下文 |
+`pnpm format:check` 当前覆盖应用的 TS/TSX/CSS 和共享包的 TS；维护脚本和 Markdown 不在其范围内。脚本可用 `node --check scripts/文件名.mjs` 检查语法，再运行与修改对应的验证。
 
-现有测试包含 SQLite 持久化、修订冲突、范围查询、撤销/重做、河流命令、
-JSON 导入导出与 PNG 导出。百万格地图的耗时、内存和长时间编辑表现尚未压测。
+[CI](../.github/workflows/ci.yml) 在推送、PR 和手动触发时执行完整检查、源码格式检查，以及生产镜像构建、令牌访问、中文字体、后台预览和 PNG 下载验证。发布时还需按[发布检查](./deployment.md#发布检查)核对最终提交与标签。
 
-新增的 `.github/workflows/ci.yml` 在 push、pull request 或手动触发时，
-使用 `.nvmrc` 和 `packageManager` 安装工具链，并执行 `pnpm check`。
-远端验证以相应提交的 GitHub Actions 运行结果为准；本机基线结果见上表。
+## 视觉与性能验证
 
-## 代码结构
+启动开发服务后可访问 `/visual-qa.html`，比较浏览器、PNG、灰度与色觉模拟，并测量浏览器交互；`/responsive-qa.html` 在指定 CSS 视口中打开正式编辑器。这些是开发入口，生产构建以 `index.html` 为入口。
 
-2026-10-03 实施进度见[重构实施记录](./IMPLEMENTATION_PLAN.md)。命令执行已收口至
-`apps/server/src/command-executor.ts`，完整与摘要返回共享同步事务和核心规则。
-当前完整检查通过 143 项测试。
+固定样例位于 [editor-v3](./design/editor-v3/README.md)。图集重生成会更新仓库内样例和图片，操作前阅读[脚本说明](../scripts/README.md)。性能脚本分别测量场景构建、真实数据库访问与大图完整流程；报告保留样本、机器、版本和测量口径。浏览器帧耗时与服务端时间分别记录。
 
-### 服务访问配置
+历次结果和需要人工补充的验收见[研究与验收索引](./research/README.md)。
 
-开发服务默认绑定 `127.0.0.1`。需要局域网或容器访问时显式配置 `HOST=0.0.0.0`，
-同时设置 `MAPDESIGNER_TOKEN`。API 请求携带 `Authorization: Bearer <token>`；
-健康检查和页面静态文件可公开读取。令牌应通过运行环境提供，不应写入仓库或导出地图。
+## 维护入口
 
-默认允许本机服务和 Vite 5173 端口的浏览器来源。其他跨域部署用逗号分隔的
-`MAPDESIGNER_ALLOWED_ORIGINS` 配置确切来源。网络部署还应通过反向代理提供 HTTPS。
-远程页面的令牌输入会随前端会话与界面阶段接入。
-
-| 位置 | 当前职责 |
-| --- | --- |
-| `packages/map-core` | 六角格坐标、地形/生态字典、命令、校验、序列化、运行时历史 |
-| `packages/map-render` | SVG 布局、样式、场景与河流渲染；前端和 PNG 导出共用 |
-| `apps/server/src/api.ts` | Fastify 路由、请求解析、静态页面与导出下载 |
-| `apps/server/src/service.ts` | 地图操作、范围查询、命令执行、导出和撤销/重做服务 |
-| `apps/server/src/repository.ts` | SQLite 查询、增量写入、旧 JSON 迁移、持久操作历史 |
-| `apps/server/src/cli.ts` | 面向用户脚本与 AI agent 的结构化 JSON 接口 |
-| `apps/web/src/useMapWorkspace.ts` | 地图会话、范围加载、缓存、保存与持久编辑历史 |
-| `apps/web/src/MapCanvas.tsx` | SVG 画布、缩放平移、视口裁剪、单元格与河流交互 |
-
-基线中的 `service.ts` 约 1,961 行，`repository.ts` 约 1,406 行，
-`MapCanvas.tsx` 约 840 行，`useMapWorkspace.ts` 约 740 行。
-它们是后续职责拆分和性能分析的主要入口。
-
-## 数据与文档状态
-
-当前实际数据位置：
-
-- `storage/mapdesigner.db`：SQLite 地图、单元格、河流和持久操作历史。
-- `storage/mapdesigner.db-wal`、`storage/mapdesigner.db-shm`：数据库运行时的辅助文件。
-- `storage/maps`：旧 JSON 地图的兼容与迁移入口。
-- `storage/exports`：导出的 JSON 和 PNG。
-
-`MAPDESIGNER_ROOT` 会覆盖数据根目录。测试通过临时目录隔离数据。
-手动迁移或备份时，先停止服务，再复制整个 `storage` 目录。
-
-`docs/deployment.md`、`docs/docker.md` 和用户手册的部分段落仍按旧 JSON 存储描述，
-`PRODUCT_OVERVIEW_0.1.0.md` 是历史版本说明。部署文档和 Dockerfile 已与 Node.js 24 基线对齐，生产镜像由 CI 验证。
-
-`docs/NEXT_WORK_PLAN.md` 已标记为历史计划。当前服务端已有 SQLite 操作日志、
-持久撤销/重做和范围读取；核心包中也保留了运行时快照历史。
-后续历史系统设计需要先梳理两条路径的实际使用范围。
-
-## 依赖审计
-
-2026-10-02 对原锁文件执行 `pnpm audit --json`，报告：
-
-| 等级 | 报告数量 |
-| --- | ---: |
-| Critical | 1 |
-| High | 33 |
-| Moderate | 17 |
-| Low | 2 |
-
-这些是包管理器报告的告警数量，具体可达性和触发条件需要逐项核实。
-主要涉及 Fastify、`@fastify/static`、Sharp 及其间接依赖，
-以及 Vite、Vitest、PostCSS 等开发依赖。
-
-Critical 项为 Vitest UI 服务相关告警（`GHSA-5xrq-8626-4rwp`）；
-当前测试脚本执行 `vitest run`。后续升级仍需覆盖所有工作区中的 Vitest 版本。
-
-优先按运行依赖与开发工具分别验证升级，每批更新后执行 `pnpm check`，
-并复查 PNG 导出、数据库读写与旧地图导入。
-
-## 已有反馈与后续工作
-
-- [Issue #2](https://github.com/NecrosisO-O/mapdesigner/issues/2)：反馈地图删除、
-  PNG 导出不稳定、JSON 请求大小限制和大地图卡顿；用户提到 11 万、500 万、2,300 万格地图。
-- [PR #3：v0.1.1](https://github.com/NecrosisO-O/mapdesigner/pull/3)：仍开放，
-  2026-10-02 查询为 `CONFLICTING`，涉及 22 个文件；包含深色模式、透明导出、
-  导出进度、标签筛选、地图合并和方格模式等改动。
-  其中部分能力已经出现在当前主分支，需要按功能核对现状与差异。
-
-本次重启已获准进行大幅重构。建议按以下顺序推进：
-
-1. 优先修复审查中复现的事务隔离、并发写入、撤销与元数据草稿问题。
-2. 统一命令规则、输入校验和前端会话模型；同步处理依赖告警与服务访问边界。
-3. 修复大地图导入和区域导出，再根据范围查询、河流几何和浏览器测量推进性能改造。
-4. 逐项评估 PR #3 的修复与功能，配合数据契约完善迁移、运行时与部署说明。
-
-每阶段以已有行为验证、数据兼容和明确的性能指标作为验收依据。
-
-以上为接手阶段记录。后续已经关闭 PR #3 并保留原贡献引用；#7、#8、#9 分别跟踪大地图导入/浏览、分块导出、地图合并。方格网不纳入官方支持，需求方可 Fork 二次开发。当前实施结果见[大地图工作记录](./LARGE_MAP_WORK_PLAN.md)，#2 保留用于真实样本与材料需求讨论。
-
-### 后台导入与导出
-
-正式界面直接上传 JSON 文件，经过临时文件与独立工作线程处理，避免把文件再次包进 JSON 请求。
-POST /api/jobs/import 接收 application/octet-stream，可附 generateNewId=true。
-POST /api/jobs/export 接收 {kind: "png" | "json" | "preview" | "tiles" | "tiles-preview", mapId, options?, tileSize?}。分块尺寸为 1024、2048、4096 像素。
-POST /api/jobs/merge 接收 {mapId, input: {sourceId, offsetRow, offsetCol, conflict, expectedSourceRevision?, expectedTargetRevision?}, preview?}。conflict 为 keep-target 或 replace-target；先设置 preview=true 取得统计和来源/目标修订，再将返回的 input 用于实际提交。
-POST /api/jobs/history 接收 {mapId, direction: "undo" | "redo", expectedRevision}，用于在后台执行合并撤销或重做。
-返回任务 ID，使用 GET /api/jobs/:id 查询，DELETE /api/jobs/:id 取消。
-最多三项运行/等待任务，单工作线程 JavaScript 堆上限 512 MiB。导入、合并/历史、JSON 导出限时 15 分钟；分块导出一小时；其余任务两分钟。已结束任务的状态最多保留 15 分钟，总数最多 20 项。
-服务重启后任务状态失效。导入事务在最终提交前检查取消，失败或取消不会留下半张地图。
-提交已经开始时，取消请求会提示等待完成。
-
-文件逐条解析到暂存 SQLite，完成校验后在事务中发布。流式路径限制为 2 GiB、2500 万单元格、2 万条河流和总计 50 万格河流路径；单记录 8 MiB，嵌套深度 32。直接字符串导入保留 64 MiB / 50 万格预算。
-普通 PNG 总面积限制 4000 万像素、单边 32768 像素。分块导出最多 2048 张、总计 320 亿像素、2 GiB ZIP；每块内部以最多 1024 像素的画面渲染后拼接。导出工作线程通过只读事务固定地图修订。
-每次导出产生独立文件，下载链接携带五分钟有效的单文件凭证；不要公开分享下载链接。
-旧同步 API 和 CLI 保留。开发模式的工作线程使用 apps/server/worker.mjs 引导，生产模式直接运行编译产物。
-
-数据库以 32 格基础聚合保存远景地形及材料计数，编辑和历史变更通过事务内触发器同步更新。合并历史使用 operation_cells 和 operation_features 逐条保存变更，避免单个巨大历史 JSON。
-
-构建后运行 `node scripts/benchmark-large-maps.mjs 1000000 /private/tmp/capacity.json` 测量单图容量；追加 `--flows` 验证合并、撤销、重做、JSON 往返和区域分块输出。所有样本使用隔离临时数据库，结束后清理。结果及浏览器证据见[容量记录](./research/large-map-capacity/README.md)。
-
-
-### 视觉重构验证入口
-
-当前视觉规范和完整记录见 [editor-v3](./design/editor-v3/README.md) 与 [视觉验收](./research/2026-10-03/visual-redesign/README.md)，上方接手阶段的数量保留为历史基线。
-
-构建后运行 node scripts/build-visual-gallery.mjs 生成校验过的固定样例及 SVG/PNG。开发服务的 /visual-qa.html 比较浏览器、PNG、灰度和红绿色觉模拟，也包含浏览器性能测量；/responsive-qa.html 在指定 CSS 视口中打开正式编辑器。这两个入口仅用于开发验收，不进入生产构建。
-
-node scripts/benchmark-visual.mjs 测量场景构建；node scripts/benchmark-visual-data.mjs 在临时 SQLite 数据库中测量真实万格、十万格、五十万格的区域、概览、图例、预览和导出。两个脚本的第一个参数可指定报告路径。数据读取、浏览器帧耗时和真实设备体验分别记录。
+- 后台导入、导出、合并和历史操作见[后台任务 API](./background-jobs.md)。
+- 模块边界和后续拆分方向见[架构说明](./architecture.md)。
+- 设计、河宽兼容和历史计划从[文档索引](./index.md)进入。新的实施记录和测量按日期保存，并更新相应索引。

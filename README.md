@@ -54,6 +54,7 @@ docker run --rm -p 127.0.0.1:3010:3010 -e MAPDESIGNER_TOKEN=replace-with-a-long-
 Then open `http://localhost:3010`.
 
 For detailed setup steps, see the [Deployment Guide](./docs/deployment.md) and [Docker Guide](./docs/docker.md).
+Enter the container's access token in the map menu connection settings.
 For an existing installation, follow the [upgrade steps](./docs/deployment.md#升级到-v030-rc2) before starting this version with your data.
 
 ## AI Agent / CLI
@@ -69,12 +70,16 @@ More examples and command conventions are documented in [Agent CLI Guide](./docs
 
 ## Documentation
 
+- [Documentation Index](./docs/index.md)
 - [User Manual](./docs/user-manual.md)
 - [Deployment Guide](./docs/deployment.md)
 - [Docker Guide](./docs/docker.md)
 - [Agent CLI Guide](./docs/agent-cli.md)
-- [Product Overview](./PRODUCT_OVERVIEW_0.1.0.md)
+- [Development Guide](./docs/development.md)
+- [Architecture and Repository Layout](./docs/architecture.md)
+- [Validation Records and Pending Checks](./docs/research/README.md)
 - [Changelog](./CHANGELOG.md)
+- [Historical Documents](./docs/archive/README.md)
 - [中文说明](./README.zh-CN.md)
 
 ## Current Release
@@ -86,12 +91,10 @@ More examples and command conventions are documented in [Agent CLI Guide](./docs
 Use the Node.js version in `.nvmrc` and the pnpm version in `package.json`.
 After `pnpm install --frozen-lockfile`, run `pnpm check` to build, typecheck, and test,
 or `pnpm dev` to start the API and WebUI together.
-See the [Development Guide](./docs/development.md) for the verified baseline and takeover notes.
+See the [Development Guide](./docs/development.md) for setup and validation, and the [maintenance scripts](./scripts/README.md) for backups and benchmarks.
 
 AI assistance was used during the development of this project.
 
 ## License
 
 This project is licensed under the [GNU General Public License v3.0](./LICENSE).
-
-Implementation history is tracked in [the implementation record](./docs/IMPLEMENTATION_PLAN.md). Container deployments require an access token, entered through the map menu connection settings.
