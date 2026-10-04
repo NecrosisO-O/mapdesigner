@@ -1,10 +1,12 @@
 # MapDesigner Next Work Plan
 
+> Historical archive of the 0.1.0 optimization plan. Completion labels describe that development cycle. See the [current development guide](../../development.md) and [architecture](../../architecture.md) for ongoing maintenance.
+
 > Historical plan from the 0.1.0 development cycle. The current server already uses
 > SQLite, persistent operation history, and range queries. Its progress snapshot
 > and architecture recommendations need reassessment against the current code.
 > The October 2, 2026 takeover permits substantial refactoring; see
-> [the development baseline](./development.md) for current findings and priorities.
+> [the archived takeover baseline](../takeover-notes.md) for the findings from that handover.
 
 ## Purpose
 

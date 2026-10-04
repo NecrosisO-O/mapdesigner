@@ -7,7 +7,7 @@ import { performance } from "node:perf_hooks";
 import { createEmptyDocument } from "../packages/map-core/dist/index.js";
 
 const count = Number(process.argv[2] ?? 110000);
-const output = process.argv[3] ?? "/private/tmp/mapdesigner-capacity-" + count + ".json";
+const output = process.argv[3] ?? path.join(os.tmpdir(), "mapdesigner-capacity-" + count + ".json");
 if (!Number.isSafeInteger(count) || count < 1) throw new Error("cell count must be positive");
 const root = await fs.mkdtemp(path.join(os.tmpdir(), "mapdesigner-capacity-"));
 process.env.MAPDESIGNER_ROOT = root;

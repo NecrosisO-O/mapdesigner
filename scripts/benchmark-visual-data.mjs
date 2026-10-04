@@ -116,7 +116,7 @@ try {
     console.log(JSON.stringify(result));
   }
   await fs.writeFile(
-    process.argv[2] ?? "/private/tmp/mapdesigner-visual-data.json",
+    process.argv[2] ?? path.join(os.tmpdir(), "mapdesigner-visual-data.json"),
     JSON.stringify(report, null, 2) + "\n"
   );
 } finally {
