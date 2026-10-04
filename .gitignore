@@ -5,18 +5,13 @@ coverage
 .vite
 *.log
 chrome-capture-*.png
-apps/server/storage/
-storage/mapdesigner.db
-storage/mapdesigner.db-shm
-storage/mapdesigner.db-wal
-storage/maps/*
-!storage/maps/.gitkeep
-storage/maps/*.tmp
-storage/maps/test*.json
-storage/maps/*-smoke*.json
-storage/exports/*
-!storage/exports/.gitkeep
-storage/exports/*.tmp
-storage/exports/*.json
-storage/exports/*.png
+/apps/server/storage/
+# Runtime databases, uploads, backups and exports stay local.
+/storage/*
+!/storage/maps/
+!/storage/exports/
+/storage/maps/*
+!/storage/maps/.gitkeep
+/storage/exports/*
+!/storage/exports/.gitkeep
 *.tsbuildinfo

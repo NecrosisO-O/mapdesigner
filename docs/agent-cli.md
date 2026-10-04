@@ -32,7 +32,7 @@ pnpm exec tsx apps/server/src/cli.ts maps import --file ./island.json --summary
 
 此路径与浏览器文件导入采用相同预算：2 GiB、2500 万格、2 万条河流，河流路径总长度 50 万格，单条记录 8 MiB。ID 冲突时可增加 `--generate-new-id`。不加 `--summary` 的兼容路径读取完整文件并返回完整地图，仍限制为 64 MiB、50 万格。
 
-地图合并和分块图片包使用 WebUI 或[后台任务 API](./development.md#后台导入与导出)。CLI 的 `maps export-png` 生成单张图片；`maps export-json --map-id demo-map` 流式写出完整 JSON。
+地图合并和分块图片包使用 WebUI 或[后台任务 API](./background-jobs.md)。CLI 的 `maps export-png` 生成单张图片；`maps export-json --map-id demo-map` 流式写出完整 JSON。
 
 ### 1. 查看地图摘要
 

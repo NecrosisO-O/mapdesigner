@@ -45,16 +45,21 @@ docker run --rm -p 127.0.0.1:3010:3010 -e MAPDESIGNER_TOKEN=replace-with-a-long-
 然后访问 `http://localhost:3010`。
 
 已有安装请先阅读[升级步骤](./docs/deployment.md#升级到-v030-rc2)，再使用原有数据启动新版本。
+Docker 启动后，在地图菜单的“连接设置”中输入令牌。
 
 ## 文档导航
 
+- [文档总入口](./docs/index.md)
 - [英文 README](./README.md)
 - [用户说明书](./docs/user-manual.md)
 - [部署说明](./docs/deployment.md)
 - [Docker 部署说明](./docs/docker.md)
 - [Agent CLI 指南](./docs/agent-cli.md)
-- [产品总览](./PRODUCT_OVERVIEW_0.1.0.md)
+- [开发指南](./docs/development.md)
+- [架构与仓库结构](./docs/architecture.md)
+- [验收记录与待补项目](./docs/research/README.md)
 - [版本变更记录](./CHANGELOG.md)
+- [历史档案](./docs/archive/README.md)
 
 ## 当前版本
 
@@ -65,12 +70,10 @@ docker run --rm -p 127.0.0.1:3010:3010 -e MAPDESIGNER_TOKEN=replace-with-a-long-
 Node.js 版本见 `.nvmrc`，pnpm 版本见 `package.json`。
 执行 `pnpm install --frozen-lockfile` 后，可以用 `pnpm check` 完成构建、类型检查与测试，
 用 `pnpm dev` 同时启动后端和 WebUI。
-环境基线、开发流程与接手记录见[开发说明](./docs/development.md)。
+环境准备与验证流程见[开发指南](./docs/development.md)，备份和性能测量入口见[维护脚本说明](./scripts/README.md)。
 
 本项目在开发过程中使用了 AI 辅助。
 
 ## 许可证
 
 本项目采用 [GNU General Public License v3.0](./LICENSE)。
-
-重构实施与验证记录见 [实施计划](./docs/IMPLEMENTATION_PLAN.md) 和 [性能记录](./docs/research/2026-10-03/README.md)。Docker 启动后需在“连接设置”输入令牌。

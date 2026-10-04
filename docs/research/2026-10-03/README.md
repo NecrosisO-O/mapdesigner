@@ -19,4 +19,4 @@
 河流样本缓存最多 128 项和 100,000 个路径样本，缩放仅跨细节阈值时重建场景。
 
 原始输出见 edit-performance.json、river-performance.json、import-performance.json。
-复现命令：构建后运行上一目录的 probe-backend.mjs，参数分别是 single_cell_edit_scaling、river_line_scaling、import_150000_cells。
+复现命令：在对应历史版本构建后运行[接手阶段的 probe-backend.mjs](../2026-10-02/probe-backend.mjs)，参数分别是 single_cell_edit_scaling、river_line_scaling、import_150000_cells。
