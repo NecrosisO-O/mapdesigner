@@ -5,14 +5,14 @@
 
 ## 构建与启动
 
-    docker build -t mapdesigner:0.3.0-rc.1 .
+    docker build -t mapdesigner:0.3.0-rc.2 .
     export MAPDESIGNER_TOKEN='替换为随机长令牌'
     docker volume create mapdesigner-data
     docker run --rm --name mapdesigner \
       -p 127.0.0.1:3010:3010 \
       -e MAPDESIGNER_TOKEN \
       -v mapdesigner-data:/data \
-      mapdesigner:0.3.0-rc.1
+      mapdesigner:0.3.0-rc.2
 
 打开 http://127.0.0.1:3010 ，在“地图 → 连接设置”输入令牌。
 使用命名卷时 Docker 会保留数据目录权限。若改用宿主机目录挂载，提前让 UID 1000 可写。
@@ -20,10 +20,12 @@
 
 ## 升级已有数据卷
 
-先停止旧容器并备份整个 /data 卷，再构建 v0.3.0-rc.1 镜像。新版以 UID/GID 1000 运行，旧版由 root 创建的文件需调整所有者。以下命令使用本地新镜像更新示例命名卷的权限：
+先停止旧容器并备份整个 /data 卷，再从 v0.3.0-rc.2 源码构建镜像。复用 RC1 的数据卷和访问令牌，SQLite 地图、修订与撤销重做历史会继续保留；新增表在启动时初始化。
+
+镜像以 UID/GID 1000 运行。更早版本由 root 创建的文件需调整所有者；已经正常运行 RC1 的卷可直接复用。以下命令使用本地新镜像更新示例命名卷的权限：
 
     docker run --rm --user 0 --entrypoint chown \
-      -v mapdesigner-data:/data mapdesigner:0.3.0-rc.1 -R 1000:1000 /data
+      -v mapdesigner-data:/data mapdesigner:0.3.0-rc.2 -R 1000:1000 /data
 
 将 mapdesigner-data 替换为实际卷名；宿主机目录挂载同样需要让 UID/GID 1000 可写。随后按上面的启动命令复用原卷并配置访问令牌。
 
