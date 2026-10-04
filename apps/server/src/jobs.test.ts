@@ -129,6 +129,31 @@ it("exports through a job and gives separate files to concurrent export requests
     map.document.meta.id
   );
 });
+it("retains long-running job results for fifteen minutes after completion", async () => {
+  const map = await service.createMap({ name: "Long export" });
+  const clock = vi.spyOn(Date, "now").mockReturnValue(1_000_000);
+  try {
+    const start = async () =>
+      (
+        await app.inject({
+          method: "POST",
+          url: "/api/jobs/export",
+          payload: { kind: "json", mapId: map.document.meta.id }
+        })
+      ).json().result;
+    const first = await start();
+    clock.mockReturnValue(1_000_000 + 20 * 60_000);
+    expect((await finish(first.id)).state).toBe("done");
+    // Finishing the next queued job also guarantees the first worker has exited.
+    const second = await start();
+    expect((await finish(second.id)).state).toBe("done");
+    expect((await app.inject({ url: "/api/jobs/" + first.id })).json().result.state).toBe("done");
+    clock.mockReturnValue(1_000_000 + 36 * 60_000);
+    expect((await app.inject({ url: "/api/jobs/" + first.id })).json().ok).toBe(false);
+  } finally {
+    clock.mockRestore();
+  }
+});
 it("paginates beyond 500 rivers and includes the final river in a range export", async () => {
   const doc = createEmptyDocument({ id: "many-rivers", name: "Rivers" });
   doc.features.rivers = Array.from({ length: 501 }, (_, i) => ({

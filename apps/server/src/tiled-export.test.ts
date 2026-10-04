@@ -28,7 +28,7 @@ async function fixture() {
     row: Math.floor(i / 25) - 12,
     col: (i % 25) - 12,
     terrain: i % 25 > 19 ? ("sea" as const) : ("plain" as const),
-    biome: null,
+    biome: i % 25 > 19 ? ("marine" as const) : ("grassland" as const),
     tags: [],
     note: ""
   }));
@@ -62,7 +62,7 @@ it("stitches variable-width rivers, junctions and coastlines like a single rende
   const plan = await tiled.planTiledExport(
     id,
     { scale: 1, background: "transparent", includeCoordinates: true, includeGrid: true },
-    1024
+    2048
   );
   const map = await service.getMap(id);
   const whole = buildMapScene(map, {
@@ -86,7 +86,7 @@ it("stitches variable-width rivers, junctions and coastlines like a single rende
       for (let y = 0; y < info.height; y++)
         data.copy(
           stitched,
-          ((row * 1024 + y) * plan.width + col * 1024) * 4,
+          ((row * plan.tileSize + y) * plan.width + col * plan.tileSize) * 4,
           y * info.width * 4,
           (y + 1) * info.width * 4
         );

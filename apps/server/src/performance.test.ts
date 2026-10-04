@@ -124,6 +124,28 @@ it("provides render bounds for maps containing only distant rivers", async () =>
     max_col: 1003
   });
 });
+it("keeps aligned overview buckets within budget when both boundaries cut through bins", async () => {
+  const doc = createEmptyDocument({ id: "aligned-bounds", name: "Aligned bounds" });
+  doc.cells = Array.from({ length: 65 * 65 }, (_, i) => ({
+    row: Math.max(1, Math.floor(i / 65) * 32) - 1024,
+    col: Math.max(1, (i % 65) * 32) - 1024,
+    terrain: "plain" as const,
+    biome: null,
+    tags: [],
+    note: ""
+  }));
+  await repository.importMapDocument(doc);
+  const { getOverview } = await import("./overview.js");
+  const overview = await getOverview(doc.meta.id, {
+    minRow: -1023,
+    maxRow: 1024,
+    minCol: -1023,
+    maxCol: 1024
+  });
+  expect(overview.tiles.length).toBeLessThanOrEqual(4096);
+  expect(overview.designed_cell_count).toBe(doc.cells.length);
+  expect(overview.tiles.reduce((sum, tile) => sum + tile.count, 0)).toBe(doc.cells.length);
+});
 
 it("keeps persistent material counts exact across overwrite, undo, redo and restart", async () => {
   const id = (await service.createMap({ name: "Counters" })).document.meta.id;
