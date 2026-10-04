@@ -1,0 +1,21 @@
+{
+  "date": "2026-10-03T20:19:12.453Z",
+  "node": "v24.16.0",
+  "cpu": "Apple M5",
+  "ramGiB": 16,
+  "cells": 1000000,
+  "inputMiB": 77.09362983703613,
+  "databaseMiB": 170.97265625,
+  "importMs": 4858.89175,
+  "viewportP95Ms": 2.7034590000002936,
+  "overviewMs": 1.9562079999996058,
+  "repeatedOverviewMs": 1.2885829999995622,
+  "editedOverviewMs": 1.2970839999998134,
+  "materialsMs": 0.08779100000083417,
+  "editMs": 1.8232920000000377,
+  "overviewCount": 1000000,
+  "tiles": 1024,
+  "peakRssMiB": 235.328125,
+  "heapMiB": 18.33374786376953,
+  "method": "One isolated process/database per size. Incrementally generated JSON. Timings include service/SQLite work, exclude network/browser. Peak RSS is process lifetime (including generation); fixtures are generated in batches of 1000."
+}

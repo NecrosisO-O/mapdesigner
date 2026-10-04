@@ -250,6 +250,16 @@ it("requests a complete overview instead of clipping a large viewport to its cen
   expect(range.minCol).toBeLessThanOrEqual(0);
   expect(range.maxCol).toBeGreaterThanOrEqual(999);
   expect(result.current.overview?.designed_cell_count).toBe(2);
+  await act(() =>
+    result.current.requestVisibleRange({ minRow: 0, maxRow: 99, minCol: 0, maxCol: 99 })
+  );
+  expect(result.current.overview?.range.maxRow).toBeGreaterThanOrEqual(99);
+  expect(result.current.currentMap?.activeCells).toHaveLength(0);
+  await act(() =>
+    result.current.requestVisibleRange({ minRow: 0, maxRow: 31, minCol: 0, maxCol: 31 })
+  );
+  expect(result.current.overview).toBeNull();
+  expect(result.current.currentMap?.activeCells.length).toBeGreaterThan(0);
 });
 it("keeps terrain category choices when identical viewport cells arrive", async () => {
   const map = makeMap();

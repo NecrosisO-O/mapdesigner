@@ -40,6 +40,8 @@ export function formatStatusMessage(message: string | undefined, fallback: strin
 }
 const keyOf = (range: CellRange) =>
   [range.minRow, range.maxRow, range.minCol, range.maxCol].join(":");
+// Detailed cells create several SVG nodes each; keep zoom transitions bounded.
+const MAX_DETAILED_VIEWPORT_CELLS = 8_000;
 function normalizeRange(range: CellRange): CellRange {
   const span = (min: number, max: number) => {
     min -= 6;
@@ -204,7 +206,10 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
     }
   }
   async function readRange(id: string, range: CellRange, epoch: number): Promise<RangeData> {
-    if ((range.maxRow - range.minRow + 1) * (range.maxCol - range.minCol + 1) > 40_000) {
+    if (
+      (range.maxRow - range.minRow + 1) * (range.maxCol - range.minCol + 1) >
+      MAX_DETAILED_VIEWPORT_CELLS
+    ) {
       const response = await api.getOverview(id, range);
       if (!response.ok || !response.result)
         throw new Error(errorMessage(response, "加载地图概览失败"));
@@ -328,7 +333,7 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
     return operation;
   }
   async function acceptResult(
-    result: CommandApplyResponse | HistoryMoveResult,
+    result: Pick<CommandApplyResponse, "summary" | "map" | "features" | "changes">,
     epoch: number,
     id: string
   ): Promise<WorkspaceMap | null> {
@@ -384,9 +389,15 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
   function historyMove(direction: "undo" | "redo"): Promise<WorkspaceMap | null> {
     return enqueue(direction, async (current, epoch) => {
       const id = current.summary.meta.id;
-      const response = await (direction === "undo"
-        ? api.undoMap(id, false)
-        : api.redoMap(id, false));
+      const seq = (current.history?.status.cursor ?? 0) + (direction === "redo" ? 1 : 0);
+      const bulk = current.history?.entries.some(
+        (entry) => entry.seq === seq && entry.action === "merge_maps"
+      );
+      const response = await (bulk
+        ? api.historyJob(id, direction, current.summary.meta.revision, { onProgress: setMessage })
+        : direction === "undo"
+          ? api.undoMap(id, false)
+          : api.redoMap(id, false));
       if (!valid(epoch, id)) return null;
       if (!response.ok) {
         setMessage(errorMessage(response, "历史操作失败"));
@@ -502,8 +513,8 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
   }
   async function importFile(file: File): Promise<MapRuntimeState | null> {
     if (importAbort.current) return null;
-    if (file.size > 64 * 1024 * 1024) {
-      setMessage("导入文件超过 64 MiB 限制");
+    if (file.size > 2 * 1024 * 1024 * 1024) {
+      setMessage("导入文件超过 2 GiB 限制");
       return null;
     }
     const epoch = beginSwitch();
@@ -627,6 +638,11 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
     refreshMapSummary,
     refreshMapFeatures,
     refreshMapHistory,
+    refreshMergedMap: (summary: MapSummary) =>
+      enqueue("merge-refresh", async (current, epoch) => {
+        if (current.summary.meta.id !== summary.meta.id) return null;
+        return acceptResult({ summary }, epoch, summary.meta.id);
+      }),
     requestVisibleRange,
     openMap,
     ensureCanLeaveMap,

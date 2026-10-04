@@ -1,6 +1,7 @@
 import { usePanelLayout } from "./usePanelLayout.js";
 import { PanelControls } from "./PanelControls.js";
 import { HistoryPanel } from "./HistoryPanel.js";
+import { MergeDialog } from "./MergeDialog.js";
 import { Icon } from "./Icon.js";
 import { useMaterialBrush } from "./useMaterialBrush.js";
 import { MaterialLibrary } from "./MaterialLibrary.js";
@@ -42,6 +43,7 @@ export default function App() {
   const [layers, setLayers] = useState({ terrain: true, biomes: true, rivers: true, tags: true });
   const [highlight, setHighlight] = useState<LegendHighlight | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [mergeOpen, setMergeOpen] = useState(false);
   const [focusRequest, setFocusRequest] = useState<{ coord: GridCoordinate; token: number } | null>(
     null
   );
@@ -260,6 +262,7 @@ export default function App() {
     const listener = (event: KeyboardEvent) => {
       if (
         historyOpen ||
+        mergeOpen ||
         prompt.open ||
         helpOpen ||
         exportPanel.exportPanelOpen ||
@@ -419,6 +422,11 @@ export default function App() {
         onCancelRename={workspace.cancelRenaming}
         onImportFile={(file) => void handleImportFile(file)}
         onDuplicateMap={() => void handleDuplicateMap()}
+        onMergeMap={() =>
+          void (async () => {
+            if (await ensureCanLeave()) setMergeOpen(true);
+          })()
+        }
         onDeleteMap={() => void handleDeleteMap()}
         interactionMode={interactionMode}
         onInteractionModeChange={(mode) => void changeTool(mode)}
@@ -558,7 +566,7 @@ export default function App() {
       </div>
       <main
         className="layout"
-        inert={prompt.open || helpOpen || historyOpen || exportPanel.exportPanelOpen}
+        inert={prompt.open || helpOpen || historyOpen || mergeOpen || exportPanel.exportPanelOpen}
       >
         <ToolRail
           mode={interactionMode}
@@ -906,6 +914,20 @@ export default function App() {
         />
       )}
       {prompt.dialog}
+      {mergeOpen && workspace.mapSummary && (
+        <MergeDialog
+          target={workspace.mapSummary}
+          maps={workspace.displayMaps}
+          onClose={() => setMergeOpen(false)}
+          onComplete={async (summary) => {
+            const result = await workspace.refreshMergedMap(summary);
+            if (result) {
+              updateEditorDraftFromMap(result);
+              setMessage("地图已合并，可在编辑历史中整体撤销");
+            }
+          }}
+        />
+      )}
       {historyOpen && (
         <Dialog title="编辑历史" onClose={() => setHistoryOpen(false)}>
           <HistoryPanel history={workspace.mapHistory} />

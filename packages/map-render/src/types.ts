@@ -10,10 +10,17 @@ import type {
 } from "@mapdesigner/map-core";
 
 export interface HexLayoutOptions {
+  frame?: PixelFrame;
   size: number;
   padding?: number;
   extraCoords?: GridCoordinate[];
   boundsCoords?: GridCoordinate[];
+}
+export interface PixelFrame {
+  minX: number;
+  minY: number;
+  width: number;
+  height: number;
 }
 
 export interface HexCellLayout {
@@ -63,6 +70,7 @@ export interface RiverControlPointLayout {
 }
 
 export interface MapRenderOptions {
+  frame?: PixelFrame;
   mapStyle?: MapStyle;
   includeTerrain?: boolean;
   includeTerrainSymbols?: boolean;
@@ -96,7 +104,10 @@ export interface MapScene {
   riverBodies: RiverBodyLayout[];
   riverControlPoints: RiverControlPointLayout[];
   defs: string[];
-  options: Required<Omit<MapRenderOptions, "previewRivers" | "boundsCoords" | "riverClipRange">> & {
+  options: Required<
+    Omit<MapRenderOptions, "previewRivers" | "boundsCoords" | "riverClipRange" | "frame">
+  > & {
+    frame?: PixelFrame;
     previewRivers: RiverFeature[];
     boundsCoords?: GridCoordinate[];
     riverClipRange?: CellRange;

@@ -81,6 +81,8 @@ More examples and command conventions are documented in [Agent CLI Guide](./docs
 
 ## Development Note
 
+The current source also includes unreleased streamed large-file import, tiled image packages, and map merging with persistent undo/redo. See the [user manual](./docs/user-manual.md) and [capacity/workflow record](./docs/research/large-map-capacity/README.md). These additions are not included in the published RC1 package.
+
 Use the Node.js version in `.nvmrc` and the pnpm version in `package.json`.
 After `pnpm install --frozen-lockfile`, run `pnpm check` to build, typecheck, and test,
 or `pnpm dev` to start the API and WebUI together.

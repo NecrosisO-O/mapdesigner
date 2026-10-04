@@ -1,0 +1,31 @@
+{
+  "sourceCells": 1000000,
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "zoom": "14%",
+  "before": {
+    "detailedRangeBudget": 40000,
+    "svgNodes": 202061,
+    "interactiveObjects": 36865
+  },
+  "after": {
+    "detailedRangeBudget": 8000,
+    "svgNodes": 8270,
+    "interactiveObjects": 0
+  },
+  "detailView": {
+    "zoom": "104%",
+    "svgNodes": 14351,
+    "interactiveObjects": 2305
+  },
+  "workflow": [
+    "browser file import",
+    "open overview",
+    "zoom to local detail",
+    "R500C501 plain to hill: revision 2",
+    "undo restores plain: revision 3"
+  ],
+  "method": "Observed DOM counts from the actual editor in an isolated synthetic million-cell map. Interactive objects include cell buttons and river targets. Counts are not frame-time or end-to-end latency measurements."
+}

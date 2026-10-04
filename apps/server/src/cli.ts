@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 import fs from "node:fs/promises";
 import path from "node:path";
+import { randomUUID } from "node:crypto";
+import { STORAGE_DIR } from "./config.js";
+import { importMapFile } from "./stream-import.js";
 import {
   buildHexLine,
   createDisplayCoord,
@@ -604,6 +607,18 @@ async function main(): Promise<void> {
           printFailure("maps import requires --file");
         }
         const summaryOnly = hasFlag(args, "--summary");
+        if (summaryOnly) {
+          const directory = path.join(STORAGE_DIR, "uploads");
+          await fs.mkdir(directory, { recursive: true });
+          const result = await importMapFile(path.resolve(filePath), {
+            generateNewId: hasFlag(args, "--generate-new-id"),
+            stagingPrefix: path.join(directory, process.pid + "-" + randomUUID() + ".json")
+          });
+          printResult(
+            createEnvelope({ result: { summary: result.summary }, warnings: result.warnings })
+          );
+          break;
+        }
         const content = await fs.readFile(path.resolve(filePath), "utf8");
         const result = await importMap({
           content,

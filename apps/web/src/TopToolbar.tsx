@@ -35,6 +35,7 @@ interface TopToolbarProps {
   onCancelRename: () => void;
   onImportFile: (file: File) => void;
   onDuplicateMap: () => void;
+  onMergeMap?: () => void;
   onDeleteMap: () => void;
   interactionMode: InteractionMode;
   onInteractionModeChange: (mode: InteractionMode) => void;
@@ -126,6 +127,9 @@ export function TopToolbar(props: TopToolbarProps) {
           </button>
           <button onClick={props.onDuplicateMap} disabled={!props.currentMap}>
             复制地图
+          </button>
+          <button onClick={props.onMergeMap} disabled={!props.currentMap || props.pending}>
+            合并其他地图
           </button>
           <button
             className="danger-button"

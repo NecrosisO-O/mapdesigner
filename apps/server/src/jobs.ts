@@ -5,15 +5,26 @@ import type { Readable } from "node:stream";
 import { Worker } from "node:worker_threads";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { ExportRenderOptions } from "@mapdesigner/map-core";
-import { STORAGE_DIR } from "./config.js";
+import { STORAGE_DIR, EXPORT_STORAGE_DIR } from "./config.js";
 import { badRequest } from "./errors.js";
-import { MAX_IMPORT_BYTES } from "./resource-limits.js";
+import { MAX_STREAM_IMPORT_BYTES } from "./resource-limits.js";
+import { removeImportStage } from "./stream-import.js";
+import { cleanupTiledExport, normalizeTiledOptions, normalizeTileSize } from "./tiled-export.js";
+import { normalizeMergeInput } from "./merge.js";
+import type { MergeMapInput } from "@mapdesigner/map-core";
 import { normalizeExportOptions, assertSafeMapId } from "./storage.js";
 import { createEnvelope } from "./utils.js";
 import { downloadUrl } from "./downloads.js";
 export type JobInput =
+  | { kind: "merge" | "merge-preview"; mapId: string; merge: MergeMapInput }
+  | { kind: "history"; mapId: string; direction: "undo" | "redo"; expectedRevision: number }
   | { kind: "import"; filePath: string; generateNewId: boolean }
-  | { kind: "png" | "json" | "preview"; mapId: string; options?: Partial<ExportRenderOptions> };
+  | {
+      kind: "png" | "json" | "preview" | "tiles" | "tiles-preview";
+      mapId: string;
+      options?: Partial<ExportRenderOptions>;
+      tileSize?: number;
+    };
 export interface JobStatus {
   id: string;
   kind: JobInput["kind"];
@@ -28,6 +39,7 @@ interface Job {
   input: JobInput;
   flag: Int32Array;
   worker?: Worker;
+  finishedAt?: number;
 }
 export async function registerJobs(app: FastifyInstance): Promise<void> {
   const jobs = new Map<string, Job>();
@@ -36,12 +48,34 @@ export async function registerJobs(app: FastifyInstance): Promise<void> {
     closing = false;
   const directory = path.join(STORAGE_DIR, "uploads");
   await fs.mkdir(directory, { recursive: true });
+  await fs.mkdir(EXPORT_STORAGE_DIR, { recursive: true });
+  for (const name of await fs.readdir(EXPORT_STORAGE_DIR)) {
+    const match = /^(?:[.]tiles-|tiles-)([0-9]+)-[a-f0-9-]+(?:[.]zip[.]tmp)?$/.exec(name);
+    if (!match) continue;
+    try {
+      process.kill(Number(match[1]), 0);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ESRCH")
+        await fs.rm(path.join(EXPORT_STORAGE_DIR, name), { recursive: true, force: true });
+    }
+  }
+  // An interrupted process may leave an upload/staging file. Only reclaim dead owners.
+  for (const name of await fs.readdir(directory)) {
+    const match = /^(\d+)-[a-f0-9-]+\.json(?:\.stage\.sqlite(?:-journal|-wal|-shm)?)?$/.exec(name);
+    if (!match) continue;
+    try {
+      process.kill(Number(match[1]), 0);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ESRCH")
+        await fs.rm(path.join(directory, name), { force: true });
+    }
+  }
   function prune(): void {
     for (const [id, job] of jobs)
       if (
         !job.worker &&
         ["done", "failed", "cancelled"].includes(job.status.state) &&
-        Date.now() - job.status.createdAt > 900_000
+        Date.now() - (job.finishedAt ?? job.status.createdAt) > 900_000
       )
         jobs.delete(id);
     for (const [id, job] of jobs)
@@ -68,17 +102,28 @@ export async function registerJobs(app: FastifyInstance): Promise<void> {
       ? new URL("../worker.mjs", import.meta.url)
       : new URL("./job-worker.js", import.meta.url);
     const worker = new Worker(entry, {
-      workerData: { input: next.input, cancellation: next.flag.buffer },
+      workerData: {
+        input: next.input,
+        cancellation: next.flag.buffer,
+        taskId: process.pid + "-" + next.status.id
+      },
       resourceLimits: { maxOldGenerationSizeMb: 512 },
       execArgv: []
     });
     next.worker = worker;
-    const timer = setTimeout(() => {
-      if (Atomics.load(next.flag, 0) === 2) return;
-      next.status.error = "任务超时，请缩小地图或导出范围";
-      next.status.state = "failed";
-      void worker.terminate();
-    }, 120_000);
+    const timer = setTimeout(
+      () => {
+        if (Atomics.load(next.flag, 0) === 2) return;
+        next.status.error = "任务超时，请缩小地图或导出范围";
+        next.status.state = "failed";
+        void worker.terminate();
+      },
+      ["import", "merge", "history", "json"].includes(next.input.kind)
+        ? 900_000
+        : next.input.kind === "tiles"
+          ? 3_600_000
+          : 120_000
+    );
     timer.unref();
     worker.on(
       "message",
@@ -88,9 +133,9 @@ export async function registerJobs(app: FastifyInstance): Promise<void> {
           next.status.state = message.cancelled ? "cancelled" : "failed";
           next.status.error = message.error;
         }
-        if (message.result) {
-          const result = message.result as Record<string, unknown>;
-          if (typeof result.fileName === "string") {
+        if ("result" in message) {
+          const result = message.result as Record<string, unknown> | null;
+          if (result && typeof result.fileName === "string") {
             result.downloadUrl = downloadUrl(result.fileName);
             delete result.path;
           }
@@ -110,7 +155,13 @@ export async function registerJobs(app: FastifyInstance): Promise<void> {
         next.status.state = "failed";
         next.status.error = "后台处理意外中断，请重试";
       }
-      if (next.input.kind === "import") await fs.rm(next.input.filePath, { force: true });
+      if (next.input.kind === "import") {
+        await fs.rm(next.input.filePath, { force: true });
+        await removeImportStage(next.input.filePath);
+      }
+      if (next.input.kind === "tiles")
+        await cleanupTiledExport(process.pid + "-" + next.status.id, next.status.state !== "done");
+      next.finishedAt = Date.now();
       next.worker = undefined;
       active = undefined;
       runNext();
@@ -143,7 +194,7 @@ export async function registerJobs(app: FastifyInstance): Promise<void> {
         throw badRequest("此端点不接受文件上传");
       capacity();
       uploads++;
-      const filePath = path.join(directory, randomUUID() + ".json");
+      const filePath = path.join(directory, process.pid + "-" + randomUUID() + ".json");
       let file: Awaited<ReturnType<typeof fs.open>> | undefined;
       try {
         file = await fs.open(filePath, "wx");
@@ -151,7 +202,7 @@ export async function registerJobs(app: FastifyInstance): Promise<void> {
         for await (const chunk of payload) {
           const data = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
           bytes += data.length;
-          if (bytes > MAX_IMPORT_BYTES) throw badRequest("导入文件超过 64 MiB 限制");
+          if (bytes > MAX_STREAM_IMPORT_BYTES) throw badRequest("导入文件超过 2 GiB 限制");
           await file.writeFile(data);
         }
         if (!bytes) throw badRequest("导入文件为空");
@@ -167,7 +218,7 @@ export async function registerJobs(app: FastifyInstance): Promise<void> {
   );
   app.post<{ Body: string; Querystring: { generateNewId?: string } }>(
     "/api/jobs/import",
-    { bodyLimit: MAX_IMPORT_BYTES },
+    { bodyLimit: MAX_STREAM_IMPORT_BYTES },
     async (request, reply) => {
       if (request.headers["content-type"] !== "application/octet-stream")
         throw badRequest("请上传原始 JSON 文件");
@@ -188,21 +239,68 @@ export async function registerJobs(app: FastifyInstance): Promise<void> {
     }
   );
   app.post<{
+    Body: { mapId: string; input: MergeMapInput; preview?: boolean };
+  }>("/api/jobs/merge", async (request, reply) => {
+    const body = request.body;
+    if (
+      !body ||
+      typeof body.mapId !== "string" ||
+      (body.preview !== undefined && typeof body.preview !== "boolean")
+    )
+      throw badRequest("合并参数无效");
+    return reply.code(202).send(
+      createEnvelope({
+        result: create({
+          kind: body.preview ? "merge-preview" : "merge",
+          mapId: assertSafeMapId(body.mapId),
+          merge: normalizeMergeInput(body.input)
+        })
+      })
+    );
+  });
+  app.post<{ Body: { mapId: string; direction: "undo" | "redo"; expectedRevision: number } }>(
+    "/api/jobs/history",
+    async (request, reply) => {
+      const body = request.body;
+      if (
+        !body ||
+        typeof body.mapId !== "string" ||
+        !["undo", "redo"].includes(body.direction) ||
+        !Number.isSafeInteger(body.expectedRevision)
+      )
+        throw badRequest("历史操作参数无效");
+      return reply.code(202).send(
+        createEnvelope({
+          result: create({
+            kind: "history",
+            mapId: assertSafeMapId(body.mapId),
+            direction: body.direction,
+            expectedRevision: body.expectedRevision
+          })
+        })
+      );
+    }
+  );
+  app.post<{
     Body: {
-      kind: "png" | "json" | "preview";
+      kind: "png" | "json" | "preview" | "tiles" | "tiles-preview";
       mapId: string;
       options?: Partial<ExportRenderOptions>;
+      tileSize?: number;
     };
   }>("/api/jobs/export", async (request, reply) => {
     const body = request.body;
-    if (!body || !["png", "json", "preview"].includes(body.kind))
+    if (!body || !["png", "json", "preview", "tiles", "tiles-preview"].includes(body.kind))
       throw badRequest("请选择导出格式");
     return reply.code(202).send(
       createEnvelope({
         result: create({
           kind: body.kind,
           mapId: assertSafeMapId(body.mapId),
-          options: normalizeExportOptions(body.options ?? {})
+          options: body.kind.startsWith("tiles")
+            ? normalizeTiledOptions(body.options ?? {})
+            : normalizeExportOptions(body.options ?? {}),
+          ...(body.kind.startsWith("tiles") ? { tileSize: normalizeTileSize(body.tileSize) } : {})
         })
       })
     );
@@ -219,6 +317,7 @@ export async function registerJobs(app: FastifyInstance): Promise<void> {
     if (job.status.state === "queued") {
       job.status.state = "cancelled";
       job.status.stage = "已取消";
+      job.finishedAt = Date.now();
       if (job.input.kind === "import") await fs.rm(job.input.filePath, { force: true });
     } else {
       job.status.state = "cancelling";

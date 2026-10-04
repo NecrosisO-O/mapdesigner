@@ -22,6 +22,18 @@
 
 ## 推荐工作流
 
+### 导入大地图
+
+使用 `--summary` 逐条读取现有 JSON 格式，在暂存数据库校验后原子导入；返回地图摘要。
+
+```bash
+pnpm exec tsx apps/server/src/cli.ts maps import --file ./island.json --summary
+```
+
+此路径与浏览器文件导入采用相同预算：2 GiB、2500 万格、2 万条河流，河流路径总长度 50 万格，单条记录 8 MiB。ID 冲突时可增加 `--generate-new-id`。不加 `--summary` 的兼容路径读取完整文件并返回完整地图，仍限制为 64 MiB、50 万格。
+
+地图合并和分块图片包使用 WebUI 或[后台任务 API](./development.md#后台导入与导出)。CLI 的 `maps export-png` 生成单张图片；`maps export-json --map-id demo-map` 流式写出完整 JSON。
+
 ### 1. 查看地图摘要
 
 优先用 `summary` 了解地图元数据、边界和已设计单元格数量。这个命令不会返回完整单元格数组，适合作为大地图和 agent 工作流的入口。
@@ -348,6 +360,7 @@ pnpm exec tsx apps/server/src/cli.ts maps rivers delete --map-id demo-map --rive
 ## 当前适合 agent 调用的命令
 
 - `maps list`
+- `maps import --summary`
 - `maps summary`
 - `maps cells`
 - `maps inspect`
@@ -361,3 +374,4 @@ pnpm exec tsx apps/server/src/cli.ts maps rivers delete --map-id demo-map --rive
 - `maps rivers update`
 - `maps rivers delete`
 - `maps export-png`
+- `maps export-json`
