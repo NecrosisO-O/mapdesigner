@@ -9,7 +9,7 @@ import {
   type MapSummary
 } from "@mapdesigner/map-core";
 import { buildExportScene, renderSvgString } from "@mapdesigner/map-render";
-import cases from "../../../docs/design/editor-v3/fixtures/cartography-gallery.json";
+import cases from "../../../docs/design/fixtures/cartography-gallery.json";
 import { MapCanvas } from "./MapCanvas.js";
 import "./editor.css";
 const fixtures = cases as unknown as Array<{
@@ -19,7 +19,7 @@ const fixtures = cases as unknown as Array<{
   document: MapDocument;
   options: ExportRenderOptions;
 }>;
-const pngs = import.meta.glob("../../../docs/research/2026-10-03/visual-redesign/gallery/*.png", {
+const pngs = import.meta.glob("../../../docs/design/gallery/*.png", {
   eager: true,
   query: "?url",
   import: "default"

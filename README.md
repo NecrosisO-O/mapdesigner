@@ -28,9 +28,9 @@ It combines a visual WebUI with a structured CLI, so the same map can evolve alo
 
 ## Screenshot
 
-![MapDesigner main interface](./docs/research/2026-10-03/visual-redesign/workspace-final.png)
+![MapDesigner main interface](./docs/images/workspace.png)
 
-See the [browser acceptance record](./docs/research/2026-10-03/visual-redesign/README.md) for responsive layouts and verified editing workflows.
+See the [validation record](./docs/research/README.md) for responsive layouts and verified editing workflows.
 
 ## Quick Start
 
@@ -53,7 +53,7 @@ docker run --rm -p 127.0.0.1:3010:3010 -e MAPDESIGNER_TOKEN=replace-with-a-long-
 
 Then open `http://localhost:3010`.
 
-For detailed setup steps, see the [Deployment Guide](./docs/deployment.md) and [Docker Guide](./docs/docker.md).
+For setup steps, container configuration and backups, see the [Deployment Guide](./docs/deployment.md).
 Enter the container's access token in the map menu connection settings.
 For an existing installation, follow the [upgrade steps](./docs/deployment.md#升级到-v030-rc2) before starting this version with your data.
 
@@ -73,13 +73,10 @@ More examples and command conventions are documented in [Agent CLI Guide](./docs
 - [Documentation Index](./docs/index.md)
 - [User Manual](./docs/user-manual.md)
 - [Deployment Guide](./docs/deployment.md)
-- [Docker Guide](./docs/docker.md)
 - [Agent CLI Guide](./docs/agent-cli.md)
 - [Development Guide](./docs/development.md)
-- [Architecture and Repository Layout](./docs/architecture.md)
 - [Validation Records and Pending Checks](./docs/research/README.md)
 - [Changelog](./CHANGELOG.md)
-- [Historical Documents](./docs/archive/README.md)
 - [中文说明](./README.zh-CN.md)
 
 ## Current Release
@@ -91,7 +88,7 @@ More examples and command conventions are documented in [Agent CLI Guide](./docs
 Use the Node.js version in `.nvmrc` and the pnpm version in `package.json`.
 After `pnpm install --frozen-lockfile`, run `pnpm check` to build, typecheck, and test,
 or `pnpm dev` to start the API and WebUI together.
-See the [Development Guide](./docs/development.md) for setup and validation, and the [maintenance scripts](./scripts/README.md) for backups and benchmarks.
+See the [Development Guide](./docs/development.md) for setup, validation and maintenance scripts.
 
 AI assistance was used during the development of this project.
 
