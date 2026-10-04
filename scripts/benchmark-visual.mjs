@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import os from "node:os";
+import path from "node:path";
 import { performance } from "node:perf_hooks";
 import { createEmptyDocument, createRuntimeState } from "../packages/map-core/dist/index.js";
 import {
@@ -66,6 +67,6 @@ for (const count of [10000, 100000, 500000]) {
     heapMB: process.memoryUsage().heapUsed / 1048576
   });
 }
-const target = process.argv[2] ?? "/private/tmp/mapdesigner-visual-performance.json";
+const target = process.argv[2] ?? path.join(os.tmpdir(), "mapdesigner-visual-performance.json");
 await fs.writeFile(target, JSON.stringify(report, null, 2) + "\n");
 console.log(JSON.stringify(report, null, 2));
