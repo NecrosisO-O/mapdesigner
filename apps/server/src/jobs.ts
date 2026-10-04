@@ -39,6 +39,7 @@ interface Job {
   input: JobInput;
   flag: Int32Array;
   worker?: Worker;
+  finishedAt?: number;
 }
 export async function registerJobs(app: FastifyInstance): Promise<void> {
   const jobs = new Map<string, Job>();
@@ -74,7 +75,7 @@ export async function registerJobs(app: FastifyInstance): Promise<void> {
       if (
         !job.worker &&
         ["done", "failed", "cancelled"].includes(job.status.state) &&
-        Date.now() - job.status.createdAt > 900_000
+        Date.now() - (job.finishedAt ?? job.status.createdAt) > 900_000
       )
         jobs.delete(id);
     for (const [id, job] of jobs)
@@ -160,6 +161,7 @@ export async function registerJobs(app: FastifyInstance): Promise<void> {
       }
       if (next.input.kind === "tiles")
         await cleanupTiledExport(process.pid + "-" + next.status.id, next.status.state !== "done");
+      next.finishedAt = Date.now();
       next.worker = undefined;
       active = undefined;
       runNext();
@@ -315,6 +317,7 @@ export async function registerJobs(app: FastifyInstance): Promise<void> {
     if (job.status.state === "queued") {
       job.status.state = "cancelled";
       job.status.stage = "已取消";
+      job.finishedAt = Date.now();
       if (job.input.kind === "import") await fs.rm(job.input.filePath, { force: true });
     } else {
       job.status.state = "cancelling";

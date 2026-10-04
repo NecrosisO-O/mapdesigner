@@ -29,6 +29,7 @@ import {
 } from "./repository.js";
 import { EXPORT_STORAGE_DIR } from "./config.js";
 import { badRequest } from "./errors.js";
+import { getOverview } from "./overview.js";
 import { normalizeExportOptions } from "./storage.js";
 
 export const MAX_TILE_COUNT = 2048;
@@ -134,12 +135,39 @@ export async function planTiledExport(
 export async function renderExportTile(
   plan: TileExportPlan,
   row: number,
-  col: number
+  col: number,
+  checkCancelled?: () => void
 ): Promise<Buffer> {
   const { options } = plan,
     size = 36 * options.scale;
   const width = Math.min(plan.tileSize, plan.width - col * plan.tileSize),
     height = Math.min(plan.tileSize, plan.height - row * plan.tileSize);
+  checkCancelled?.();
+  // Small SVG surfaces bound pattern/mask work. Their global pixel frames meet exactly.
+  if (plan.tileSize > 1024) {
+    const factor = plan.tileSize / 1024,
+      parts: Array<{ input: Buffer; left: number; top: number }> = [];
+    for (let y = 0; y < Math.ceil(height / 1024); y++)
+      for (let x = 0; x < Math.ceil(width / 1024); x++) {
+        checkCancelled?.();
+        parts.push({
+          input: await renderExportTile(
+            { ...plan, tileSize: 1024 },
+            row * factor + y,
+            col * factor + x,
+            checkCancelled
+          ),
+          left: x * 1024,
+          top: y * 1024
+        });
+      }
+    return sharp({
+      create: { width, height, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } }
+    })
+      .composite(parts)
+      .png()
+      .toBuffer();
+  }
   const frame = {
     minX: plan.minX + col * plan.tileSize,
     minY: plan.minY + row * plan.tileSize,
@@ -199,8 +227,32 @@ export async function previewTiledExport(
   tileSize = 4096
 ): Promise<TileExportPreview> {
   const plan = await planTiledExport(id, options, tileSize);
-  const sampleRow = Math.floor(plan.rows / 2),
-    sampleCol = Math.floor(plan.columns / 2);
+  const overview = await getOverview(id, plan.range);
+  const size = 36 * plan.options.scale,
+    weights = new Map<number, number>();
+  // A bounded overview chooses a populated sample even when the map center is empty.
+  for (const tile of overview.tiles) {
+    const center = (overview.bucket_size - 1) / 2;
+    const r = Math.min(plan.range.maxRow, Math.max(plan.range.minRow, tile.row + center));
+    const c = Math.min(plan.range.maxCol, Math.max(plan.range.minCol, tile.col + center));
+    const row = Math.max(
+      0,
+      Math.min(
+        plan.rows - 1,
+        Math.floor((-size * Math.sqrt(3) * (r + c / 2) - plan.minY) / plan.tileSize)
+      )
+    );
+    const col = Math.max(
+      0,
+      Math.min(plan.columns - 1, Math.floor((1.5 * size * c - plan.minX) / plan.tileSize))
+    );
+    const key = row * plan.columns + col;
+    weights.set(key, (weights.get(key) ?? 0) + tile.count);
+  }
+  const selected = [...weights].sort((a, b) => b[1] - a[1])[0]?.[0];
+  const sampleRow =
+    selected === undefined ? Math.floor(plan.rows / 2) : Math.floor(selected / plan.columns);
+  const sampleCol = selected === undefined ? Math.floor(plan.columns / 2) : selected % plan.columns;
   const png = await sharp(await renderExportTile(plan, sampleRow, sampleCol))
     .resize({ width: 900, height: 600, fit: "inside", withoutEnlargement: true })
     .png()
@@ -247,7 +299,7 @@ export async function exportTiles(
       for (let col = 0; col < plan.columns; col++) {
         control.checkCancelled?.();
         control.progress?.(`正在绘制分块 · ${tiles.length + 1}/${plan.tileCount}`);
-        const buffer = await renderExportTile(plan, row, col);
+        const buffer = await renderExportTile(plan, row, col, control.checkCancelled);
         totalBytes += buffer.length;
         if (totalBytes > MAX_ARCHIVE_BYTES) throw badRequest("图片包超过 2 GiB，请缩小导出范围");
         const file = `tile-${String(row + 1).padStart(3, "0")}-${String(col + 1).padStart(3, "0")}.png`;

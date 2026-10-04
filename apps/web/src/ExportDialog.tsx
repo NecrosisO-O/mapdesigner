@@ -285,7 +285,7 @@ export function ExportDialog({
             {preview ? (
               <img
                 src={preview.image}
-                alt={"tileCount" in preview ? "中央分块的实际成图样例" : "实际范围的成图预览"}
+                alt={"tileCount" in preview ? "分块的实际成图样例" : "实际范围的成图预览"}
               />
             ) : (
               <div className="empty-state">
@@ -324,7 +324,7 @@ export function ExportDialog({
           </figcaption>
           <p className="field-help">
             {c.pngMode === "tiles"
-              ? "图片包包含 PNG、位置清单和可打开的索引页；最多 2048 张、2 GiB。上方图片展示中央分块，尺寸表示整套图片拼接后的范围。"
+              ? "图片包包含 PNG、位置清单和可打开的索引页；最多 2048 张、2 GiB。上方图片展示一块实际分块，尺寸表示整套图片拼接后的范围。"
               : "单张图片上限：单边 32,768 px、总计 4,000 万像素；全图 10,000 格、区域 25,000 格。"}
           </p>
         </figure>

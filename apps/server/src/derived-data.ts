@@ -66,7 +66,15 @@ export function readOverviewTerrain(
 ) {
   const span = Math.max(range.maxRow - range.minRow + 1, range.maxCol - range.minCol + 1);
   let size = Math.max(1, Math.ceil(span / 64));
-  if (size >= 32) size = 32 * 2 ** Math.ceil(Math.log2(size / 32));
+  if (size >= 8) {
+    size = 32 * 2 ** Math.ceil(Math.log2(Math.max(1, size / 32)));
+    while (
+      (Math.floor(range.maxRow / size) - Math.floor(range.minRow / size) + 1) *
+        (Math.floor(range.maxCol / size) - Math.floor(range.minCol / size) + 1) >
+      4096
+    )
+      size *= 2;
+  }
   const originRow = size >= 32 ? Math.floor(range.minRow / size) * size : range.minRow;
   const originCol = size >= 32 ? Math.floor(range.minCol / size) * size : range.minCol;
   type Row = { r: number; c: number; terrain: TerrainKey; count: number };

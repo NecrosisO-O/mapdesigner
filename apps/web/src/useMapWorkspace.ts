@@ -40,6 +40,8 @@ export function formatStatusMessage(message: string | undefined, fallback: strin
 }
 const keyOf = (range: CellRange) =>
   [range.minRow, range.maxRow, range.minCol, range.maxCol].join(":");
+// Detailed cells create several SVG nodes each; keep zoom transitions bounded.
+const MAX_DETAILED_VIEWPORT_CELLS = 8_000;
 function normalizeRange(range: CellRange): CellRange {
   const span = (min: number, max: number) => {
     min -= 6;
@@ -204,7 +206,10 @@ export function useMapWorkspace(setMessage: (message: string) => void) {
     }
   }
   async function readRange(id: string, range: CellRange, epoch: number): Promise<RangeData> {
-    if ((range.maxRow - range.minRow + 1) * (range.maxCol - range.minCol + 1) > 40_000) {
+    if (
+      (range.maxRow - range.minRow + 1) * (range.maxCol - range.minCol + 1) >
+      MAX_DETAILED_VIEWPORT_CELLS
+    ) {
       const response = await api.getOverview(id, range);
       if (!response.ok || !response.result)
         throw new Error(errorMessage(response, "加载地图概览失败"));

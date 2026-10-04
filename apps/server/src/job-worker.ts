@@ -70,7 +70,8 @@ try {
           : "正在写出地图"
     );
     await getMapSummary(input.mapId);
-    if (input.kind === "tiles") await getMapMaterialUsage(input.mapId);
+    if (input.kind === "tiles" || input.kind === "tiles-preview")
+      await getMapMaterialUsage(input.mapId);
     // This worker owns its connection for the entire asynchronous export.
     getDatabase().exec("BEGIN");
     try {
