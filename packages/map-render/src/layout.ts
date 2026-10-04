@@ -68,10 +68,12 @@ export function buildHexLayout(
   }
   if (!boundsCenters.length) minCenterX = maxCenterX = minCenterY = maxCenterY = 0;
 
-  const minX = minCenterX - size - padding;
-  const maxX = maxCenterX + size + padding;
-  const minY = minCenterY - (SQRT3 * size) / 2 - padding;
-  const maxY = maxCenterY + (SQRT3 * size) / 2 + padding;
+  const minX = options.frame?.minX ?? minCenterX - size - padding;
+  const maxX = options.frame ? minX + options.frame.width : maxCenterX + size + padding;
+  const minY = options.frame?.minY ?? minCenterY - (SQRT3 * size) / 2 - padding;
+  const maxY = options.frame
+    ? minY + options.frame.height
+    : maxCenterY + (SQRT3 * size) / 2 + padding;
 
   return {
     width: maxX - minX,

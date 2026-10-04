@@ -2,6 +2,31 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Added
+
+- Streamed JSON file import with per-record validation, temporary SQLite staging, atomic publication, cancellation, and interrupted-task cleanup. Web uploads and CLI `maps import --summary` accept up to 2 GiB and 25 million cells.
+- Tiled PNG export for a whole map or selected region, with a consistent revision and pixel frame, bounded rendering, ZIP download, position manifest, and a browsable index with legends.
+- Hex map merging with translation, overlap previews, keep-target or replace-target rules, river/junction remapping, revision checks, and persistent undo/redo for the entire merge.
+- Reproducible synthetic capacity measurements through 23 million cells, a million-cell merge/history/JSON round trip, and desktop/narrow-screen workflow evidence.
+
+### Changed
+
+- Persistent terrain bins and material counts keep large-map overviews and legends quick after edits and history operations.
+- Large textured export tiles are rendered in smaller internal surfaces before composition; sample previews favor populated map areas.
+- Import, merge/history, and JSON jobs have a 15-minute budget; tiled exports have one hour.
+
+### Fixed
+
+- Retain completed job results for 15 minutes after completion so long exports remain available to download.
+- Keep overview tile counts within the response budget when range boundaries cut through cached bins.
+- Use overviews above 8000 cells per requested viewport to avoid large SVG bursts while zooming into dense maps.
+
+### Project scope
+
+- Historical PR #3 was reviewed and closed with attribution. Its applicable requests are handled in #7, #8, and #9 on the current architecture. Square grids are outside the supported model; forks may add them. Original large-map feedback files are still requested in #2.
+
 ## [0.3.0-rc.1] - 2026-10-03
 
 First release candidate for 0.3.0. This entry covers all changes since 0.2.0.

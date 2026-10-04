@@ -433,13 +433,16 @@ export async function importMap(input: {
   };
 }
 
-export async function exportJson(id: string): Promise<{ fileName: string; path: string }> {
+export async function exportJson(
+  id: string,
+  control: { checkCancelled?: () => void; progress?: (stage: string) => void } = {}
+): Promise<{ fileName: string; path: string }> {
   await ensureDirectories();
   const normalizedId = assertSafeMapId(id);
   const summary = await getMapSummary(normalizedId);
   const fileName = `${slugify(summary.meta.name) || normalizedId}-${randomUUID()}.json`;
   const filePath = exportPath(fileName);
-  await writeMapDocumentJsonExport(normalizedId, filePath);
+  await writeMapDocumentJsonExport(normalizedId, filePath, control);
   return { fileName, path: filePath };
 }
 

@@ -60,6 +60,8 @@ docker run --rm -p 127.0.0.1:3010:3010 -e MAPDESIGNER_TOKEN=replace-with-a-long-
 
 ## 开发说明
 
+当前源码还包含未发布的流式大文件导入、分块图片包和可完整撤销/重做的地图合并。使用方法见[用户手册](./docs/user-manual.md)，测量和验收依据见[容量与流程记录](./docs/research/large-map-capacity/README.md)。已发布 RC1 包不包含这些新增能力。
+
 Node.js 版本见 `.nvmrc`，pnpm 版本见 `package.json`。
 执行 `pnpm install --frozen-lockfile` 后，可以用 `pnpm check` 完成构建、类型检查与测试，
 用 `pnpm dev` 同时启动后端和 WebUI。

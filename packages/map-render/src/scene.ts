@@ -300,6 +300,7 @@ export function buildMapScene(map: MapRuntimeState, options: MapRenderOptions = 
     river.points.filter((sample) => !riverCoordRange || isCoordInRange(sample, riverCoordRange))
   );
   const layout = buildHexLayout(cells, {
+    frame: resolved.frame,
     size: resolved.size,
     padding: resolved.padding,
     extraCoords: riverCoords,

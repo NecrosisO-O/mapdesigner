@@ -18,12 +18,15 @@
     "@fastify/static": "^10.1.5",
     "@mapdesigner/map-core": "workspace:*",
     "@mapdesigner/map-render": "workspace:*",
+    "@streamparser/json": "^0.0.26",
     "better-sqlite3": "^12.11.1",
     "fastify": "^5.12.5",
-    "sharp": "^0.35.5"
+    "sharp": "^0.35.5",
+    "yazl": "^3.3.1"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
+    "@types/yazl": "^3.3.1",
     "tsx": "^4.23.15",
     "vitest": "^5.0.3"
   },

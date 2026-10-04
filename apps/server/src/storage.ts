@@ -65,7 +65,7 @@ export function assertExportDownloadFileName(fileName: string): string {
     !normalized ||
     normalized !== path.basename(normalized) ||
     hasPathSeparator(normalized) ||
-    (!normalized.endsWith(".png") && !normalized.endsWith(".json"))
+    (!normalized.endsWith(".png") && !normalized.endsWith(".json") && !normalized.endsWith(".zip"))
   ) {
     throw badRequest("invalid export file name");
   }

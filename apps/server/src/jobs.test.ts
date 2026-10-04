@@ -129,6 +129,31 @@ it("exports through a job and gives separate files to concurrent export requests
     map.document.meta.id
   );
 });
+it("retains long-running job results for fifteen minutes after completion", async () => {
+  const map = await service.createMap({ name: "Long export" });
+  const clock = vi.spyOn(Date, "now").mockReturnValue(1_000_000);
+  try {
+    const start = async () =>
+      (
+        await app.inject({
+          method: "POST",
+          url: "/api/jobs/export",
+          payload: { kind: "json", mapId: map.document.meta.id }
+        })
+      ).json().result;
+    const first = await start();
+    clock.mockReturnValue(1_000_000 + 20 * 60_000);
+    expect((await finish(first.id)).state).toBe("done");
+    // Finishing the next queued job also guarantees the first worker has exited.
+    const second = await start();
+    expect((await finish(second.id)).state).toBe("done");
+    expect((await app.inject({ url: "/api/jobs/" + first.id })).json().result.state).toBe("done");
+    clock.mockReturnValue(1_000_000 + 36 * 60_000);
+    expect((await app.inject({ url: "/api/jobs/" + first.id })).json().ok).toBe(false);
+  } finally {
+    clock.mockRestore();
+  }
+});
 it("paginates beyond 500 rivers and includes the final river in a range export", async () => {
   const doc = createEmptyDocument({ id: "many-rivers", name: "Rivers" });
   doc.features.rivers = Array.from({ length: 501 }, (_, i) => ({
@@ -252,4 +277,69 @@ it("returns material usage outside the currently displayed region", async () => 
   expect(usage.terrains).toEqual(["mountain", "plain"]);
   expect(usage.biomes).toEqual(["conifer_forest", "grassland"]);
   expect(usage.tags).toEqual(["peak"]);
+});
+
+it("exports a downloadable ZIP and performs merge history through background jobs", async () => {
+  const source = await service.createMap({ name: "来源岛" }),
+    target = await service.createMap({ name: "群岛" });
+  await service.applyCommandsLight(source.document.meta.id, [
+    { action: "set_cell", target: { row: 0, col: 0 }, changes: { terrain: "mountain" } }
+  ]);
+  const input = {
+    sourceId: source.document.meta.id,
+    offsetRow: -3,
+    offsetCol: 2,
+    conflict: "keep-target"
+  };
+  const started = (
+    await app.inject({
+      method: "POST",
+      url: "/api/jobs/merge",
+      payload: { mapId: target.document.meta.id, input, preview: true }
+    })
+  ).json().result;
+  const preview = await finish(started.id);
+  expect(preview.state, preview.error).toBe("done");
+  const pending = (
+    await app.inject({
+      method: "POST",
+      url: "/api/jobs/merge",
+      payload: { mapId: target.document.meta.id, input: preview.result.input }
+    })
+  ).json().result;
+  expect((await app.inject({ url: "/api/health" })).statusCode).toBe(200);
+  const merged = await finish(pending.id);
+  expect(merged.state, merged.error).toBe("done");
+  expect(merged.result.summary.designed_cell_count).toBe(1);
+  const undo = (
+    await app.inject({
+      method: "POST",
+      url: "/api/jobs/history",
+      payload: {
+        mapId: target.document.meta.id,
+        direction: "undo",
+        expectedRevision: merged.result.summary.meta.revision
+      }
+    })
+  ).json().result;
+  const undone = await finish(undo.id);
+  expect(undone.state, undone.error).toBe("done");
+  expect(undone.result.summary.designed_cell_count).toBe(0);
+  const zip = (
+    await app.inject({
+      method: "POST",
+      url: "/api/jobs/export",
+      payload: {
+        kind: "tiles",
+        mapId: source.document.meta.id,
+        tileSize: 1024,
+        options: { scale: 1 }
+      }
+    })
+  ).json().result;
+  const ready = await finish(zip.id);
+  expect(ready.state, ready.error).toBe("done");
+  const downloaded = await app.inject({ url: ready.result.downloadUrl });
+  expect(downloaded.headers["content-type"]).toContain("application/zip");
+  expect(downloaded.rawPayload.subarray(0, 4).toString("hex")).toBe("504b0304");
 });

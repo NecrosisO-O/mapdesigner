@@ -1,3 +1,4 @@
+import { readOverviewTerrain } from "./derived-data.js";
 import { riverGeometry } from "@mapdesigner/map-render";
 import {
   type CellRange,
@@ -25,33 +26,15 @@ export async function getOverview(id: string, range: CellRange): Promise<MapOver
     throw badRequest("invalid overview range");
   const summary = await getMapSummary(id),
     db = getDatabase();
-  const size = Math.max(
-    1,
-    Math.ceil(Math.max(range.maxRow - range.minRow + 1, range.maxCol - range.minCol + 1) / 64)
-  );
-  const rows = db
-    .prepare(
-      "SELECT CAST((row - ?) / ? AS INTEGER) AS r, CAST((col - ?) / ? AS INTEGER) AS c, terrain, COUNT(*) AS count FROM cells WHERE map_id = ? AND row BETWEEN ? AND ? AND col BETWEEN ? AND ? GROUP BY r, c, terrain"
-    )
-    .all(
-      range.minRow,
-      size,
-      range.minCol,
-      size,
-      id,
-      range.minRow,
-      range.maxRow,
-      range.minCol,
-      range.maxCol
-    ) as Array<{ r: number; c: number; terrain: TerrainKey; count: number }>;
+  const { size, originRow, originCol, rows } = readOverviewTerrain(db, id, range, summary.bounds);
   const tiles = new Map<string, MapOverview["tiles"][number]>(),
     dominant = new Map<string, number>();
   let count = 0;
   for (const row of rows) {
     const key = row.r + "," + row.c;
     const tile = tiles.get(key) ?? {
-      row: range.minRow + row.r * size,
-      col: range.minCol + row.c * size,
+      row: originRow + row.r * size,
+      col: originCol + row.c * size,
       terrain: null,
       count: 0,
       river: false
@@ -126,9 +109,9 @@ export async function getOverview(id: string, range: CellRange): Promise<MapOver
       if (!run.length) run.push(start);
       run.push(end);
       const bucket = tiles.get(
-        Math.floor((start.row - range.minRow) / size) +
+        Math.floor((start.row - originRow) / size) +
           "," +
-          Math.floor((start.col - range.minCol) / size)
+          Math.floor((start.col - originCol) / size)
       );
       if (bucket) bucket.river = true;
       if (hi < 1) {

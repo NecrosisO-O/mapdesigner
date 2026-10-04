@@ -1,5 +1,8 @@
 import type {
   ExportPreview,
+  TileExportPreview,
+  MergeMapInput,
+  MergeMapPreview,
   MapMaterialUsage,
   CellRange,
   MapOverview,
@@ -204,6 +207,58 @@ async function runJob<T>(
 }
 
 export const api = {
+  previewMerge: (id: string, input: MergeMapInput, control: TaskControl = {}) =>
+    runJob<MergeMapPreview>(
+      request("/api/jobs/merge", {
+        method: "POST",
+        body: JSON.stringify({ mapId: id, input, preview: true })
+      }),
+      control
+    ),
+  mergeMap: (id: string, input: MergeMapInput, control: TaskControl = {}) =>
+    runJob<{ summary: MapSummary; added: number; replaced: number; rivers: number }>(
+      request("/api/jobs/merge", { method: "POST", body: JSON.stringify({ mapId: id, input }) }),
+      control
+    ),
+  historyJob: (
+    id: string,
+    direction: "undo" | "redo",
+    expectedRevision: number,
+    control: TaskControl = {}
+  ) =>
+    runJob<HistoryMoveResult | null>(
+      request("/api/jobs/history", {
+        method: "POST",
+        body: JSON.stringify({ mapId: id, direction, expectedRevision })
+      }),
+      control
+    ),
+  previewTiles: (
+    id: string,
+    options: Partial<ExportRenderOptions>,
+    tileSize: number,
+    control: TaskControl = {}
+  ) =>
+    runJob<TileExportPreview>(
+      request("/api/jobs/export", {
+        method: "POST",
+        body: JSON.stringify({ kind: "tiles-preview", mapId: id, options, tileSize })
+      }),
+      control
+    ),
+  exportTiles: (
+    id: string,
+    options: Partial<ExportRenderOptions>,
+    tileSize: number,
+    control: TaskControl = {}
+  ) =>
+    runJob<{ fileName: string; downloadUrl: string }>(
+      request("/api/jobs/export", {
+        method: "POST",
+        body: JSON.stringify({ kind: "tiles", mapId: id, options, tileSize })
+      }),
+      control
+    ),
   searchMapFeatures: (id: string, search: string, offset = 0, range: CellRange | null = null) => {
     const params = new URLSearchParams({
       search,

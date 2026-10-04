@@ -28,6 +28,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { MAP_STORAGE_DIR } from "./config.js";
 import { getDatabase } from "./db.js";
+import { ensureDerivedData } from "./derived-data.js";
 import { badRequest, notFound, storageError } from "./errors.js";
 import { assertSafeMapId, mapFilePath, writeFileAtomicStream } from "./storage.js";
 import { createMapId } from "./utils.js";
@@ -949,7 +950,11 @@ function indentJson(value: unknown, spaces: number): string {
     .join("\n");
 }
 
-export async function writeMapDocumentJsonExport(id: string, filePath: string): Promise<void> {
+export async function writeMapDocumentJsonExport(
+  id: string,
+  filePath: string,
+  control: { checkCancelled?: () => void; progress?: (stage: string) => void } = {}
+): Promise<void> {
   await ensureMapInDatabase(id);
   const db = getDatabase();
   const row = getMapRowOrThrow(db, id);
@@ -975,7 +980,17 @@ export async function writeMapDocumentJsonExport(id: string, filePath: string): 
       )
       .iterate(row.id) as Iterable<FeatureRow>;
 
-  await writeFileAtomicStream(filePath, async (write) => {
+  await writeFileAtomicStream(filePath, async (flush) => {
+    let buffer = "",
+      completed = 0;
+    const write = async (chunk: string) => {
+      buffer += chunk;
+      if (buffer.length >= 64 * 1024) {
+        control.checkCancelled?.();
+        await flush(buffer);
+        buffer = "";
+      }
+    };
     await write("{\n");
     await write('  "schema_version": 1,\n');
     await write(`  "meta": ${JSON.stringify(meta, null, 2).replace(/\n/g, "\n  ")},\n`);
@@ -983,7 +998,9 @@ export async function writeMapDocumentJsonExport(id: string, filePath: string): 
     await write('  "cells": [');
     let hasCell = false;
     for (const cellRow of cellRows()) {
-      await write(`${hasCell ? "," : ""}\n${indentJson(normalizeCellForExport(cellRow), 4)}`);
+      await write(`${hasCell ? "," : ""}\n${JSON.stringify(normalizeCellForExport(cellRow))}`);
+      if (++completed % 100_000 === 0)
+        control.progress?.(`正在写出地图 · ${completed.toLocaleString("zh-CN")} 格`);
       hasCell = true;
     }
     await write(hasCell ? "\n  ],\n" : "],\n");
@@ -998,6 +1015,8 @@ export async function writeMapDocumentJsonExport(id: string, filePath: string): 
     await write(hasRiver ? "\n    ]\n" : "]\n");
     await write("  }\n");
     await write("}");
+    control.checkCancelled?.();
+    if (buffer) await flush(buffer);
   });
 }
 
@@ -1005,19 +1024,16 @@ export async function getMapMaterialUsage(id: string): Promise<MapMaterialUsage>
   await ensureMapInDatabase(id);
   const db = getDatabase(),
     row = getMapRowOrThrow(db, id);
-  const terrains = db
-    .prepare("SELECT DISTINCT terrain AS value FROM cells WHERE map_id=? ORDER BY terrain")
-    .all(row.id) as Array<{ value: MapMaterialUsage["terrains"][number] }>;
-  const biomes = db
-    .prepare(
-      "SELECT DISTINCT biome AS value FROM cells WHERE map_id=? AND biome IS NOT NULL ORDER BY biome"
-    )
-    .all(row.id) as Array<{ value: MapMaterialUsage["biomes"][number] }>;
-  const tags = db
-    .prepare(
-      "SELECT DISTINCT j.value FROM cells c, json_each(c.tags_json) j WHERE c.map_id=? ORDER BY j.value"
-    )
-    .all(row.id) as Array<{ value: MapMaterialUsage["tags"][number] }>;
+  ensureDerivedData(db, row.id);
+  const materialRows = (kind: string) =>
+    db
+      .prepare("SELECT value FROM material_counts WHERE map_id=? AND kind=? ORDER BY value")
+      .all(row.id, kind) as Array<{ value: string }>;
+  const terrains = materialRows("terrain") as Array<{
+    value: MapMaterialUsage["terrains"][number];
+  }>;
+  const biomes = materialRows("biome") as Array<{ value: MapMaterialUsage["biomes"][number] }>;
+  const tags = materialRows("tag") as Array<{ value: MapMaterialUsage["tags"][number] }>;
   const rivers = db
     .prepare("SELECT COUNT(*) AS count FROM features WHERE map_id=? AND kind='river'")
     .get(row.id) as { count: number };
@@ -1416,6 +1432,39 @@ export async function importMapDocument(
   const normalized = normalizeDocument(document);
   writeDocumentBatched(getDatabase(), normalized, beforeCommit);
   return normalized;
+}
+
+/** Publish a validated staging database in one transaction without materializing its rows. */
+export function publishStagedMap(
+  document: MapDocument,
+  stagePath: string,
+  count: number,
+  bounds: MapBounds,
+  beforeCommit?: () => void
+): void {
+  const db = getDatabase();
+  db.prepare("ATTACH DATABASE ? AS import_stage").run(stagePath);
+  try {
+    db.transaction(() => {
+      if (db.prepare("SELECT id FROM maps WHERE id = ?").get(document.meta.id))
+        throw badRequest("meta.id conflict for " + document.meta.id);
+      upsertMapRow(db, document, bounds);
+      db.prepare(
+        "INSERT INTO cells SELECT ?, row, col, terrain, biome, tags_json, note FROM import_stage.cells"
+      ).run(document.meta.id);
+      db.prepare(
+        "INSERT INTO features SELECT ?, 'river', feature_id, json, bounds_min_row, bounds_max_row, bounds_min_col, bounds_max_col FROM import_stage.features"
+      ).run(document.meta.id);
+      db.prepare("UPDATE maps SET designed_cell_count = ? WHERE id = ?").run(
+        count,
+        document.meta.id
+      );
+      ensureDerivedData(db, document.meta.id);
+      beforeCommit?.();
+    }).immediate();
+  } finally {
+    db.exec("DETACH DATABASE import_stage");
+  }
 }
 
 export async function mapExists(id: string): Promise<boolean> {

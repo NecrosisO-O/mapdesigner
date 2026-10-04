@@ -35,6 +35,8 @@ export function useExportPanel(setMessage: (message: string) => void) {
   const [exportPanelOpen, setExportPanelOpen] = useState(false);
   const [pngOptions, setPngOptions] = useState<ExportRenderOptions>(DEFAULT_PNG_OPTIONS);
   const [pngRangeMode, setPngRangeMode] = useState<"visible" | "full">("full");
+  const [pngMode, setPngMode] = useState<"single" | "tiles">("single");
+  const [tileSize, setTileSize] = useState(4096);
   const [isExportingPng, setIsExportingPng] = useState(false);
   const [download, setDownload] = useState<{ fileName: string; url: string } | null>(null);
   const [progress, setProgress] = useState("");
@@ -63,10 +65,14 @@ export function useExportPanel(setMessage: (message: string) => void) {
     setIsExportingPng(true);
     setMessage("正在导出 PNG...");
     try {
-      const response = await api.exportPng(currentMap.document.meta.id, exportOptions, {
+      const control = {
         signal: controller.current.signal,
         onProgress: setProgress
-      });
+      };
+      const response =
+        pngMode === "tiles"
+          ? await api.exportTiles(currentMap.document.meta.id, exportOptions, tileSize, control)
+          : await api.exportPng(currentMap.document.meta.id, exportOptions, control);
       if (!response.ok || !response.result) {
         reportResult(
           controller.current?.signal.aborted
@@ -86,7 +92,11 @@ export function useExportPanel(setMessage: (message: string) => void) {
           `/api/exports/${encodeURIComponent(response.result.fileName)}`,
         response.result.fileName
       );
-      reportResult("PNG 已导出并开始下载");
+      reportResult(
+        pngMode === "tiles"
+          ? "图片包已导出，解压后打开 index.html 查看分块与图例"
+          : "PNG 已导出并开始下载"
+      );
     } finally {
       setIsExportingPng(false);
       controller.current = null;
@@ -123,6 +133,10 @@ export function useExportPanel(setMessage: (message: string) => void) {
   }
 
   return {
+    pngMode,
+    setPngMode,
+    tileSize,
+    setTileSize,
     download,
     progress,
     resultMessage,

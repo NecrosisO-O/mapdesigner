@@ -1,6 +1,9 @@
 import type { MapDocument } from "@mapdesigner/map-core";
 import { badRequest } from "./errors.js";
 export const MAX_IMPORT_BYTES = 64 * 1024 * 1024;
+export const MAX_STREAM_IMPORT_BYTES = 2 * 1024 * 1024 * 1024;
+export const MAX_STREAM_IMPORT_CELLS = 25_000_000;
+export const MAX_IMPORT_RECORD_BYTES = 8 * 1024 * 1024;
 export const MAX_EXPORT_PIXELS = 40_000_000;
 export function assertPixelBudget(width: number, height: number): void {
   if (

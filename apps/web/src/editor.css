@@ -1813,3 +1813,84 @@ details.editor-section[open] > summary::after {
 .preview-zoom {
   justify-self: start;
 }
+
+.merge-preview {
+  margin: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.merge-map-preview {
+  width: 100%;
+  height: min(42vh, 390px);
+  min-height: 220px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--subtle);
+}
+.merge-target {
+  fill: var(--accent-soft);
+  stroke: var(--accent);
+  stroke-width: 0.5px;
+  vector-effect: non-scaling-stroke;
+}
+.merge-source {
+  fill: url(#merge-source-pattern);
+  stroke: var(--warning);
+  stroke-width: 0.5px;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.85;
+}
+.merge-conflict {
+  fill: var(--danger);
+  stroke: var(--surface);
+  stroke-width: 1px;
+  vector-effect: non-scaling-stroke;
+}
+.merge-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.merge-counts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0;
+}
+.merge-counts div {
+  padding: 12px;
+  background: var(--subtle);
+  border-radius: var(--radius);
+}
+.merge-counts dt {
+  color: var(--muted);
+  font-size: 13px;
+}
+.merge-counts dd {
+  margin: 6px 0 0;
+  font-size: 21px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.merge-layout .empty-state {
+  min-height: 240px;
+}
+@media (max-width: 760px) {
+  .merge-counts {
+    gap: 6px;
+  }
+  .merge-counts div {
+    padding: 8px;
+  }
+  .merge-counts dd {
+    font-size: 18px;
+  }
+  .merge-map-preview {
+    height: 240px;
+  }
+}
