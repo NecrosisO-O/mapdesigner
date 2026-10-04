@@ -21,9 +21,9 @@ MapDesigner 是一个本地优先的六角格地图设计工具，适合异世�
 
 ## 快速开始
 
-![正式编辑器界面](./docs/research/2026-10-03/visual-redesign/workspace-final.png)
+![正式编辑器界面](./docs/images/workspace.png)
 
-桌面、窄屏截图与操作验证见[浏览器验收记录](./docs/research/2026-10-03/visual-redesign/README.md)。
+桌面、窄屏与操作验证见[验收记录](./docs/research/README.md)。
 
 ### 源码运行
 
@@ -53,13 +53,10 @@ Docker 启动后，在地图菜单的“连接设置”中输入令牌。
 - [英文 README](./README.md)
 - [用户说明书](./docs/user-manual.md)
 - [部署说明](./docs/deployment.md)
-- [Docker 部署说明](./docs/docker.md)
 - [Agent CLI 指南](./docs/agent-cli.md)
 - [开发指南](./docs/development.md)
-- [架构与仓库结构](./docs/architecture.md)
 - [验收记录与待补项目](./docs/research/README.md)
 - [版本变更记录](./CHANGELOG.md)
-- [历史档案](./docs/archive/README.md)
 
 ## 当前版本
 
@@ -70,7 +67,7 @@ Docker 启动后，在地图菜单的“连接设置”中输入令牌。
 Node.js 版本见 `.nvmrc`，pnpm 版本见 `package.json`。
 执行 `pnpm install --frozen-lockfile` 后，可以用 `pnpm check` 完成构建、类型检查与测试，
 用 `pnpm dev` 同时启动后端和 WebUI。
-环境准备与验证流程见[开发指南](./docs/development.md)，备份和性能测量入口见[维护脚本说明](./scripts/README.md)。
+环境准备、验证流程和维护脚本见[开发指南](./docs/development.md)。
 
 本项目在开发过程中使用了 AI 辅助。
 

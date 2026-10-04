@@ -13,9 +13,9 @@ packages/
   map-render/     共享场景、SVG、图例与水系几何
 scripts/          备份、性能测量和生产验证工具
 docs/
-  design/         现行视觉规范、固定地图与历史原型
-  research/       按阶段保存的复现、测量和验收证据
-  archive/        旧版说明、接手基线与已交付计划
+  design/         视觉与兼容约定、固定地图和 PNG 对照
+  research/       验收结论、容量与性能测量
+  images/         项目介绍使用的界面截图
 storage/          本地运行数据，仅提交目录占位文件
 .github/          CI 工作流
 ```
@@ -50,7 +50,7 @@ WebUI 保存已确认的地图修订、当前范围和独立的表单草稿。�
 
 上传文件暂存于 `storage/uploads/`，工作线程逐条解析到暂存 SQLite，校验后通过事务发布。导出在数据库读事务内固定修订，构建共享场景并输出 PNG、JSON 或分块图片包。任务请求格式见[后台任务 API](./background-jobs.md)，资源预算见[部署说明](./deployment.md#资源边界)。
 
-工作区主题和地图样式分别保存。画布、材料样本、图例和导出共用绘图规则；旧地图样式及河宽语义按[视觉规范](./design/editor-v3/README.md)和[宽度兼容契约](./RIVER_WIDTH_COMPATIBILITY.md)恢复。
+工作区主题和地图样式分别保存。画布、材料样本、图例和导出共用绘图规则；旧地图样式及河宽语义按[视觉与兼容约定](./design/README.md)恢复。
 
 ## 后续维护边界
 

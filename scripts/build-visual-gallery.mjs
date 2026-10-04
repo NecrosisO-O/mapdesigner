@@ -322,13 +322,13 @@ add(all, "36 种地形、30 种生态均可见；完整图例与实际渲染使�
   includeShorthand: true,
   title: "地形与生态视觉对照"
 });
-const target = new URL("../docs/design/editor-v3/fixtures/", import.meta.url);
+const target = new URL("../docs/design/fixtures/", import.meta.url);
 await fs.mkdir(target, { recursive: true });
 await fs.writeFile(
   new URL("cartography-gallery.json", target),
   JSON.stringify(cases, null, 2) + "\n"
 );
-const output = new URL("../docs/research/2026-10-03/visual-redesign/gallery/", import.meta.url);
+const output = new URL("../docs/design/gallery/", import.meta.url);
 await fs.mkdir(output, { recursive: true });
 for (const fixture of cases) {
   let runtime = createRuntimeState(fixture.document);
@@ -347,7 +347,6 @@ for (const fixture of cases) {
   }
   const scene = buildExportScene({ map: runtime, options: fixture.options });
   const svg = renderSvgString(scene);
-  await fs.writeFile(new URL(fixture.id + ".svg", output), svg);
   await sharp(Buffer.from(svg))
     .resize({ width: 960, withoutEnlargement: true })
     .png()
