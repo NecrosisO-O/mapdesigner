@@ -165,20 +165,28 @@ Critical 项为 Vitest UI 服务相关告警（`GHSA-5xrq-8626-4rwp`）；
 
 每阶段以已有行为验证、数据兼容和明确的性能指标作为验收依据。
 
+以上为接手阶段记录。后续已经关闭 PR #3 并保留原贡献引用；#7、#8、#9 分别跟踪大地图导入/浏览、分块导出、地图合并。方格网不纳入官方支持，需求方可 Fork 二次开发。当前实施结果见[大地图工作记录](./LARGE_MAP_WORK_PLAN.md)，#2 保留用于真实样本与材料需求讨论。
+
 ### 后台导入与导出
 
 正式界面直接上传 JSON 文件，经过临时文件与独立工作线程处理，避免把文件再次包进 JSON 请求。
 POST /api/jobs/import 接收 application/octet-stream，可附 generateNewId=true。
-POST /api/jobs/export 接收 {kind: "png" | "json" | "preview", mapId, options?}。
+POST /api/jobs/export 接收 {kind: "png" | "json" | "preview" | "tiles" | "tiles-preview", mapId, options?, tileSize?}。分块尺寸为 1024、2048、4096 像素。
+POST /api/jobs/merge 接收 {mapId, input: {sourceId, offsetRow, offsetCol, conflict, expectedSourceRevision?, expectedTargetRevision?}, preview?}。conflict 为 keep-target 或 replace-target；先设置 preview=true 取得统计和来源/目标修订，再将返回的 input 用于实际提交。
+POST /api/jobs/history 接收 {mapId, direction: "undo" | "redo", expectedRevision}，用于在后台执行合并撤销或重做。
 返回任务 ID，使用 GET /api/jobs/:id 查询，DELETE /api/jobs/:id 取消。
-最多三项运行/等待任务，单工作线程上限 512 MiB、120 秒；任务状态保留最多 20 项和 15 分钟。
+最多三项运行/等待任务，单工作线程 JavaScript 堆上限 512 MiB。导入、合并/历史、JSON 导出限时 15 分钟；分块导出一小时；其余任务两分钟。已结束任务的状态最多保留 15 分钟，总数最多 20 项。
 服务重启后任务状态失效。导入事务在最终提交前检查取消，失败或取消不会留下半张地图。
 提交已经开始时，取消请求会提示等待完成。
 
-文件限制为 64 MiB、50 万单元格、2 万条河流和总计 50 万格河流路径。
-PNG 总面积限制 4000 万像素、单边 32768 像素，超出时缩小导出范围或倍率。
+文件逐条解析到暂存 SQLite，完成校验后在事务中发布。流式路径限制为 2 GiB、2500 万单元格、2 万条河流和总计 50 万格河流路径；单记录 8 MiB，嵌套深度 32。直接字符串导入保留 64 MiB / 50 万格预算。
+普通 PNG 总面积限制 4000 万像素、单边 32768 像素。分块导出最多 2048 张、总计 320 亿像素、2 GiB ZIP；每块内部以最多 1024 像素的画面渲染后拼接。导出工作线程通过只读事务固定地图修订。
 每次导出产生独立文件，下载链接携带五分钟有效的单文件凭证；不要公开分享下载链接。
 旧同步 API 和 CLI 保留。开发模式的工作线程使用 apps/server/worker.mjs 引导，生产模式直接运行编译产物。
+
+数据库以 32 格基础聚合保存远景地形及材料计数，编辑和历史变更通过事务内触发器同步更新。合并历史使用 operation_cells 和 operation_features 逐条保存变更，避免单个巨大历史 JSON。
+
+构建后运行 `node scripts/benchmark-large-maps.mjs 1000000 /private/tmp/capacity.json` 测量单图容量；追加 `--flows` 验证合并、撤销、重做、JSON 往返和区域分块输出。所有样本使用隔离临时数据库，结束后清理。结果及浏览器证据见[容量记录](./research/large-map-capacity/README.md)。
 
 
 ### 视觉重构验证入口
