@@ -1,29 +1,14 @@
-# MapDesigner 文档索引
+# 文档入口
 
-使用、开发和验收资料从这里查找。版本变化见[变更记录](../CHANGELOG.md)，发布与升级以[部署说明](./deployment.md)为准。
-
-## 使用与部署
-
-| 需要做什么 | 阅读入口 |
+| 需要做什么 | 文档 |
 | --- | --- |
-| 创建地图、绘制地形与河流、合并和导出 | [用户说明书](./user-manual.md) |
-| 从源码运行、升级、配置网络、备份与恢复 | [部署与数据维护](./deployment.md) |
-| 构建镜像、启动容器与迁移数据卷 | [Docker 部署](./docker.md) |
-| 通过脚本或 AI agent 查询、修改地图 | [Agent CLI 指南](./agent-cli.md) |
-| 接入后台导入、导出、合并与历史任务 | [后台任务 API](./background-jobs.md) |
+| 创建地图、绘制、合并和导出 | [用户说明书](./user-manual.md) |
+| 源码或 Docker 运行、升级、网络配置、备份 | [部署与数据维护](./deployment.md) |
+| 脚本与 AI agent 操作地图 | [CLI 指南](./agent-cli.md) |
+| 接入异步导入、导出与合并 | [后台任务 API](./background-jobs.md) |
+| 开发、测试、性能测量与维护脚本 | [开发指南](./development.md) |
+| 查找模块职责与数据流程 | [架构说明](./architecture.md) |
+| 理解地图表达、河网与旧图兼容 | [视觉与兼容约定](./design/README.md) |
+| 查看验收结果与尚待补测的项目 | [验收记录](./research/README.md) |
 
-## 开发与维护
-
-- [开发指南](./development.md)：工具链、启动命令、验证范围和数据隔离。
-- [架构与仓库结构](./architecture.md)：包依赖、关键模块、编辑及存储流程。
-- [维护脚本](../scripts/README.md)：备份、性能测量、视觉图集与生产包验证的参数和数据影响。
-- [设计资料](./design/README.md)：现行视觉规范、固定样例和历史交互原型。
-- [河流宽度兼容说明](./RIVER_WIDTH_COMPATIBILITY.md)：旧图插值规则、迁移和历史恢复契约。
-
-## 验收与历史
-
-- [研究与验收索引](./research/README.md)：按阶段查找原始测量、截图和复现说明。
-- [待补验收](./research/README.md#待补验收)：真实设备、辅助技术、首次使用者及原始大地图样本。
-- [历史档案](./archive/README.md)：0.1.0 产品资料、接手基线和已交付计划。
-
-现行指南随功能更新；历史记录保留当时的版本、测试数量和结论。历史清单中的完成状态需连同对应验收记录阅读。
+版本变化见 [CHANGELOG](../CHANGELOG.md)，大地图实测数据见[容量记录](./research/large-map-capacity/README.md)。

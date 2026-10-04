@@ -33,7 +33,7 @@ Second release candidate for 0.3.0. This entry covers changes since 0.3.0-rc.1; 
 
 - Stop the server and CLI processes, back up the data directory or Docker volume, and keep the existing data root when starting RC2. Existing SQLite maps and history are retained; the additional aggregate and merge-history tables are initialized automatically.
 - Use Node.js 24.16.0 and pnpm 10.23.0, then run `pnpm install --frozen-lockfile` and `pnpm build`. Docker users rebuild the RC2 image and reuse their data volume and access token.
-- Import large legacy JSON files through the WebUI file importer or CLI `maps import --file ./map.json --summary`. The legacy directory scan retains its existing file-size budget. See the [upgrade guide](./docs/deployment.md#升级到-v030-rc2) and [Docker instructions](./docs/docker.md#升级已有数据卷).
+- Import large legacy JSON files through the WebUI file importer or CLI `maps import --file ./map.json --summary`. The legacy directory scan retains its existing file-size budget. See the [upgrade guide](./docs/deployment.md#升级到-v030-rc2) and [Docker instructions](./docs/deployment.md#升级已有数据卷).
 
 ### Validation
 
@@ -77,13 +77,13 @@ First release candidate for 0.3.0. This entry covers all changes since 0.2.0.
 - Stop the old server and CLI processes, and back up the entire data directory or Docker volume before upgrading.
 - Keep the existing data root. Legacy files in `storage/maps` are imported into SQLite and retained; maps and new history are saved in `storage/mapdesigner.db`.
 - Use Node.js 24.16.0 and pnpm 10.23.0 for source deployments. Set `MAPDESIGNER_TOKEN` for Docker or network listening and enter it in the map menu connection settings.
-- Ensure the existing Docker data volume is writable by UID/GID 1000. See the [upgrade guide](./docs/deployment.md#升级到-v030-rc1) and [Docker instructions](./docs/docker.md#升级已有数据卷) for the steps.
+- Ensure the existing Docker data volume is writable by UID/GID 1000. See the [upgrade guide](./docs/deployment.md#升级到-v030-rc1) and [Docker instructions](./docs/deployment.md#升级已有数据卷) for the steps.
 
 ### Validation
 
 - 214 regression tests cover core rules, rendering, server and CLI behavior, and editor workflows.
 - Production container checks cover non-root execution, access tokens, CJK fonts, background previews, and PNG downloads.
-- Maintainer hands-on acceptance completed for RC1. Measured results and implementation evidence are recorded in the [acceptance record](./docs/research/2026-10-03/visual-redesign/README.md).
+- Maintainer hands-on acceptance completed for RC1. Measured results and implementation evidence are recorded in the [acceptance record](./docs/research/README.md#视觉与交互).
 
 ## [0.2.0] - 2026-05-25
 
