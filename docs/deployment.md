@@ -1,14 +1,15 @@
 # 部署与数据维护
 
-v0.3.0-rc.2 采用 SQLite 保存地图和操作历史，支持流式大文件导入、分块图片包和地图合并。Node 版本由根目录 .nvmrc 固定，包管理器版本由 package.json 固定。
+v0.3.0 采用 SQLite 保存地图和操作历史，支持流式大文件导入、分块图片包和地图合并。Node 版本由根目录 .nvmrc 固定，包管理器版本由 package.json 固定。
 
-## 升级到 v0.3.0-rc.2
+## 升级到 v0.3.0
 
 <a id="升级到-v030-rc1"></a>
+<a id="升级到-v030-rc2"></a>
 
-1. 停止旧服务和直接访问地图的 CLI，备份原数据根目录下的整个 storage 目录；Docker 部署则备份原 /data 卷。RC1 数据库包含地图与操作历史，需一起保留。v0.2.0 使用 JSON 存储，停服复制即可保留原始地图。
-2. 下载 v0.3.0-rc.2 源码，使用 Node.js 24.16.0 和 pnpm 10.23.0，执行 pnpm install --frozen-lockfile 和 pnpm build。
-3. 保持原 MAPDESIGNER_ROOT 配置；使用默认路径时，将备份之外的原 storage 目录放到新源码根目录。RC1 的 SQLite 地图与历史继续使用原数据库，新增聚合和合并历史表会自动初始化。旧 storage/maps 下符合扫描预算的 JSON 会自动导入 SQLite 并保留原文件；大 JSON 文件通过“地图 → 导入 JSON”或 CLI maps import --file ./map.json --summary 逐条导入。
+1. 停止旧服务和直接访问地图的 CLI，备份原数据根目录下的整个 storage 目录；Docker 部署则备份原 /data 卷。RC1、RC2 的数据库包含地图与操作历史，需一起保留。v0.2.0 使用 JSON 存储，停服复制即可保留原始地图。
+2. 下载 v0.3.0 源码，使用 Node.js 24.16.0 和 pnpm 10.23.0，执行 pnpm install --frozen-lockfile 和 pnpm build。
+3. 保持原 MAPDESIGNER_ROOT 配置；使用默认路径时，将备份之外的原 storage 目录放到新源码根目录。已有 SQLite 地图与历史继续使用原数据库，缺少的聚合和合并历史表会自动初始化。旧 storage/maps 下符合扫描预算的 JSON 会自动导入 SQLite 并保留原文件；大 JSON 文件通过“地图 → 导入 JSON”或 CLI maps import --file ./map.json --summary 逐条导入。
 4. Docker 或对外监听时设置 MAPDESIGNER_TOKEN，在“地图 → 连接设置”中输入该令牌。旧 Docker 数据卷需由 UID/GID 1000 写入，步骤见[升级已有数据卷](#升级已有数据卷)。
 5. 启动服务，核对地图列表与已有历史。后续地图和操作历史写入 storage/mapdesigner.db，可使用下方备份命令保存。合并入口在“地图 → 合并其他地图”，分块输出在“导出 → 分块图片包”。
 
@@ -28,25 +29,25 @@ v0.3.0-rc.2 采用 SQLite 保存地图和操作历史，支持流式大文件导
 镜像使用与 `.nvmrc` 对齐的 Node 版本，包含服务器生产依赖、编译产物和 WebUI。运行账号为 `node`（UID/GID 1000），容器默认监听 `0.0.0.0:3010`，需配置访问令牌。
 
 ```sh
-docker build -t mapdesigner:0.3.0-rc.2 .
+docker build -t mapdesigner:0.3.0 .
 export MAPDESIGNER_TOKEN='替换为随机长令牌'
 docker volume create mapdesigner-data
 docker run --rm --name mapdesigner \
   -p 127.0.0.1:3010:3010 \
   -e MAPDESIGNER_TOKEN \
   -v mapdesigner-data:/data \
-  mapdesigner:0.3.0-rc.2
+  mapdesigner:0.3.0
 ```
 
 打开 `http://127.0.0.1:3010`，在“地图 → 连接设置”输入令牌。数据保存在卷内 `/data/storage/`，升级时保留整个卷。宿主机目录挂载需预先让 UID/GID 1000 可写。镜像提供 `/api/health` 健康检查，日志用 `docker logs mapdesigner` 查看。
 
 ### 升级已有数据卷
 
-停止旧容器并备份整个卷，再用新镜像复用原卷和令牌。RC1 的地图及持久历史继续保留，新增表自动初始化；更早版本由 root 创建的文件需调整权限：
+停止旧容器并备份整个卷，再用新镜像复用原卷和令牌。已有 SQLite 地图及持久历史继续保留，缺少的表自动初始化；更早版本由 root 创建的文件需调整权限：
 
 ```sh
 docker run --rm --user 0 --entrypoint chown \
-  -v mapdesigner-data:/data mapdesigner:0.3.0-rc.2 -R 1000:1000 /data
+  -v mapdesigner-data:/data mapdesigner:0.3.0 -R 1000:1000 /data
 ```
 
 将 `mapdesigner-data` 替换为实际卷名；已经由 UID/GID 1000 正常使用的卷可直接复用。恢复时保留旧卷，用新卷验证备份。
@@ -95,7 +96,7 @@ PNG/JSON/ZIP 导出文件不属于数据库备份；需要长期保留时另行�
 
 ## 资源边界
 
-RC2 的浏览器文件导入与 CLI `maps import --summary` 使用流式导入：文件最多 2 GiB、2500 万格、2 万条河流，河流总路径最多 50 万格，单条记录最多 8 MiB。
+浏览器文件导入与 CLI `maps import --summary` 使用流式导入：文件最多 2 GiB、2500 万格、2 万条河流，河流总路径最多 50 万格，单条记录最多 8 MiB。
 最多三项运行/等待任务，一个独立工作线程，JavaScript 堆上限 512 MiB（不等于进程总内存）。导入、合并、合并历史和 JSON 导出限时 15 分钟，分块导出一小时，预览和普通 PNG 两分钟。
 任务状态仅在进程内保存；重启后需重新查询地图列表确认已经完成的导入。
 取消在事务提交前生效，已经开始最终提交时会提示等待完成。
