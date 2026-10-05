@@ -38,13 +38,13 @@ pnpm start
 ### Docker 运行
 
 ```bash
-docker build -t mapdesigner:0.3.0-rc.2 .
-docker run --rm -p 127.0.0.1:3010:3010 -e MAPDESIGNER_TOKEN=replace-with-a-long-random-token -v mapdesigner-data:/data mapdesigner:0.3.0-rc.2
+docker build -t mapdesigner:0.3.0 .
+docker run --rm -p 127.0.0.1:3010:3010 -e MAPDESIGNER_TOKEN=replace-with-a-long-random-token -v mapdesigner-data:/data mapdesigner:0.3.0
 ```
 
 然后访问 `http://localhost:3010`。
 
-已有安装请先阅读[升级步骤](./docs/deployment.md#升级到-v030-rc2)，再使用原有数据启动新版本。
+已有安装请先阅读[升级步骤](./docs/deployment.md#升级到-v030)，再使用原有数据启动新版本。
 Docker 启动后，在地图菜单的“连接设置”中输入令牌。
 
 ## 文档导航
@@ -60,7 +60,7 @@ Docker 启动后，在地图菜单的“连接设置”中输入令牌。
 
 ## 当前版本
 
-`v0.3.0-rc.2` 新增流式大文件导入、更快的远景查询、分块图片包和可完整撤销/重做的地图合并，并包含 RC1 的工作区重设计、可视化材料绘制、直接河流编辑和共享制图表现。使用方法见[用户手册](./docs/user-manual.md)，完整变化见[版本记录](./CHANGELOG.md)，测量和验收依据见[容量与流程记录](./docs/research/large-map-capacity/README.md)。
+[`v0.3.0`](https://github.com/NecrosisO-O/mapdesigner/releases/tag/v0.3.0) 正式版包含重设计的工作区、可视化材料绘制、直接河流编辑、共享制图表现，以及使用 SQLite 保存的地图和持久撤销/重做历史。同时提供流式大文件导入、更快的远景查询、分块图片包和地图合并。使用方法见[用户手册](./docs/user-manual.md)，完整变化见[版本记录](./CHANGELOG.md)，测量和验收依据见[容量与流程记录](./docs/research/large-map-capacity/README.md)。
 
 ## 开发说明
 

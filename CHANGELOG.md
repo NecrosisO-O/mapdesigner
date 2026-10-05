@@ -2,6 +2,46 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.0] - 2026-10-05
+
+Stable release combining the changes in 0.3.0-rc.1 and 0.3.0-rc.2. This entry summarizes changes since 0.2.0.
+
+### Added
+
+- A redesigned workspace with contextual inspectors, searchable visual materials, sampling, stroke painting, whole-map object search, layer controls, and light/dark themes.
+- Shared terrain symbols, ecology textures, graphical markers, legends, and continuous water surfaces across the editor and exports.
+- Direct river node and width editing, explicit junctions, flow direction, water endpoint settings, and branches.
+- SQLite map storage with persistent undo/redo, atomic edits, revision checks, legacy JSON import, and an online backup command.
+- Background import and export with progress, cancellation, and streamed JSON file import up to 2 GiB and 25 million cells, subject to the documented resource budgets.
+- PNG previews and exports with titles, legends, transparent backgrounds, direction, and grid-distance references; tiled PNG packages include a position manifest and browsable index.
+- Hex map merging with placement and overlap previews, keep-target or replace-target rules, river copying, and persistent undo/redo for the entire merge.
+
+### Changed
+
+- Summary and range queries, persistent terrain aggregates, paginated feature search, and bounded viewport rendering keep large maps usable during browsing and local editing.
+- New rivers interpolate width by path distance; existing maps and history retain their width rules until compatible editing conversion.
+- Network listening requires an access token, with host/origin validation and temporary download credentials. Production containers run as UID 1000 and include CJK fonts.
+- Current documentation is consolidated into user, deployment, CLI, development, and architecture guides. Historical personal environment records have been removed.
+
+### Fixed
+
+- Partial command/history writes, conflicting edits, and unnecessary full-map processing during local edits.
+- River width changes from unanchored nodes, false connections at viewport cuts, wide-bend holes, confluence overpainting, and internal river bands across lakes.
+- Narrow-screen inspector overlap, inaccessible landscape export actions, inconsistent canvas/export textures and fonts, and incomplete river search results.
+- Dense SVG output while zooming, overview counts at clipped boundaries, large textured export tile timeouts, and completed job results expiring immediately after long exports.
+
+### Upgrade
+
+- Stop the server and CLI processes and back up the entire data directory or Docker volume. Reuse the existing data root when starting 0.3.0; RC1/RC2 SQLite maps and history are retained, and missing tables are initialized automatically.
+- Use Node.js 24.16.0 and pnpm 10.23.0, then run `pnpm install --frozen-lockfile` and `pnpm build`. Docker users rebuild the 0.3.0 image and reuse their data volume and access token.
+- Import large legacy JSON files through the WebUI file importer or CLI `maps import --file ./map.json --summary`. See the [upgrade guide](./docs/deployment.md#升级到-v030), [Docker instructions](./docs/deployment.md#升级已有数据卷), and [backup guide](./docs/deployment.md#备份与恢复).
+
+### Validation
+
+- 235 regression tests cover core, rendering, storage, background jobs, CLI, and editor workflows; builds, types, formatting, and production container checks pass.
+- Maintainer hands-on acceptance covers the redesigned editor and river/export workflows. Desktop and narrow-screen checks include merging, dark-theme tiled exports, real ZIP downloads, and million-cell import and local editing.
+- Synthetic capacity measurements cover 110,000 through 23 million cells, with a million-cell merge/history/JSON round trip and regional tiled output. See the [validation record](./docs/research/README.md) and [capacity record](./docs/research/large-map-capacity/README.md).
+
 ## [0.3.0-rc.2] - 2026-10-04
 
 Second release candidate for 0.3.0. This entry covers changes since 0.3.0-rc.1; all RC1 features are included.

@@ -1,6 +1,6 @@
 # MapDesigner
 
-[![Version](https://img.shields.io/badge/version-0.3.0--rc.2-2563eb)](./package.json)
+[![Version](https://img.shields.io/badge/version-0.3.0-2563eb)](./package.json)
 [![Node.js](https://img.shields.io/badge/node-24-339933)](https://nodejs.org/)
 [![pnpm](https://img.shields.io/badge/pnpm-10-f69220)](https://pnpm.io/)
 [![License: GPL v3](https://img.shields.io/badge/license-GPLv3-dc2626.svg)](./LICENSE)
@@ -47,15 +47,15 @@ Then open `http://localhost:3010`.
 ### Run with Docker
 
 ```bash
-docker build -t mapdesigner:0.3.0-rc.2 .
-docker run --rm -p 127.0.0.1:3010:3010 -e MAPDESIGNER_TOKEN=replace-with-a-long-random-token -v mapdesigner-data:/data mapdesigner:0.3.0-rc.2
+docker build -t mapdesigner:0.3.0 .
+docker run --rm -p 127.0.0.1:3010:3010 -e MAPDESIGNER_TOKEN=replace-with-a-long-random-token -v mapdesigner-data:/data mapdesigner:0.3.0
 ```
 
 Then open `http://localhost:3010`.
 
 For setup steps, container configuration and backups, see the [Deployment Guide](./docs/deployment.md).
 Enter the container's access token in the map menu connection settings.
-For an existing installation, follow the [upgrade steps](./docs/deployment.md#升级到-v030-rc2) before starting this version with your data.
+For an existing installation, follow the [upgrade steps](./docs/deployment.md#升级到-v030) before starting this version with your data.
 
 ## AI Agent / CLI
 
@@ -81,7 +81,7 @@ More examples and command conventions are documented in [Agent CLI Guide](./docs
 
 ## Current Release
 
-`v0.3.0-rc.2` adds streamed large-file import, faster overviews, tiled image packages, and map merging with persistent undo/redo. It includes the redesigned workspace, visual materials, direct river editing, and shared cartographic output from RC1. See the [changelog](./CHANGELOG.md), [user manual](./docs/user-manual.md), and [capacity/workflow record](./docs/research/large-map-capacity/README.md).
+[`v0.3.0`](https://github.com/NecrosisO-O/mapdesigner/releases/tag/v0.3.0) is the stable release of the redesigned workspace, visual materials, direct river editing, shared cartographic output, and SQLite storage with persistent undo/redo. It includes streamed large-file import, faster overviews, tiled image packages, and map merging. See the [changelog](./CHANGELOG.md), [user manual](./docs/user-manual.md), and [capacity/workflow record](./docs/research/large-map-capacity/README.md).
 
 ## Development Note
 
